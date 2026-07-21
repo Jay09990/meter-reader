@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Device {
+  id                   String    @id @default(cuid())
+  deviceSerialNo       String    @unique
+  meterSerialNo        String?
+  meterSize            String?
+  firmwareVersion      String?
+  hardwareVersion      String?
+  deviceModel          String?
+  configurationVersion String?
+  siteLabel            String?
+  stationLabel         String?
+  firstSeenAt          DateTime  @default(now())
+  lastSeenAt           DateTime?
+
+  readings Reading[]
+  alarms   Alarm[]
+}
+
+model Reading {
+  id                  String   @id @default(cuid())
+  deviceId            String
+  device              Device   @relation(fields: [deviceId], references: [id])
+  readingDate         DateTime
+  correctedVolumeVb   Float?
+  uncorrectedVolumeVm Float?
+  gasPressure         Float?
+  pressureMax         Float?
+  pressureMin         Float?
+  gasTemperature      Float?
+  temperatureMax      Float?
+  temperatureMin      Float?
+  compressibilityZ    Float?
+  compressibilityFpv  Float?
+  correctionFactorC   Float?
+  gasDensity          Float?
+  hourlyConsumption   Json?
+  rawPayload          Json
+  receivedAt          DateTime @default(now())
+
+  @@unique([deviceId, readingDate])
+  @@index([readingDate])
+}
+
+model Alarm {
+  id           String      @id @default(cuid())
+  deviceId     String
+  device       Device      @relation(fields: [deviceId], references: [id])
+  type         AlarmType
+  cause        String
+  gasValue     Float?
+  averageValue Float?
+  forDate      DateTime
+  status       AlarmStatus @default(OPEN)
+  createdAt    DateTime    @default(now())
+
+  @@unique([deviceId, type, forDate])
+  @@index([status, createdAt])
+}
+
+enum AlarmType {
+  MISSING_DATA
+  GAS_OUT_OF_RANGE
+}
+
+enum AlarmStatus {
+  OPEN
+  RESOLVED
+}
