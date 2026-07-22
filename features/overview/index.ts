@@ -1,1 +1,1 @@
-export { getFleetOverview } from "./service";
+export { getFleetAnalytics, getFleetOverview } from "./service";

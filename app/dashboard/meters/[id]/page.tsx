@@ -42,8 +42,8 @@ interface DeviceData {
   hardwareVersion: string | null;
   deviceModel: string | null;
   configurationVersion: string | null;
-  siteLabel: string | null;
-  stationLabel: string | null;
+  customerName: string | null;
+  gaName: string | null;
   firstSeenAt: string;
   lastSeenAt: string | null;
 }
@@ -111,9 +111,9 @@ function KpiCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="bg-slate-900/60 border-slate-800">
+    <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-        <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           {title}
         </CardTitle>
         <Icon className={`w-4 h-4 ${iconColor}`} />
@@ -125,9 +125,9 @@ function KpiCard({
 
 function DataRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between items-center py-1 border-b border-slate-800/60 last:border-0">
-      <span className="text-xs text-slate-400">{label}</span>
-      <span className="font-mono text-sm text-slate-100">{value}</span>
+    <div className="flex justify-between items-center py-1 border-b border-slate-200 dark:border-slate-800/60 last:border-0">
+      <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
+      <span className="font-mono text-sm text-slate-900 dark:text-slate-100">{value}</span>
     </div>
   );
 }
@@ -135,11 +135,11 @@ function DataRow({ label, value }: { label: string; value: string }) {
 function BigValue({ value, unit }: { value: string; unit?: string }) {
   return (
     <div className="flex items-baseline gap-1.5 mb-1">
-      <span className="font-mono text-2xl font-semibold text-white">
+      <span className="font-mono text-2xl font-semibold text-slate-900 dark:text-white">
         {value}
       </span>
       {unit && (
-        <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">
+        <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
           {unit}
         </span>
       )}
@@ -215,7 +215,7 @@ export default function MeterDetailPage() {
   if (loading) {
     return (
       <div className="space-y-6 max-w-7xl mx-auto">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-5">
           <div className="space-y-2">
             <Skeleton className="h-8 w-24" />
             <div className="flex items-center gap-3">
@@ -228,7 +228,7 @@ export default function MeterDetailPage() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {[...Array(5)].map((_, i) => (
-            <Card key={i} className="bg-slate-900/60 border-slate-800">
+            <Card key={i} className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
               <CardHeader className="pb-3">
                 <Skeleton className="h-4 w-24" />
               </CardHeader>
@@ -241,7 +241,7 @@ export default function MeterDetailPage() {
             </Card>
           ))}
         </div>
-        <Card className="bg-slate-900/60 border-slate-800">
+        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
           <CardHeader className="pb-2">
              <Skeleton className="h-5 w-40" />
           </CardHeader>
@@ -257,7 +257,7 @@ export default function MeterDetailPage() {
     return (
       <div className="space-y-4 max-w-7xl mx-auto">
         <Link href="/dashboard/meters">
-          <Button variant="ghost" size="sm" className="text-slate-400 hover:text-white">
+          <Button variant="ghost" size="sm" className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-white">
             <ChevronLeft className="w-4 h-4 mr-1" />
             Back to Meters
           </Button>
@@ -274,20 +274,20 @@ export default function MeterDetailPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* ── Breadcrumb / Title ─────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-5">
         <div className="space-y-1">
           <Link href="/dashboard/meters">
             <Button
               variant="ghost"
               size="sm"
-              className="text-slate-400 hover:text-white -ml-2 mb-1"
+              className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-white -ml-2 mb-1"
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
               Meter Directory
             </Button>
           </Link>
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold text-white font-mono">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
               {device.deviceSerialNo}
             </h1>
             {isStale ? (
@@ -302,18 +302,18 @@ export default function MeterDetailPage() {
               </Badge>
             )}
           </div>
-          <p className="text-sm text-slate-400">
-            {device.siteLabel || device.stationLabel
-              ? `${device.siteLabel ?? ""}${device.siteLabel && device.stationLabel ? " / " : ""}${device.stationLabel ?? ""}`
-              : "General Fleet"}
-            {r ? ` · Last reading: ${r.readingDate}` : " · No reading yet"}
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {device.customerName
+              ? `${device.customerName} (${device.gaName || 'Unknown GA'})`
+              : "Unassigned"}
+            {r ? ` · Last reading: ${new Date(r.readingDate).toLocaleString()}` : " · No reading yet"}
           </p>
         </div>
         <Button
           onClick={loadData}
           variant="outline"
           size="sm"
-          className="border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800"
+          className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800"
         >
           <RefreshCw className="w-4 h-4 mr-2" />
           Refresh
@@ -360,18 +360,18 @@ export default function MeterDetailPage() {
         </KpiCard>
 
         {/* Meter Info */}
-        <KpiCard title="Meter Info" icon={Info} iconColor="text-slate-400">
+        <KpiCard title="Meter Info" icon={Info} iconColor="text-slate-500 dark:text-slate-400">
           <DataRow label="Meter Serial" value={device.meterSerialNo ?? "—"} />
           <DataRow label="Meter Size" value={device.meterSize ?? "—"} />
           <DataRow
             label="First Seen"
-            value={new Date(device.firstSeenAt).toLocaleDateString()}
+            value={new Date(device.firstSeenAt).toLocaleString()}
           />
           <DataRow
             label="Last Seen"
             value={
               device.lastSeenAt
-                ? new Date(device.lastSeenAt).toLocaleDateString()
+                ? new Date(device.lastSeenAt).toLocaleString()
                 : "—"
             }
           />
@@ -379,10 +379,10 @@ export default function MeterDetailPage() {
       </div>
 
       {/* ── Hourly Consumption Chart ────────────────────────────────────── */}
-      <Card className="bg-slate-900/60 border-slate-800">
+      <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold text-slate-200">
+            <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-200">
               Hourly Consumption
               {hourly?.date && (
                 <span className="ml-2 text-xs text-slate-500 font-mono">
@@ -437,10 +437,10 @@ export default function MeterDetailPage() {
       </Card>
 
       {/* ── Trend Charts ───────────────────────────────────────────────── */}
-      <Card className="bg-slate-900/60 border-slate-800">
+      <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-sm font-semibold text-slate-200">
+            <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-200">
               Historical Trends
             </CardTitle>
             <div className="flex gap-1">
@@ -450,8 +450,8 @@ export default function MeterDetailPage() {
                   onClick={() => setTrendDays(d)}
                   className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${
                     trendDays === d
-                      ? "bg-orange-600 text-white"
-                      : "bg-slate-800 text-slate-400 hover:text-slate-200"
+                      ? "bg-orange-600 text-slate-900 dark:text-white"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-200"
                   }`}
                 >
                   {d}d
@@ -477,27 +477,29 @@ export default function MeterDetailPage() {
                     data={history}
                     margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-300 dark:text-slate-800" />
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 10, fill: "#64748b" }}
+                      tick={{ fontSize: 10, fill: "currentColor" }}
                       tickLine={false}
                       axisLine={false}
                       interval="preserveStartEnd"
+                      className="text-slate-500 dark:text-slate-400"
                     />
                     <YAxis
-                      tick={{ fontSize: 10, fill: "#64748b" }}
+                      tick={{ fontSize: 10, fill: "currentColor" }}
                       tickLine={false}
                       axisLine={false}
                       width={50}
+                      className="text-slate-500 dark:text-slate-400"
                     />
                     <Tooltip
                       contentStyle={{
-                        background: "#0f172a",
-                        border: "1px solid #1e293b",
+                        backgroundColor: "var(--popover)",
+                        borderColor: "var(--border)",
+                        color: "var(--popover-foreground)",
                         borderRadius: "6px",
                         fontSize: "12px",
-                        color: "#e2e8f0",
                       }}
                     />
                     <Line
@@ -523,27 +525,29 @@ export default function MeterDetailPage() {
                     data={history}
                     margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-300 dark:text-slate-800" />
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 10, fill: "#64748b" }}
+                      tick={{ fontSize: 10, fill: "currentColor" }}
                       tickLine={false}
                       axisLine={false}
                       interval="preserveStartEnd"
+                      className="text-slate-500 dark:text-slate-400"
                     />
                     <YAxis
-                      tick={{ fontSize: 10, fill: "#64748b" }}
+                      tick={{ fontSize: 10, fill: "currentColor" }}
                       tickLine={false}
                       axisLine={false}
                       width={40}
+                      className="text-slate-500 dark:text-slate-400"
                     />
                     <Tooltip
                       contentStyle={{
-                        background: "#0f172a",
-                        border: "1px solid #1e293b",
+                        backgroundColor: "var(--popover)",
+                        borderColor: "var(--border)",
+                        color: "var(--popover-foreground)",
                         borderRadius: "6px",
                         fontSize: "12px",
-                        color: "#e2e8f0",
                       }}
                     />
                     <Line
@@ -569,27 +573,29 @@ export default function MeterDetailPage() {
                     data={history}
                     margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-300 dark:text-slate-800" />
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 10, fill: "#64748b" }}
+                      tick={{ fontSize: 10, fill: "currentColor" }}
                       tickLine={false}
                       axisLine={false}
                       interval="preserveStartEnd"
+                      className="text-slate-500 dark:text-slate-400"
                     />
                     <YAxis
-                      tick={{ fontSize: 10, fill: "#64748b" }}
+                      tick={{ fontSize: 10, fill: "currentColor" }}
                       tickLine={false}
                       axisLine={false}
                       width={40}
+                      className="text-slate-500 dark:text-slate-400"
                     />
                     <Tooltip
                       contentStyle={{
-                        background: "#0f172a",
-                        border: "1px solid #1e293b",
+                        backgroundColor: "var(--popover)",
+                        borderColor: "var(--border)",
+                        color: "var(--popover-foreground)",
                         borderRadius: "6px",
                         fontSize: "12px",
-                        color: "#e2e8f0",
                       }}
                     />
                     <Line
@@ -610,18 +616,18 @@ export default function MeterDetailPage() {
       </Card>
 
       {/* ── Device Info (collapsible) ────────────────────────────────── */}
-      <Card className="bg-slate-900/60 border-slate-800">
+      <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
         <button
           onClick={() => setShowDeviceInfo((v) => !v)}
           className="w-full flex items-center justify-between px-6 py-4 text-left"
         >
-          <span className="text-sm font-semibold text-slate-200">
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
             Device Information
           </span>
           {showDeviceInfo ? (
-            <ChevronUp className="w-4 h-4 text-slate-400" />
+            <ChevronUp className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           ) : (
-            <ChevronDown className="w-4 h-4 text-slate-400" />
+            <ChevronDown className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           )}
         </button>
         {showDeviceInfo && (
@@ -640,11 +646,8 @@ export default function MeterDetailPage() {
               label="Config Version"
               value={device.configurationVersion ?? "—"}
             />
-            <DataRow label="Site Label" value={device.siteLabel ?? "—"} />
-            <DataRow
-              label="Station Label"
-              value={device.stationLabel ?? "—"}
-            />
+            <DataRow label="Customer" value={device.customerName ?? "—"} />
+            <DataRow label="Geographical Area" value={device.gaName ?? "—"} />
           </CardContent>
         )}
       </Card>

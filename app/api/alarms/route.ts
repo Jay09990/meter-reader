@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPaginatedAlarms } from "@/features/alarms";
-import { AlarmStatus, AlarmType } from "@prisma/client";
+import { AlarmStatus, AlarmType, AlarmSeverity } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,7 +18,14 @@ export async function GET(req: NextRequest) {
       ? (typeParam as AlarmType)
       : undefined;
 
-    const result = await getPaginatedAlarms({ page, limit, status, type });
+    const severityParam = searchParams.get("severity");
+    const severity = severityParam && Object.values(AlarmSeverity).includes(severityParam as AlarmSeverity)
+      ? (severityParam as AlarmSeverity)
+      : undefined;
+
+    const search = searchParams.get("search") || undefined;
+
+    const result = await getPaginatedAlarms({ page, limit, status, type, severity, search });
     return NextResponse.json(result, { status: 200 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to fetch alarms";

@@ -7,9 +7,11 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "10", 10);
     const search = searchParams.get("search") || "";
-    const status = (searchParams.get("status") || "all") as "all" | "reporting" | "stale";
+    const status = searchParams.get("status") || "all";
+    const category = searchParams.get("category") || "";
+    const gaId = searchParams.get("gaId") || "";
 
-    const result = await getPaginatedDevices({ page, limit, search, status });
+    const result = await getPaginatedDevices({ page, limit, search, status, category, gaId });
     return NextResponse.json(result, { status: 200 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to fetch devices";

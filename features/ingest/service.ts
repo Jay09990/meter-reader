@@ -17,8 +17,6 @@ export async function processIngestPayload(rawBody: unknown) {
   if (parsed.hardwareVersion) deviceUpdateData.hardwareVersion = parsed.hardwareVersion;
   if (parsed.deviceModel) deviceUpdateData.deviceModel = parsed.deviceModel;
   if (parsed.configurationVersion) deviceUpdateData.configurationVersion = parsed.configurationVersion;
-  if (parsed.siteLabel) deviceUpdateData.siteLabel = parsed.siteLabel;
-  if (parsed.stationLabel) deviceUpdateData.stationLabel = parsed.stationLabel;
 
   const device = await db.device.upsert({
     where: { deviceSerialNo: parsed.deviceSerialNo },
@@ -30,8 +28,6 @@ export async function processIngestPayload(rawBody: unknown) {
       hardwareVersion: parsed.hardwareVersion,
       deviceModel: parsed.deviceModel,
       configurationVersion: parsed.configurationVersion,
-      siteLabel: parsed.siteLabel,
-      stationLabel: parsed.stationLabel,
       lastSeenAt: new Date(),
     },
     update: deviceUpdateData,
@@ -51,6 +47,8 @@ export async function processIngestPayload(rawBody: unknown) {
     compressibilityFpv: parsed.compressibilityFpv,
     correctionFactorC: parsed.correctionFactorC,
     gasDensity: parsed.gasDensity,
+    batteryLevel: parsed.batteryLevel,
+    currentFlowRate: parsed.currentFlowRate,
     hourlyConsumption: parsed.hourlyConsumption ? JSON.parse(JSON.stringify(parsed.hourlyConsumption)) : Prisma.JsonNull,
     rawPayload: JSON.parse(JSON.stringify(parsed.rawPayload)),
     receivedAt: new Date(),

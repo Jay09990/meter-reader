@@ -4,18 +4,38 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  Flame,
   AlertTriangle,
   FileText,
   Activity,
+  Users,
+  Map,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const navigation = [
-  { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Meters", href: "/dashboard/meters", icon: Flame },
-  { name: "Alarms", href: "/dashboard/alarms", icon: AlertTriangle },
-  { name: "Reports", href: "/dashboard/reports", icon: FileText, badge: "Soon" },
+const navigationGroups = [
+  {
+    title: "MONITOR",
+    items: [
+      { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+      { name: "Map View", href: "/dashboard/map", icon: Map },
+      { name: "Customers", href: "/dashboard/customers", icon: Users },
+      { name: "Meters", href: "/dashboard/meters", icon: Activity },
+    ]
+  },
+  {
+    title: "OPERATIONS",
+    items: [
+      { name: "Alarms", href: "/dashboard/alarms", icon: AlertTriangle },
+      { name: "Reports", href: "/dashboard/reports", icon: FileText },
+    ]
+  },
+  {
+    title: "SYSTEM",
+    items: [
+      { name: "Admin Settings", href: "/dashboard/admin", icon: Settings },
+    ]
+  }
 ];
 
 export function Sidebar() {
@@ -35,38 +55,40 @@ export function Sidebar() {
       </div>
 
       {/* Navigation Menu */}
-      <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-        {navigation.map((item) => {
-          const isActive =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard"
-              : pathname.startsWith(item.href);
+      <nav className="flex-1 px-4 py-6 space-y-6 overflow-y-auto">
+        {navigationGroups.map((group) => (
+          <div key={group.title}>
+            <h3 className="px-3 mb-2 text-xs font-semibold tracking-wider text-slate-400 uppercase">
+              {group.title}
+            </h3>
+            <div className="space-y-1">
+              {group.items.map((item) => {
+                const isActive =
+                  item.href === "/dashboard"
+                    ? pathname === "/dashboard"
+                    : pathname.startsWith(item.href);
 
-          const Icon = item.icon;
+                const Icon = item.icon;
 
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={cn(
-                "flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-orange-50 dark:bg-orange-600/15 text-orange-600 dark:text-orange-400 border border-orange-500/20"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800/60"
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <Icon className={cn("w-4 h-4", isActive ? "text-orange-600 dark:text-orange-400" : "text-slate-400")} />
-                <span>{item.name}</span>
-              </div>
-              {item.badge && (
-                <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700">
-                  {item.badge}
-                </span>
-              )}
-            </Link>
-          );
-        })}
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                      isActive
+                        ? "bg-orange-50 dark:bg-orange-600/15 text-orange-600 dark:text-orange-400 border border-orange-500/20"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800/60"
+                    )}
+                  >
+                    <Icon className={cn("w-4 h-4 mr-3", isActive ? "text-orange-600 dark:text-orange-400" : "text-slate-400")} />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* Footer Info */}

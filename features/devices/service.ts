@@ -1,11 +1,14 @@
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
+import { computeDeviceStatus } from "@/lib/device-status";
 
 export interface GetDevicesOptions {
   page?: number;
   limit?: number;
   search?: string;
-  status?: "all" | "reporting" | "stale";
+  status?: string;
+  category?: string;
+  gaId?: string;
 }
 
 export async function getPaginatedDevices(options: GetDevicesOptions) {
@@ -20,21 +23,43 @@ export async function getPaginatedDevices(options: GetDevicesOptions) {
     where.OR = [
       { deviceSerialNo: { contains: s, mode: "insensitive" } },
       { meterSerialNo: { contains: s, mode: "insensitive" } },
-      { siteLabel: { contains: s, mode: "insensitive" } },
-      { stationLabel: { contains: s, mode: "insensitive" } },
+      { customer: { name: { contains: s, mode: "insensitive" } } },
+      { customer: { ga: { name: { contains: s, mode: "insensitive" } } } },
     ];
   }
 
   const now = new Date();
-  const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-  if (options.status === "reporting") {
-    where.lastSeenAt = { gte: startOfToday };
-  } else if (options.status === "stale") {
-    where.OR = [
-      { lastSeenAt: null },
-      { lastSeenAt: { lt: startOfToday } },
-    ];
+  if (options.category) {
+    where.customer = { category: options.category as import("@prisma/client").CustomerCategory };
+  }
+
+  if (options.gaId) {
+    where.customer = {
+      ...(where.customer as Prisma.CustomerWhereInput || {}),
+      gaId: options.gaId,
+    };
+  }
+
+  if (options.status && options.status !== "all") {
+    const statusVal = options.status.toLowerCase();
+    if (statusVal === "new") {
+      where.customerId = null;
+    } else if (statusVal === "online") {
+      where.customerId = { not: null };
+      where.lastSeenAt = { gte: twentyFourHoursAgo };
+      where.alarms = { none: { status: "OPEN" } };
+    } else if (statusVal === "offline") {
+      where.customerId = { not: null };
+      where.OR = [
+        { lastSeenAt: null },
+        { lastSeenAt: { lt: twentyFourHoursAgo } },
+      ];
+    } else if (statusVal === "alert") {
+      where.customerId = { not: null };
+      where.alarms = { some: { status: "OPEN" } };
+    }
   }
 
   const [devices, totalCount] = await Promise.all([
@@ -52,7 +77,21 @@ export async function getPaginatedDevices(options: GetDevicesOptions) {
             correctedVolumeVb: true,
             gasPressure: true,
             gasTemperature: true,
+            currentFlowRate: true,
+            batteryLevel: true,
           },
+        },
+        alarms: {
+          where: { status: "OPEN" },
+          select: { status: true, severity: true },
+        },
+        customer: {
+          select: { 
+            name: true, 
+            category: true,
+            address: true,
+            ga: { select: { name: true } } 
+          }
         },
       },
     }),
@@ -61,28 +100,31 @@ export async function getPaginatedDevices(options: GetDevicesOptions) {
 
   const items = devices.map((d) => {
     const latestReading = d.readings[0] || null;
-    const isReporting = d.lastSeenAt && d.lastSeenAt >= startOfToday;
 
     return {
       id: d.id,
       deviceSerialNo: d.deviceSerialNo,
       meterSerialNo: d.meterSerialNo,
       meterSize: d.meterSize,
-      siteLabel: d.siteLabel,
-      stationLabel: d.stationLabel,
+      customerName: d.customer?.name || null,
+      category: d.customer?.category || null,
+      address: d.customer?.address || null,
+      gaName: d.customer?.ga?.name || null,
       firmwareVersion: d.firmwareVersion,
       hardwareVersion: d.hardwareVersion,
       deviceModel: d.deviceModel,
       configurationVersion: d.configurationVersion,
       firstSeenAt: d.firstSeenAt,
       lastSeenAt: d.lastSeenAt,
-      status: isReporting ? "REPORTING" : "STALE",
+      status: computeDeviceStatus(d.lastSeenAt, d.alarms, d.customerId),
       latestReading: latestReading
         ? {
-            readingDate: latestReading.readingDate.toISOString().split("T")[0],
+            readingDate: latestReading.readingDate.toISOString(),
             correctedVolumeVb: latestReading.correctedVolumeVb,
             gasPressure: latestReading.gasPressure,
             gasTemperature: latestReading.gasTemperature,
+            currentFlowRate: latestReading.currentFlowRate,
+            batteryLevel: latestReading.batteryLevel,
           }
         : null,
     };
@@ -109,6 +151,13 @@ export async function getDeviceLatest(deviceIdOrSerial: string) {
         take: 1,
         orderBy: { readingDate: "desc" },
       },
+      alarms: {
+        where: { status: "OPEN" },
+        select: { status: true, severity: true },
+      },
+      customer: {
+        select: { name: true, ga: { select: { name: true } } }
+      },
     },
   });
 
@@ -128,15 +177,16 @@ export async function getDeviceLatest(deviceIdOrSerial: string) {
       hardwareVersion: device.hardwareVersion,
       deviceModel: device.deviceModel,
       configurationVersion: device.configurationVersion,
-      siteLabel: device.siteLabel,
-      stationLabel: device.stationLabel,
+      customerName: device.customer?.name || null,
+      gaName: device.customer?.ga?.name || null,
       firstSeenAt: device.firstSeenAt,
       lastSeenAt: device.lastSeenAt,
+      status: computeDeviceStatus(device.lastSeenAt, device.alarms, device.customerId),
     },
     latestReading: latestReading
       ? {
           id: latestReading.id,
-          readingDate: latestReading.readingDate.toISOString().split("T")[0],
+          readingDate: latestReading.readingDate.toISOString(),
           correctedVolumeVb: latestReading.correctedVolumeVb,
           uncorrectedVolumeVm: latestReading.uncorrectedVolumeVm,
           gasPressure: latestReading.gasPressure,

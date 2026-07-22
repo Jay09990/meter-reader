@@ -6,6 +6,8 @@ export interface GetAlarmsOptions {
   limit?: number;
   status?: AlarmStatus;
   type?: AlarmType;
+  severity?: import("@prisma/client").AlarmSeverity;
+  search?: string;
 }
 
 export async function getPaginatedAlarms(options: GetAlarmsOptions) {
@@ -23,6 +25,18 @@ export async function getPaginatedAlarms(options: GetAlarmsOptions) {
     where.type = options.type;
   }
 
+  if (options.severity) {
+    where.severity = options.severity;
+  }
+
+  if (options.search && options.search.trim()) {
+    const s = options.search.trim();
+    where.OR = [
+      { device: { deviceSerialNo: { contains: s, mode: "insensitive" } } },
+      { device: { meterSerialNo: { contains: s, mode: "insensitive" } } },
+    ];
+  }
+
   const [alarms, totalCount] = await Promise.all([
     db.alarm.findMany({
       where,
@@ -35,8 +49,9 @@ export async function getPaginatedAlarms(options: GetAlarmsOptions) {
             id: true,
             deviceSerialNo: true,
             meterSerialNo: true,
-            siteLabel: true,
-            stationLabel: true,
+            customer: {
+              select: { name: true, ga: { select: { name: true } } }
+            }
           },
         },
       },
@@ -49,14 +64,16 @@ export async function getPaginatedAlarms(options: GetAlarmsOptions) {
     deviceId: a.deviceId,
     deviceSerialNo: a.device.deviceSerialNo,
     meterSerialNo: a.device.meterSerialNo,
-    siteLabel: a.device.siteLabel,
-    stationLabel: a.device.stationLabel,
+    customerName: a.device.customer?.name || null,
+    gaName: a.device.customer?.ga?.name || null,
     type: a.type,
     cause: a.cause,
     gasValue: a.gasValue,
     averageValue: a.averageValue,
     forDate: a.forDate.toISOString().split("T")[0],
     status: a.status,
+    severity: a.severity,
+    acknowledged: a.acknowledged,
     createdAt: a.createdAt,
   }));
 

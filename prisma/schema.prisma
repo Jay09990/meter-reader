@@ -7,22 +7,61 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model GeographicalArea {
+  id         String             @id @default(cuid())
+  name       String
+  code       String?            @unique
+  parentId   String?
+  parent     GeographicalArea?  @relation("GAHierarchy", fields: [parentId], references: [id])
+  children   GeographicalArea[] @relation("GAHierarchy")
+  customers  Customer[]
+  createdAt  DateTime           @default(now())
+}
+
+enum CustomerCategory {
+  INDUSTRIAL
+  COMMERCIAL
+  RESIDENTIAL
+  BULK
+}
+
+model Customer {
+  id           String            @id @default(cuid())
+  name         String
+  category     CustomerCategory
+  address      String?
+  gaId         String
+  ga           GeographicalArea  @relation(fields: [gaId], references: [id])
+  devices      Device[]
+  createdAt    DateTime          @default(now())
+
+  @@index([gaId])
+  @@index([category])
+}
+
 model Device {
   id                   String    @id @default(cuid())
   deviceSerialNo       String    @unique
+  customerId           String?
+  customer             Customer? @relation(fields: [customerId], references: [id])
+
   meterSerialNo        String?
   meterSize            String?
   firmwareVersion      String?
   hardwareVersion      String?
   deviceModel          String?
   configurationVersion String?
-  siteLabel            String?
-  stationLabel         String?
+
+  latitude             Float?
+  longitude            Float?
+
   firstSeenAt          DateTime  @default(now())
   lastSeenAt           DateTime?
 
-  readings Reading[]
-  alarms   Alarm[]
+  readings             Reading[]
+  alarms               Alarm[]
+
+  @@index([customerId])
 }
 
 model Reading {
@@ -30,6 +69,7 @@ model Reading {
   deviceId            String
   device              Device   @relation(fields: [deviceId], references: [id])
   readingDate         DateTime
+
   correctedVolumeVb   Float?
   uncorrectedVolumeVm Float?
   gasPressure         Float?
@@ -43,6 +83,10 @@ model Reading {
   correctionFactorC   Float?
   gasDensity          Float?
   hourlyConsumption   Json?
+  
+  batteryLevel        Float?
+  currentFlowRate     Float?
+
   rawPayload          Json
   receivedAt          DateTime @default(now())
 
@@ -50,28 +94,44 @@ model Reading {
   @@index([readingDate])
 }
 
-model Alarm {
-  id           String      @id @default(cuid())
-  deviceId     String
-  device       Device      @relation(fields: [deviceId], references: [id])
-  type         AlarmType
-  cause        String
-  gasValue     Float?
-  averageValue Float?
-  forDate      DateTime
-  status       AlarmStatus @default(OPEN)
-  createdAt    DateTime    @default(now())
-
-  @@unique([deviceId, type, forDate])
-  @@index([status, createdAt])
-}
-
 enum AlarmType {
   MISSING_DATA
   GAS_OUT_OF_RANGE
 }
 
+enum AlarmSeverity {
+  CRITICAL
+  WARNING
+}
+
 enum AlarmStatus {
   OPEN
   RESOLVED
+}
+
+model Alarm {
+  id             String        @id @default(cuid())
+  deviceId       String
+  device         Device        @relation(fields: [deviceId], references: [id])
+  type           AlarmType
+  severity       AlarmSeverity
+  cause          String
+  gasValue       Float?
+  averageValue   Float?
+  forDate        DateTime
+  status         AlarmStatus   @default(OPEN)
+  acknowledged   Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+
+  @@unique([deviceId, type, forDate])
+  @@index([status, createdAt])
+  @@index([severity, status])
+  @@index([acknowledged])
+}
+
+model AlarmSettings {
+  id                       String   @id @default("singleton")
+  gasDeviationWindowDays   Int      @default(7)
+  gasDeviationPercent      Float    @default(20)
+  updatedAt                DateTime @updatedAt
 }

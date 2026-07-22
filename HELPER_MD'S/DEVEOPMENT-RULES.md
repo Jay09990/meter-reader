@@ -124,6 +124,32 @@ unrelated feature or module.** Concretely:
   what was decided, why, what was ruled out) rather than living only in a
   chat thread or PR description that'll be hard to find later.
 
+## 7a. New Modules — v2 (GA/Customer scope)
+This revision adds `admin/` (GA + Customer CRUD, device assignment),
+`map/`, `customers/`, and `reports/` as feature modules, and extends
+`alarms/` (severity, CSV export, acknowledge) and `overview/` (new
+charts). Apply §2's rules to each:
+- `admin/` is a genuinely separate concern from `ingestion/` even though
+  both write to `Device` — ingestion writes technical fields
+  (`lastSeenAt`, readings), admin writes ownership fields (`customerId`,
+  `latitude`/`longitude`). Don't let one module's write path silently
+  touch the other's fields (DATA-FLOW.md §7 vs §2 — two distinct flows
+  into the same table is fine; two modules both feeling free to write
+  either's fields is not).
+- **Derived status (Normal/Anomaly/Alert/Offline) belongs in the read/
+  query layer, not stored.** If a second feature needs "is this device
+  Offline," it calls the same shared status-computation function — don't
+  let a second module reimplement the staleness/severity logic with
+  slightly different thresholds (a classic isolation-rule violation
+  waiting to happen, §5 below).
+- `reports/` should only ever *read* from other modules' public exports
+  (§2.2) — a report is a leaf consumer, not a place where cross-cutting
+  business logic accidentally ends up living.
+- Customer name/address is real personal/business data at fleet scale
+  (10k–20k rows) — don't log it, don't put it in error messages sent to
+  monitoring/alerting tools, and treat CSV/PDF exports (Alarms export,
+  Reports) as containing data that shouldn't be casually re-shared.
+
 ## 7. Working With the Coding Agent (Antigravity CLI)
 - This repo uses the **ponytail** and **caveman** plugins/rulesets in
   Antigravity CLI (minimal-code, token-efficient defaults). Those defaults

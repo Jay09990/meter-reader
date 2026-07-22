@@ -28,8 +28,8 @@ interface DeviceItem {
   deviceSerialNo: string;
   meterSerialNo: string | null;
   meterSize: string | null;
-  siteLabel: string | null;
-  stationLabel: string | null;
+  customerName: string | null;
+  gaName: string | null;
   lastSeenAt: string | null;
   status: "REPORTING" | "STALE";
   latestReading: {
@@ -97,10 +97,10 @@ export default function MetersPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Meter Directory</h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Meter Directory</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Search, filter, and inspect deployed EVC gas meter hardware across all stations.
           </p>
         </div>
@@ -110,7 +110,7 @@ export default function MetersPage() {
           disabled={loading}
           variant="outline"
           size="sm"
-          className="border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800"
+          className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
           Refresh
@@ -118,14 +118,14 @@ export default function MetersPage() {
       </div>
 
       {/* Filter Controls Bar */}
-      <Card className="bg-slate-900/60 border-slate-800 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <Input
             placeholder="Search serial, meter #, or site..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 bg-slate-950 border-slate-800 text-slate-200 placeholder:text-slate-500 focus:border-orange-500"
+            className="pl-9 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-500 focus:border-orange-500"
           />
         </div>
 
@@ -133,7 +133,7 @@ export default function MetersPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-9 px-3 py-1 rounded-md bg-slate-950 border border-slate-800 text-sm text-slate-300 focus:outline-none focus:border-orange-500"
+            className="h-9 px-3 py-1 rounded-md bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-300 focus:outline-none focus:border-orange-500"
           >
             <option value="all">All Statuses</option>
             <option value="reporting">Reporting / Live</option>
@@ -149,50 +149,51 @@ export default function MetersPage() {
       )}
 
       {/* Table */}
-      <Card className="bg-slate-900/60 border-slate-800 overflow-hidden">
+      <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 overflow-hidden">
         <Table>
-          <TableHeader className="bg-slate-950/80 border-b border-slate-800">
-            <TableRow className="border-slate-800 hover:bg-transparent">
-              <TableHead className="text-slate-400 font-semibold">Device Serial</TableHead>
-              <TableHead className="text-slate-400 font-semibold">Meter Serial</TableHead>
-              <TableHead className="text-slate-400 font-semibold">Site / Station</TableHead>
-              <TableHead className="text-slate-400 font-semibold">Last Reading Date</TableHead>
-              <TableHead className="text-slate-400 font-semibold">Status</TableHead>
-              <TableHead className="text-right text-slate-400 font-semibold">Action</TableHead>
+          <TableHeader className="bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800">
+            <TableRow className="border-slate-200 dark:border-slate-800 hover:bg-transparent">
+              <TableHead className="text-slate-500 dark:text-slate-400 font-semibold">Device Serial</TableHead>
+              <TableHead className="text-slate-500 dark:text-slate-400 font-semibold">Meter Serial</TableHead>
+              <TableHead className="text-slate-500 dark:text-slate-400 font-semibold">Site / Station</TableHead>
+              <TableHead className="text-slate-500 dark:text-slate-400 font-semibold">Last Reading Date</TableHead>
+              <TableHead className="text-slate-500 dark:text-slate-400 font-semibold">Status</TableHead>
+              <TableHead className="text-right text-slate-500 dark:text-slate-400 font-semibold">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow className="border-slate-800">
-                <TableCell colSpan={6} className="text-center py-12 text-slate-400">
+              <TableRow className="border-slate-200 dark:border-slate-800">
+                <TableCell colSpan={6} className="text-center py-12 text-slate-500 dark:text-slate-400">
                   Loading meters...
                 </TableCell>
               </TableRow>
             ) : devices.length === 0 ? (
-              <TableRow className="border-slate-800">
-                <TableCell colSpan={6} className="text-center py-12 text-slate-400">
+              <TableRow className="border-slate-200 dark:border-slate-800">
+                <TableCell colSpan={6} className="text-center py-12 text-slate-500 dark:text-slate-400">
                   No gas meters found matching the criteria.
                 </TableCell>
               </TableRow>
             ) : (
               devices.map((device) => (
-                <TableRow key={device.id} className="border-slate-800 hover:bg-slate-800/40">
-                  <TableCell className="font-mono text-sm font-medium text-slate-100 flex items-center gap-2">
+                <TableRow key={device.id} className="border-slate-200 dark:border-slate-800 hover:bg-slate-100/40 dark:hover:bg-slate-800/40">
+                  <TableCell className="font-mono text-sm font-medium text-slate-900 dark:text-slate-100 flex items-center gap-2">
                     <Flame className="w-4 h-4 text-orange-500" />
                     {device.deviceSerialNo}
                   </TableCell>
-                  <TableCell className="font-mono text-sm text-slate-300">
+                  <TableCell className="font-mono text-sm text-slate-600 dark:text-slate-300">
                     {device.meterSerialNo || "—"}
                   </TableCell>
-                  <TableCell className="text-sm text-slate-300">
-                    {device.siteLabel || device.stationLabel
-                      ? `${device.siteLabel || ""}${device.siteLabel && device.stationLabel ? " / " : ""}${device.stationLabel || ""}`
-                      : "General Fleet"}
+                  <TableCell className="text-sm text-slate-600 dark:text-slate-300">
+                    {device.customerName
+                      ? `${device.customerName} (${device.gaName || 'Unknown GA'})`
+                      : "Unassigned"}
                   </TableCell>
-                  <TableCell className="font-mono text-sm text-slate-300">
-                    {device.latestReading?.readingDate ||
-                      (device.lastSeenAt
-                        ? new Date(device.lastSeenAt).toISOString().split("T")[0]
+                  <TableCell className="font-mono text-sm text-slate-600 dark:text-slate-300">
+                    {device.latestReading?.readingDate 
+                      ? new Date(device.latestReading.readingDate).toLocaleString()
+                      : (device.lastSeenAt
+                        ? new Date(device.lastSeenAt).toLocaleString()
                         : "No data")}
                   </TableCell>
                   <TableCell>
@@ -213,7 +214,7 @@ export default function MetersPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-slate-300 hover:text-white hover:bg-slate-800"
+                        className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800"
                       >
                         <Eye className="w-4 h-4 mr-1.5" />
                         Inspect
@@ -228,10 +229,10 @@ export default function MetersPage() {
 
         {/* Pagination Bar */}
         {!loading && pagination.totalPages > 1 && (
-          <div className="p-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <div>
-              Showing page <span className="font-semibold text-slate-200">{pagination.page}</span> of{" "}
-              <span className="font-semibold text-slate-200">{pagination.totalPages}</span> ({pagination.totalCount} total devices)
+              Showing page <span className="font-semibold text-slate-700 dark:text-slate-200">{pagination.page}</span> of{" "}
+              <span className="font-semibold text-slate-700 dark:text-slate-200">{pagination.totalPages}</span> ({pagination.totalCount} total devices)
             </div>
 
             <div className="flex items-center gap-2">
@@ -240,7 +241,7 @@ export default function MetersPage() {
                 size="sm"
                 disabled={pagination.page <= 1}
                 onClick={() => fetchDevices(pagination.page - 1)}
-                className="h-8 border-slate-800 bg-slate-950 text-slate-300 hover:bg-slate-800"
+                className="h-8 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800"
               >
                 <ChevronLeft className="w-4 h-4 mr-1" />
                 Previous
@@ -250,7 +251,7 @@ export default function MetersPage() {
                 size="sm"
                 disabled={pagination.page >= pagination.totalPages}
                 onClick={() => fetchDevices(pagination.page + 1)}
-                className="h-8 border-slate-800 bg-slate-950 text-slate-300 hover:bg-slate-800"
+                className="h-8 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800"
               >
                 Next
                 <ChevronRight className="w-4 h-4 ml-1" />

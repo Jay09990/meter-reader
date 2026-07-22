@@ -20,7 +20,7 @@ import { db } from "@/lib/db";
 
 describe("generateMissingDataAlarms", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it("fires alarm for devices with no reading on the target date", async () => {

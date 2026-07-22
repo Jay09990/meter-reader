@@ -7,14 +7,59 @@ async function main() {
   await prisma.alarm.deleteMany();
   await prisma.reading.deleteMany();
   await prisma.device.deleteMany();
+  await prisma.customer.deleteMany();
+  await prisma.geographicalArea.deleteMany();
+  await prisma.alarmSettings.deleteMany();
+
+  console.log("Creating AlarmSettings...");
+  await prisma.alarmSettings.create({
+    data: {
+      id: "singleton",
+      gasDeviationWindowDays: 7,
+      gasDeviationPercent: 20,
+    }
+  });
+
+  console.log("Creating Geographical Areas...");
+  const ga1 = await prisma.geographicalArea.create({
+    data: {
+      name: "Pune City GA",
+      code: "PUNE-01",
+    }
+  });
+  const ga2 = await prisma.geographicalArea.create({
+    data: {
+      name: "Mumbai Metro GA",
+      code: "BOM-01",
+    }
+  });
+
+  console.log("Creating Customers...");
+  const customer1 = await prisma.customer.create({
+    data: {
+      name: "Acme Industrial Ltd",
+      category: "INDUSTRIAL",
+      address: "123 Factory Road, Pune",
+      gaId: ga1.id,
+    }
+  });
+  const customer2 = await prisma.customer.create({
+    data: {
+      name: "Central Mall",
+      category: "COMMERCIAL",
+      address: "Main Square, Mumbai",
+      gaId: ga2.id,
+    }
+  });
 
   console.log("Creating dummy devices...");
   const device1 = await prisma.device.create({
     data: {
       deviceSerialNo: "DEV-1001",
       meterSerialNo: "MET-5501",
-      siteLabel: "North Station",
-      stationLabel: "Zone A",
+      customerId: customer1.id,
+      latitude: 18.5204,
+      longitude: 73.8567,
       lastSeenAt: new Date(),
     },
   });
@@ -23,8 +68,9 @@ async function main() {
     data: {
       deviceSerialNo: "DEV-1002",
       meterSerialNo: "MET-5502",
-      siteLabel: "South Station",
-      stationLabel: "Zone B",
+      customerId: customer2.id,
+      latitude: 19.0760,
+      longitude: 72.8777,
       lastSeenAt: new Date(Date.now() - 24 * 60 * 60 * 1000 * 2), // Stale device (2 days ago)
     },
   });
@@ -46,6 +92,8 @@ async function main() {
       uncorrectedVolumeVm: 1480.0 + (6 - i) * 98 + variance,
       gasPressure: 2.5 + Math.random() * 0.2,
       gasTemperature: 15.0 + Math.random() * 2,
+      batteryLevel: 85 - i * 0.5,
+      currentFlowRate: 15 + Math.random() * 2,
       rawPayload: { source: "dummy_seed" },
     });
   }
@@ -61,6 +109,8 @@ async function main() {
       uncorrectedVolumeVm: 1180.0 + (8 - i) * 78 + variance,
       gasPressure: 2.1 + Math.random() * 0.15,
       gasTemperature: 12.0 + Math.random() * 1.5,
+      batteryLevel: 42 - i * 0.2,
+      currentFlowRate: 12 + Math.random() * 1.5,
       rawPayload: { source: "dummy_seed" },
     });
   }
@@ -74,6 +124,7 @@ async function main() {
     data: {
       deviceId: device1.id,
       type: "GAS_OUT_OF_RANGE",
+      severity: "WARNING",
       cause: "Pressure exceeded maximum threshold",
       gasValue: 5.8,
       forDate: new Date(),
@@ -85,6 +136,7 @@ async function main() {
     data: {
       deviceId: device2.id,
       type: "MISSING_DATA",
+      severity: "CRITICAL",
       cause: "No communication for 48 hours",
       forDate: new Date(),
       status: "OPEN",

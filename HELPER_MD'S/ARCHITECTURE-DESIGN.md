@@ -1,17 +1,19 @@
-# DESIGN — EVC Gas Meter Dashboard
+# DESIGN — EVC Gas Meter Dashboard (v2 — GA/Customer scope)
 
-## 1. Tech Stack (proposed, adjust freely)
-- **Next.js (App Router)** — single fullstack app; API routes replace the
-  standalone `http-server`.
-- **PostgreSQL** — fleet-scale (10k–20k devices, one row/device/day) still
-  fits comfortably in Postgres; JSONB covers the raw payload and the hourly
-  breakdown.
-- **Prisma** — schema-first ORM, matches the Postgres choice.
-- **Recharts** — for the hourly bar chart and day-over-day trend lines on
-  the meter detail page.
-- **Tailwind CSS** — dashboard layout/cards.
-- Deploy target: anywhere Next.js + Postgres run (Vercel + Neon/Supabase, or
-  a VPS) — no hard requirement from what's known so far.
+## 1. Tech Stack (unchanged)
+- **Next.js (App Router)**, **PostgreSQL**, **Prisma**, **Recharts**,
+  **Tailwind CSS + shadcn/ui**.
+- **New for this revision:** a mapping library for Map View — Leaflet
+  (matches the reference site, which is explicitly "Leaflet map" per its
+  own on-page text) with marker clustering (e.g. `react-leaflet` +
+  `leaflet.markercluster` or an equivalent clustering approach) — required
+  at fleet scale (10k–20k possible markers), not optional.
+- **New for this revision:** a PDF generation approach for Reports (FR12)
+  — e.g. `@react-pdf/renderer` or server-side HTML→PDF. Pick whichever
+  integrates cleanest with the existing Next.js API routes; not
+  prescribed further here since it's an implementation detail, not an
+  architectural one.
+- Deploy target unchanged.
 
 ## 2. Architecture Overview
 
@@ -19,45 +21,88 @@
 EVC Meter (per device)
    │  Modbus registers
    ▼
-4G Modem/Gateway (Teltonika)  — "Services → Data to Server"
-   │  once/day, HTTP POST, JSON body (template configured on the device)
+4G Modem/Gateway  — "Services → Data to Server"
+   │  once/day, HTTP POST, JSON body
    ▼
-Internet
+Next.js API route  POST /api/ingest   (single endpoint, fleet-wide)
+   │  identify device by deviceSerialNo; device may have no Customer yet
    ▼
-Next.js API route  /api/ingest   (single endpoint, fleet-wide — see §4)
-   │  validate + parse, identify device by serial number in body
-   ▼
-Postgres  (Device registry + Reading history + Alarm table)
+Postgres
+   ├── GeographicalArea  ─┐
+   ├── Customer          ─┼─ admin-managed, NOT from the device payload
+   ├── Device            ─┘  (payload updates Device + Reading only)
+   ├── Reading
+   ├── Alarm
+   └── AlarmSettings
    │
    ▼
-Next.js API routes (read)  ──►  Dashboard UI (Overview, Meter Table, Meter
-                                 Detail, Alarms)
+Next.js read API routes  ──►  Dashboard UI
+   Overview · Map View · Customers · Meter/Customer Detail · Alarms ·
+   Reports
 ```
 
-The existing `write-server`/`priceWrite.js` (SSH → `ubus call
-modbus_client.rpc set_tag_value`) is a **separate, admin-only write path**
-directly to a router's Modbus tags — it does not go through the
-dashboard's DB and is not part of the read/display flow. Kept as a
-standalone internal tool (see PRD.md §3 Non-Goals).
+The admin flow (create GA → create Customer → assign Device to Customer)
+is a **separate write path from ingestion** — it's a human using a form,
+not a meter pushing data. Keep it as its own feature module
+(`features/admin/` or similar) per DEVELOPMENT_RULES.md §2.1, not bolted
+onto the ingestion module.
 
-## 3. Data Model (Prisma-style, names indicative — see PRD §7 and
-DATAFLOW.md §5 on payload verification)
+`write-server`/`priceWrite.js` remains a separate, out-of-scope admin-only
+Modbus write path (unchanged from v1, PRD.md §3).
 
-Fleet scale (10k–20k devices) rules out the pilot's per-site/per-station
-modeling (`Site` → `Station` → `DeviceInfo`/`DailyReading`, 4 tables). A
-device is self-describing (it reports its own serial number, meter info,
-and firmware/hardware info on every push), so the model collapses to
-**three tables**: one device registry, one reading-history table, and one
-alarms table.
+## 3. Data Model
+
+Six tables. `GeographicalArea` and `Customer` are new this revision;
+`Device`, `Reading`, `Alarm` are extended; `AlarmSettings` is new (a
+config table, not fleet data).
 
 ```prisma
+model GeographicalArea {
+  id         String             @id @default(cuid())
+  name       String
+  code       String?            @unique
+  parentId   String?            // self-relation — optional hierarchy,
+  parent     GeographicalArea?  @relation("GAHierarchy", fields: [parentId], references: [id])
+  children   GeographicalArea[] @relation("GAHierarchy")
+  customers  Customer[]
+  createdAt  DateTime           @default(now())
+}
+// Kept as a flat table with an optional parent, not a fixed N-level
+// hierarchy (region/state/GA/zone...) — add levels only when a real need
+// shows up (DEVELOPMENT_RULES.md §3 "no speculative abstraction"). Most
+// queries just need "which GA is this customer in," which this supports
+// without forcing a tree depth.
+
+enum CustomerCategory {
+  INDUSTRIAL
+  COMMERCIAL
+  RESIDENTIAL
+  BULK
+}
+
+model Customer {
+  id           String            @id @default(cuid())
+  name         String
+  category     CustomerCategory
+  address      String?
+  gaId         String
+  ga           GeographicalArea  @relation(fields: [gaId], references: [id])
+  devices      Device[]
+  createdAt    DateTime          @default(now())
+
+  @@index([gaId])
+  @@index([category])
+}
+// Customer/GA are entered through the admin flow (§2) — never derived
+// from the ingestion payload, which has no concept of "who owns this
+// meter" (PRD.md FR3).
+
 model Device {
-  id                   String   @id @default(cuid())
-  deviceSerialNo       String   @unique // primary identifier — every
-                                         // payload carries this; devices
-                                         // are created on first push
-                                         // (PRD §7 — no pre-provisioning
-                                         // step for v1)
+  id                   String    @id @default(cuid())
+  deviceSerialNo       String    @unique // primary identifier from payload
+  customerId           String?   // nullable — device may be unassigned
+  customer             Customer? @relation(fields: [customerId], references: [id])
+
   meterSerialNo        String?
   meterSize            String?
   firmwareVersion      String?
@@ -65,29 +110,24 @@ model Device {
   deviceModel          String?
   configurationVersion String?
 
-  // Optional grouping/labels — carried over from the pilot's "pune/s1"
-  // naming so existing devices stay identifiable; free-text, not a
-  // foreign key, since fleet scale doesn't need a formal site hierarchy
-  // for v1 (add one later only if the business actually needs it — see
-  // DEVELOPMENT_RULES.md §3 "no speculative abstraction").
-  siteLabel            String?
-  stationLabel         String?
+  latitude             Float?    // set during provisioning, NOT from the
+  longitude            Float?    // daily payload — meters don't report
+                                  // GPS; see DATAFLOW.md §5.1
 
-  firstSeenAt          DateTime @default(now())
-  lastSeenAt           DateTime? // set on every successful ingest —
-                                  // drives the meter table's "last
-                                  // reading" column and the missing-data
-                                  // alarm job
+  firstSeenAt          DateTime  @default(now())
+  lastSeenAt           DateTime? // updated on every successful ingest
 
   readings             Reading[]
-  alarms               Alarm[]
+  alarms                Alarm[]
+
+  @@index([customerId])
 }
 
 model Reading {
   id                  String   @id @default(cuid())
   deviceId            String
   device              Device   @relation(fields: [deviceId], references: [id])
-  readingDate         DateTime // date only, one row per device per day
+  readingDate         DateTime // one row per device per day
 
   correctedVolumeVb   Float?   // Sm3
   uncorrectedVolumeVm Float?   // m3
@@ -103,36 +143,19 @@ model Reading {
   gasDensity          Float?   // kg/m3
   hourlyConsumption   Json?    // [ {hour: 0..23, value: number}, ... ]
 
-  rawPayload          Json     // full as-received body, for replay/debug
-                                // — FR9 safety net, kept even after the
-                                // parser is solid
+  batteryLevel        Float?   // % — NEW, assumed field, drives the
+                                // Customers-page "Battery" column
+  currentFlowRate     Float?   // SCMH — NEW, assumed field, drives the
+                                // Customers-page / Overview "Flow" values
+                                // (fallback: derive from the latest entry
+                                // in hourlyConsumption if this isn't sent)
+
+  rawPayload          Json     // full as-received body — kept even after
+                                // the parser is solid (FR14 safety net)
   receivedAt          DateTime @default(now())
 
   @@unique([deviceId, readingDate])
   @@index([readingDate])
-}
-
-model Alarm {
-  id               String      @id @default(cuid())
-  deviceId         String
-  device           Device      @relation(fields: [deviceId], references: [id])
-  type             AlarmType
-  cause            String      // human-readable, e.g. "No data received
-                                // for 2026-07-20" or "Corrected volume
-                                // 18% above 7-day average"
-  gasValue         Float?      // the triggering value — set for
-                                // GAS_OUT_OF_RANGE, null for MISSING_DATA
-  averageValue     Float?      // the trailing average it was compared
-                                // against — GAS_OUT_OF_RANGE only
-  forDate          DateTime    // the day the alarm pertains to (missed
-                                // day, or day of the abnormal reading)
-  status           AlarmStatus @default(OPEN)
-  createdAt        DateTime    @default(now())
-
-  @@unique([deviceId, type, forDate]) // one alarm per device/type/day —
-                                       // re-running the check doesn't
-                                       // duplicate
-  @@index([status, createdAt])
 }
 
 enum AlarmType {
@@ -140,107 +163,163 @@ enum AlarmType {
   GAS_OUT_OF_RANGE
 }
 
+enum AlarmSeverity {
+  CRITICAL
+  WARNING
+}
+
 enum AlarmStatus {
   OPEN
-  RESOLVED   // e.g. a MISSING_DATA alarm auto-resolves once the device
-             // reports again — v1 can leave this manual/unused if
-             // simpler; see DATAFLOW.md §6
+  RESOLVED
 }
+
+model Alarm {
+  id             String        @id @default(cuid())
+  deviceId       String
+  device         Device        @relation(fields: [deviceId], references: [id])
+  type           AlarmType
+  severity       AlarmSeverity // NEW — assumed mapping: MISSING_DATA =
+                                // CRITICAL, GAS_OUT_OF_RANGE = WARNING
+                                // (DATAFLOW.md §6, PRD.md §9 — confirm)
+  cause          String
+  gasValue       Float?
+  averageValue   Float?
+  forDate        DateTime
+  status         AlarmStatus   @default(OPEN)
+  acknowledged   Boolean       @default(false) // NEW — the header bell's
+                                // "mark all read" affordance; separate
+                                // from `status` on purpose (PRD.md FR9 —
+                                // a single shared flag, no per-user read
+                                // state, since there's no multi-user auth)
+  createdAt      DateTime      @default(now())
+
+  @@unique([deviceId, type, forDate])
+  @@index([status, createdAt])
+  @@index([severity, status])
+  @@index([acknowledged])
+}
+
+model AlarmSettings {
+  id                       String @id @default("singleton") // one row
+  gasDeviationWindowDays   Int    @default(7)
+  gasDeviationPercent      Float  @default(20)
+  updatedAt                DateTime @updatedAt
+}
+// Replaces the hardcoded "7-day / ±20%" in v1's DATAFLOW.md §6.2 with a
+// configurable row, so ops can tune it from the Settings page (FR — see
+// §5 UI Design below) without a redeploy. Singleton via a fixed id,
+// simplest pattern for "exactly one row of global config."
 ```
 
 Notes:
-- `rawPayload` is the safety net FR9 asks for — if the parsed columns turn
-  out wrong once the real payload shape is confirmed, nothing is lost.
-- `hourlyConsumption` is kept as JSON rather than a normalized child table
-  for v1 (24 rows/day/device is small, and query patterns are "give me the
-  24 values for this day", not cross-day per-hour aggregation). Normalize
-  later only if that access pattern actually shows up.
-- Device info fields (`firmwareVersion`, etc.) are simply overwritten on
-  each push. If the payload turns out to only include device info on some
-  pushes (TBD per DATAFLOW.md §5), only overwrite fields that are present
-  rather than nulling out previously-known values.
-- `Alarm` intentionally does **not** attempt notification delivery (email/
-  SMS) — v1 is in-app only per PRD §3 Non-Goals. The header bell (§5 below)
-  reads `count(status = OPEN)`.
+- **Derived status is NOT a stored column anywhere** (PRD.md FR11) — it's
+  computed at query time from `Device.lastSeenAt` + open `Alarm` rows for
+  that device, so there is exactly one source of truth (the alarms
+  themselves), not a cached field that can drift out of sync. Compute it
+  in the read API layer (§4), not in the DB schema.
+- `latitude`/`longitude` live on `Device`, not `Customer` — a customer
+  could in principle have multiple meters at different physical
+  locations; the map plots meters, not customers.
+- Device info fields are still overwritten on each push, same
+  present-fields-only caveat as v1 (don't null out previously-known
+  values if a push omits them).
 
 ## 4. API Design
 
-### Write (ingestion)
-- `POST /api/ingest` — **single endpoint for the whole fleet** (FR1 — a
-  route per site/station doesn't scale to 20k devices). Device identifies
-  itself via `deviceSerialNo` in the JSON body, not the URL.
-  - Validates required fields exist, upserts `Device` (by
-    `deviceSerialNo`), upserts `Reading` for `(deviceId, readingDate)`.
-  - Always stores `rawPayload` even if parsing partially fails, and
-    returns a clear error if the shape is unrecognized (rather than
-    guessing) — see DATAFLOW.md §4.
+### Write
+- `POST /api/ingest` — unchanged in shape (single fleet-wide endpoint,
+  identifies device by `deviceSerialNo`), now also parses `batteryLevel`
+  and `currentFlowRate` if present, and runs the GAS_OUT_OF_RANGE check
+  using `AlarmSettings` instead of a hardcoded threshold.
+- `POST /api/gas` / `PATCH /api/gas/[id]` — create/edit a GeographicalArea.
+- `POST /api/customers` / `PATCH /api/customers/[id]` — create/edit a
+  Customer.
+- `PATCH /api/devices/[id]/assign` — assign/reassign a Device to a
+  Customer (also where `latitude`/`longitude` get set for Map View).
+- `PATCH /api/alarms/[id]/acknowledge`, `PATCH /api/alarms/acknowledge-all`
+  — the header bell's "mark read" actions (doesn't touch `status`).
+- `PUT /api/settings/alarms` — update `AlarmSettings`.
 
 ### Read
-- `GET /api/overview` — fleet summary: total devices, reported-today
-  count, open-alarm count (FR4).
-- `GET /api/devices?page=&search=&status=` — server-side paginated,
-  searchable device list for the Meter Table page (FR5). Each row: serial,
-  last reading date, reporting/stale status.
-- `GET /api/devices/[id]/latest` — full latest `Reading` + `Device` info.
-- `GET /api/devices/[id]/history?days=30` — array of `Reading` summary
-  rows for trend charts.
-- `GET /api/devices/[id]/hourly?date=YYYY-MM-DD` — hourly array for one
-  day (defaults to latest day if `date` omitted).
-- `GET /api/alarms?status=&type=&page=` — paginated alarm list, most
-  recent first (FR6).
-- `GET /api/alarms/count` — open-alarm count, for the header bell badge
-  (FR7). (May just be a field on `/api/overview` instead — pick whichever
-  avoids an extra round trip once the header component is built.)
+- `GET /api/overview` — extended: monthly consumption total, consumption
+  by category, top-5/least-5 customers, GA-wise consumption, recent
+  activity feed, reported-today count, open-alarm count.
+- `GET /api/gas` — list of GAs (for filter dropdowns / hierarchy display).
+- `GET /api/customers?page=&search=&gaId=&status=&category=` —
+  server-side paginated/filterable/searchable, for the Customers page
+  (grid and list views both consume this same endpoint).
+- `GET /api/customers/[id]` — customer detail + its device(s) + latest
+  readings.
+- `GET /api/map/devices?gaId=` — lean payload for Map View: id,
+  latitude, longitude, derived status, customer name. Only devices with
+  both lat and long set. Kept intentionally minimal (not full device
+  detail) since it may return thousands of rows.
+- `GET /api/devices/[id]/latest`, `/history`, `/hourly` — unchanged from
+  v1 (meter/device detail, KPI cards, charts).
+- `GET /api/alarms?status=&severity=&search=&page=` — extended with
+  severity filter and search.
+- `GET /api/alarms/export?format=csv` — CSV export of the current
+  filtered alarm list (FR9).
+- `GET /api/alarms/count` — unread (unacknowledged, open) count for the
+  header bell badge.
+- `GET /api/reports/monthly-consumption` — data for report #1 (FR12).
+- `GET /api/reports/leak-anomaly` — data for report #2.
+- `GET /api/reports/ga-meter-audit` — data for report #3.
+  (Each report route returns the data; PDF rendering can happen
+  server-side in the same route or client-side from the JSON — an
+  implementation choice, not an architectural one.)
+- `GET /api/settings/alarms` — current `AlarmSettings` values.
 
 ## 5. UI Design
 
-### Shell (every page)
-- **Sidebar** — primary navigation (FR8): Overview, Meters, Alarms,
-  Reports (Reports links to a "coming soon" placeholder — not built this
-  phase, see PRD §3).
-- **Header** — present on every page; includes a notification/bell icon
-  showing the open-alarm count (badge) with a dropdown or direct link
-  through to the Alarms page (FR7).
+### Shell (every page, unchanged principle)
+Sidebar: Overview, Map View, Customers, Alarms, Reports (PRD.md FR13 —
+Operations/System omitted pending clarification, PRD.md §9). Header: bell
+icon with unread count + dropdown + "mark all read," links to Alarms.
 
 ### Overview page (`/dashboard`)
-Fleet-level summary cards (FR4): total meters, reported today vs. not,
-open alarm count. Enough to answer "is anything wrong right now" without
-opening the meter table.
+Fleet summary cards (reported today / not, open alarms), Monthly
+Consumption chart, Consumption by Category chart, Top-5 / Least-5
+Consuming Customers tables, GA-wise Consumption chart, Recent Activity
+feed (explicitly labeled as "recent," not "live" — PRD.md §3).
 
-### Meter Table page (`/dashboard/meters`)
-Paginated, searchable table of all devices (FR5) — server-side pagination,
-not a full client-side table (10k–20k rows). Columns: device/meter serial,
-site/station label (if present), last reading date, status
-(reporting/stale). Row click → meter detail.
+### Map View page (`/dashboard/map`)
+Clustered marker map (Leaflet). Legend: Normal / Anomaly / Alert. Hover =
+quick-read tooltip (customer name, last reading date, status). Click =
+navigate to that device's detail page. GA filter to narrow the view.
 
-### Meter detail page (`/dashboard/meters/[id]`)
-- Top: date of latest reading + a "data is N days old" indicator (surfaces
-  missed pushes per DATAFLOW.md §4).
-- KPI card row: Volume (corrected/uncorrected), Pressure (+min/max),
-  Temperature (+min/max), Gas Properties (Z, Fpv, C, Density), Meter Info.
-- Hourly consumption chart (bar) for the selected day, with a date picker
-  limited to days that have data.
-- Trend section: line charts for Volume / Pressure / Temperature over a
-  selectable range (7/30/90 days).
-- Device Info panel (collapsible, since it rarely changes): serial,
-  firmware, hardware, model, config version.
+### Customers page (`/dashboard/customers`)
+Grid/List view toggle. Filters: GA, status (derived, PRD.md FR11),
+category. Search box. Server-side paginated. Columns/card fields: Customer
+Name, Meter ID, Device ID, Category, Address, Flow, Pressure, Battery,
+Status. Row/card click → customer or device detail.
+
+### Meter/Device detail page (`/dashboard/devices/[id]`)
+Unchanged from v1 (KPI cards, hourly chart, trend charts, device info
+panel) — now also shows which Customer/GA it belongs to (or "Unassigned"
+with a link into the admin assignment flow).
 
 ### Alarms page (`/dashboard/alarms`)
-Filterable (by type/status), most-recent-first list (FR6): device serial,
-alarm type, cause, triggering value (where applicable), date, status.
-Row click → meter detail for that device.
+Filter tabs: All / Critical / Warning / Resolved (matches the reference
+site's shorthand — really a severity filter plus a status filter combined
+in the UI). Search. Export CSV button. Table: Time, Severity, Meter (→
+Customer name), GA, Description, Acknowledge action.
 
 ### Reports page (`/dashboard/reports`)
-Nav entry + "coming soon" placeholder only — not built this phase (PRD §3
-Non-Goals, IMPLEMENTATION_PLAN.md "Explicitly Deferred").
+Three report cards (FR12), each with a "Download PDF" action.
 
-## 6. Security Notes (carried over from the existing code, worth fixing
-regardless of the dashboard work)
-- `write-server`/`priceWrite.js` and the commented router block in
-  `http-server/index.js` hardcode the router IP, username, and password in
-  source. Move these to environment variables before this code goes
-  anywhere shared (e.g. a repo, CI, or a teammate's machine).
-- `/api/ingest` will be internet-facing (device pushes over HTTP) and,
-  unlike the pilot's per-station routes, is a single fleet-wide door —
-  worth deciding whether it needs a shared secret/token in the header so
-  it's not a fully open write endpoint at 10k–20k-device scale.
+### Admin — GA/Customer/Device assignment (`/dashboard/admin` or similar)
+Minimal forms per PRD.md FR3a: create GA, create Customer (under a GA),
+assign a Device to a Customer by serial number. Not a polished workflow —
+functional is enough for v1.
+
+### Settings page (`/dashboard/settings`) — scoped down from the reference
+Only what's functionally meaningful for a real (non-simulated) system:
+`AlarmSettings` controls (deviation window/percent). Skip the reference
+site's purely cosmetic bits (theme toggle can be a simple client-side
+control if wanted, but isn't a backend requirement; "simulated tick rate"
+has no equivalent since our data isn't simulated).
+
+## 6. Security Notes (carried over, unchanged)
+Same as v1 — env vars for secrets, ingestion endpoint should have a
+shared-secret/token check at fleet scale.

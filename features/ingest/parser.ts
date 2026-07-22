@@ -51,6 +51,8 @@ export function parseIngestPayload(body: unknown): ParsedReading {
     compressibilityFpv: typeof payload.gasProperties?.compressibilityFpv === "number" ? payload.gasProperties.compressibilityFpv : undefined,
     correctionFactorC: typeof payload.gasProperties?.correctionFactorC === "number" ? payload.gasProperties.correctionFactorC : undefined,
     gasDensity: typeof payload.gasProperties?.density === "number" ? payload.gasProperties.density : undefined,
+    batteryLevel: typeof payload.batteryLevel === "number" ? payload.batteryLevel : undefined,
+    currentFlowRate: typeof payload.currentFlowRate === "number" ? payload.currentFlowRate : undefined,
     hourlyConsumption: Array.isArray(payload.hourlyConsumption) ? payload.hourlyConsumption : undefined,
     rawPayload: payload as Record<string, unknown>,
   };

@@ -76,6 +76,7 @@ export async function generateMissingDataAlarms(forDate?: Date): Promise<{
         create: {
           deviceId,
           type: "MISSING_DATA",
+          severity: "CRITICAL",
           forDate: normalizedDate,
           cause: `No data received for ${dateLabel}`,
           status: "OPEN",

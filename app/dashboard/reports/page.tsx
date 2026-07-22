@@ -12,13 +12,9 @@ import {
   Activity,
   Gauge,
   Thermometer,
-  Layers,
   Info,
-  Clock,
 } from "lucide-react";
 import {
-  BarChart,
-  Bar,
   XAxis,
   YAxis,
   Tooltip,
@@ -29,7 +25,6 @@ import {
 } from "recharts";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -46,8 +41,8 @@ interface DeviceItem {
   id: string;
   deviceSerialNo: string;
   meterSerialNo: string | null;
-  siteLabel: string | null;
-  stationLabel: string | null;
+  customerName: string | null;
+  gaName: string | null;
   status: "REPORTING" | "STALE";
 }
 
@@ -60,8 +55,8 @@ interface DeviceData {
   hardwareVersion: string | null;
   deviceModel: string | null;
   configurationVersion: string | null;
-  siteLabel: string | null;
-  stationLabel: string | null;
+  customerName: string | null;
+  gaName: string | null;
   firstSeenAt: string;
   lastSeenAt: string | null;
 }
@@ -101,12 +96,7 @@ function fmt(val: number | null | undefined, decimals = 2): string {
   });
 }
 
-function daysSince(dateStr: string | null): number | null {
-  if (!dateStr) return null;
-  const then = new Date(dateStr).getTime();
-  const now = Date.now();
-  return Math.floor((now - then) / 86_400_000);
-}
+
 
 function KpiCard({
   title,
@@ -120,9 +110,9 @@ function KpiCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="bg-slate-900/60 border-slate-800">
+    <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-        <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           {title}
         </CardTitle>
         <Icon className={`w-4 h-4 ${iconColor}`} />
@@ -134,9 +124,9 @@ function KpiCard({
 
 function DataRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between items-center py-1 border-b border-slate-800/60 last:border-0">
-      <span className="text-xs text-slate-400">{label}</span>
-      <span className="font-mono text-sm text-slate-100">{value}</span>
+    <div className="flex justify-between items-center py-1 border-b border-slate-200 dark:border-slate-800/60 last:border-0">
+      <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
+      <span className="font-mono text-sm text-slate-900 dark:text-slate-100">{value}</span>
     </div>
   );
 }
@@ -144,11 +134,11 @@ function DataRow({ label, value }: { label: string; value: string }) {
 function BigValue({ value, unit }: { value: string; unit?: string }) {
   return (
     <div className="flex items-baseline gap-1.5 mb-1">
-      <span className="font-mono text-2xl font-semibold text-white">
+      <span className="font-mono text-2xl font-semibold text-slate-900 dark:text-white">
         {value}
       </span>
       {unit && (
-        <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">
+        <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
           {unit}
         </span>
       )}
@@ -199,6 +189,7 @@ export default function ReportsPage() {
   }, [search]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDevices(1);
   }, [fetchDevices]);
 
@@ -237,7 +228,7 @@ export default function ReportsPage() {
       const { jsPDF } = await import("jspdf");
 
       // Temporarily set a white background to avoid transparent PDFs in dark mode, if needed. 
-      // (The wrapper is already bg-slate-950, so it should be fine).
+      // (The wrapper is already bg-white dark:bg-slate-950, so it should be fine).
       const dataUrl = await toPng(reportRef.current, { 
         quality: 0.95, 
         pixelRatio: 2,
@@ -265,8 +256,8 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-white">Reports & Export</h1>
-        <p className="text-sm text-slate-400 mt-1">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Reports & Export</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
           Select a meter below to generate a detailed telemetry report and export it to PDF.
         </p>
       </div>
@@ -274,35 +265,35 @@ export default function ReportsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* LEFT PANE: Meter Selection Table */}
         <div className="lg:col-span-4 flex flex-col gap-4">
-          <Card className="bg-slate-900/60 border-slate-800 p-4">
+          <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 p-4">
             <div className="relative mb-4">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
               <Input
                 placeholder="Search meter..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 bg-slate-950 border-slate-800 text-slate-200 placeholder:text-slate-500 focus:border-orange-500"
+                className="pl-9 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-500 focus:border-orange-500"
               />
             </div>
             
-            <div className="rounded-md border border-slate-800 overflow-hidden">
+            <div className="rounded-md border border-slate-200 dark:border-slate-800 overflow-hidden">
               <Table>
-                <TableHeader className="bg-slate-950/80">
-                  <TableRow className="border-slate-800">
-                    <TableHead className="text-slate-400 font-semibold py-2">Device</TableHead>
-                    <TableHead className="text-right text-slate-400 font-semibold py-2">Action</TableHead>
+                <TableHeader className="bg-slate-50 dark:bg-slate-950/80">
+                  <TableRow className="border-slate-200 dark:border-slate-800">
+                    <TableHead className="text-slate-500 dark:text-slate-400 font-semibold py-2">Device</TableHead>
+                    <TableHead className="text-right text-slate-500 dark:text-slate-400 font-semibold py-2">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loadingList ? (
-                    <TableRow className="border-slate-800">
-                      <TableCell colSpan={2} className="text-center py-6 text-slate-400 text-sm">
+                    <TableRow className="border-slate-200 dark:border-slate-800">
+                      <TableCell colSpan={2} className="text-center py-6 text-slate-500 dark:text-slate-400 text-sm">
                         Loading...
                       </TableCell>
                     </TableRow>
                   ) : devices.length === 0 ? (
-                    <TableRow className="border-slate-800">
-                      <TableCell colSpan={2} className="text-center py-6 text-slate-400 text-sm">
+                    <TableRow className="border-slate-200 dark:border-slate-800">
+                      <TableCell colSpan={2} className="text-center py-6 text-slate-500 dark:text-slate-400 text-sm">
                         No meters found.
                       </TableCell>
                     </TableRow>
@@ -310,20 +301,20 @@ export default function ReportsPage() {
                     devices.map((d) => (
                       <TableRow 
                         key={d.id} 
-                        className={`border-slate-800 hover:bg-slate-800/40 cursor-pointer ${selectedMeterId === d.id ? 'bg-orange-500/10' : ''}`}
+                        className={`border-slate-200 dark:border-slate-800 hover:bg-slate-100/40 dark:hover:bg-slate-800/40 cursor-pointer ${selectedMeterId === d.id ? 'bg-orange-500/10' : ''}`}
                         onClick={() => fetchMeterDetail(d.id)}
                       >
                         <TableCell className="py-2">
-                          <div className="font-mono text-sm font-medium text-slate-200 flex items-center gap-2">
+                          <div className="font-mono text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-2">
                             <Flame className={`w-3.5 h-3.5 ${d.status === "REPORTING" ? "text-emerald-400" : "text-amber-400"}`} />
                             {d.deviceSerialNo}
                           </div>
                           <div className="text-xs text-slate-500 truncate mt-0.5 max-w-[150px]">
-                            {d.siteLabel || d.stationLabel || "Unknown Site"}
+                            {d.customerName ? `${d.customerName} (${d.gaName || 'Unknown GA'})` : "Unassigned"}
                           </div>
                         </TableCell>
                         <TableCell className="text-right py-2">
-                          <Button size="sm" variant="ghost" className="h-7 text-xs text-slate-300 hover:text-white">
+                          <Button size="sm" variant="ghost" className="h-7 text-xs text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:text-white">
                             View
                           </Button>
                         </TableCell>
@@ -336,7 +327,7 @@ export default function ReportsPage() {
 
             {/* Pagination */}
             {!loadingList && totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 text-xs text-slate-400">
+              <div className="flex items-center justify-between mt-4 text-xs text-slate-500 dark:text-slate-400">
                 <span>Page {page} of {totalPages}</span>
                 <div className="flex gap-2">
                   <Button
@@ -344,7 +335,7 @@ export default function ReportsPage() {
                     size="sm"
                     disabled={page <= 1}
                     onClick={() => fetchDevices(page - 1)}
-                    className="h-7 w-7 p-0 border-slate-800 bg-slate-950 text-slate-300 hover:bg-slate-800"
+                    className="h-7 w-7 p-0 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
@@ -353,7 +344,7 @@ export default function ReportsPage() {
                     size="sm"
                     disabled={page >= totalPages}
                     onClick={() => fetchDevices(page + 1)}
-                    className="h-7 w-7 p-0 border-slate-800 bg-slate-950 text-slate-300 hover:bg-slate-800"
+                    className="h-7 w-7 p-0 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </Button>
@@ -366,7 +357,7 @@ export default function ReportsPage() {
         {/* RIGHT PANE: Detailed Report & PDF Export Area */}
         <div className="lg:col-span-8">
           {!selectedMeterId ? (
-            <div className="h-full min-h-[400px] border border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 bg-slate-900/20">
+            <div className="h-full min-h-[400px] border border-dashed border-slate-200 dark:border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 bg-slate-900/20">
               <FileDown className="w-10 h-10 mb-4 opacity-50" />
               <p>Select a meter from the list to view and export its report.</p>
             </div>
@@ -398,14 +389,14 @@ export default function ReportsPage() {
               </div>
 
               {/* PDF Wrapper: The contents inside this ref will be converted to PDF */}
-              <div ref={reportRef} className="bg-slate-950 p-6 rounded-xl border border-slate-800 shadow-xl space-y-6 text-slate-200">
+              <div ref={reportRef} className="bg-white dark:bg-slate-950 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl space-y-6 text-slate-700 dark:text-slate-200">
                 {/* PDF Header */}
-                <div className="border-b border-slate-800 pb-4 pr-32">
-                  <h2 className="text-2xl font-bold text-white font-mono flex items-center gap-2">
+                <div className="border-b border-slate-200 dark:border-slate-800 pb-4 pr-32">
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white font-mono flex items-center gap-2">
                      <Flame className="w-5 h-5 text-orange-500" />
                      {detailData.device.deviceSerialNo} Report
                   </h2>
-                  <p className="text-sm text-slate-400 mt-1">
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                     Generated on {new Date().toLocaleString()}
                   </p>
                 </div>
@@ -424,24 +415,24 @@ export default function ReportsPage() {
                     <BigValue value={fmt(detailData.latestReading?.gasTemperature)} unit="°C" />
                     <DataRow label="Max/Min" value={`${fmt(detailData.latestReading?.temperatureMax)} / ${fmt(detailData.latestReading?.temperatureMin)}`} />
                   </KpiCard>
-                  <KpiCard title="Device Info" icon={Info} iconColor="text-slate-400">
+                  <KpiCard title="Device Info" icon={Info} iconColor="text-slate-500 dark:text-slate-400">
                     <DataRow label="Meter Serial" value={detailData.device.meterSerialNo ?? "—"} />
-                    <DataRow label="Last Seen" value={detailData.device.lastSeenAt ? new Date(detailData.device.lastSeenAt).toLocaleDateString() : "—"} />
+                    <DataRow label="Last Seen" value={detailData.device.lastSeenAt ? new Date(detailData.device.lastSeenAt).toLocaleString() : "—"} />
                   </KpiCard>
                 </div>
 
                 {/* History Trend Chart */}
-                <div className="border border-slate-800 rounded-lg p-4 bg-slate-900/40">
-                  <h3 className="text-sm font-semibold text-slate-200 mb-4">30-Day Corrected Volume Trend</h3>
+                <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-4 bg-slate-50 dark:bg-slate-900/40">
+                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-4">30-Day Corrected Volume Trend</h3>
                   {history.length > 0 ? (
                     <div style={{ width: '100%', height: '200px' }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={history} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                          <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={false} />
-                          <YAxis tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={false} />
+                          <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-300 dark:text-slate-800" />
+                          <XAxis dataKey="date" tick={{ fontSize: 10, fill: "currentColor" }} tickLine={false} axisLine={false} className="text-slate-500 dark:text-slate-400" />
+                          <YAxis tick={{ fontSize: 10, fill: "currentColor" }} tickLine={false} axisLine={false} className="text-slate-500 dark:text-slate-400" />
                           <Tooltip 
-                            contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "6px" }}
+                            contentStyle={{ backgroundColor: "var(--popover)", borderColor: "var(--border)", color: "var(--popover-foreground)", borderRadius: "6px" }}
                           />
                           <Line type="monotone" dataKey="correctedVolumeVb" stroke="#f97316" strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
                         </LineChart>

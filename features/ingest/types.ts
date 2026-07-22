@@ -32,6 +32,8 @@ export interface RawIngestPayload {
     correctionFactorC?: number;
     density?: number;
   };
+  batteryLevel?: number;
+  currentFlowRate?: number;
   hourlyConsumption?: Array<{ hour: number; value: number }>;
   [key: string]: unknown;
 }
@@ -59,6 +61,8 @@ export interface ParsedReading {
   compressibilityFpv?: number;
   correctionFactorC?: number;
   gasDensity?: number;
+  batteryLevel?: number;
+  currentFlowRate?: number;
   hourlyConsumption?: unknown;
   rawPayload: Record<string, unknown>;
 }
