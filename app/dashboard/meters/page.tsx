@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
+import { useAutoRefresh } from "@/lib/auto-refresh";
 
 interface DeviceItem {
   id: string;
@@ -93,6 +94,7 @@ export default function MetersPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDevices(1);
   }, [fetchDevices]);
+  useAutoRefresh(fetchDevices);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">

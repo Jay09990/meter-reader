@@ -1,0 +1,18 @@
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: transparent;
+}
+
+.leaflet-tile-pane img.leaflet-tile {
+  max-width: none !important;
+  max-height: none !important;
+  width: 256px !important;
+  height: 256px !important;
+}
+
+.marker-dot,
+.cluster-bubble {
+  background: transparent !important;
+  border: none !important;
+}

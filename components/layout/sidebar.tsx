@@ -30,12 +30,12 @@ const navigationGroups = [
       { name: "Reports", href: "/dashboard/reports", icon: FileText },
     ]
   },
-  {
-    title: "SYSTEM",
-    items: [
-      { name: "Admin Settings", href: "/dashboard/admin", icon: Settings },
-    ]
-  }
+  // {
+  //   title: "SYSTEM",
+  //   items: [
+  //     { name: "Admin Settings", href: "/dashboard/admin", icon: Settings },
+  //   ]
+  // }
 ];
 
 export function Sidebar() {

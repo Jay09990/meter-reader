@@ -30,6 +30,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAutoRefresh } from "@/lib/auto-refresh";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -202,6 +203,9 @@ export default function MeterDetailPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadHistory();
   }, [loadHistory]);
+
+  useAutoRefresh(loadData);
+  useAutoRefresh(loadHistory);
 
   // Prepare hourly chart data (fill 0–23 gaps with 0)
   const hourlyChartData = Array.from({ length: 24 }, (_, h) => {

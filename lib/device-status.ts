@@ -1,6 +1,7 @@
 import { Alarm, AlarmSeverity, AlarmStatus } from "@prisma/client";
 
 export type DeviceStatus = "NEW" | "ONLINE" | "OFFLINE" | "ALERT";
+export type MapMarkerColor = "green" | "amber" | "red" | "gray";
 
 export function computeDeviceStatus(
   lastSeenAt: Date | null,
@@ -28,4 +29,36 @@ export function computeDeviceStatus(
   if (hasCriticalOrWarning) return "ALERT";
 
   return "ONLINE";
+}
+
+export function getMapMarkerColor(
+  lastSeenAt: Date | null,
+  alarms: Pick<Alarm, "status" | "severity">[],
+  customerId?: string | null
+): MapMarkerColor {
+  const openAlarms = alarms.filter((alarm) => alarm.status === AlarmStatus.OPEN);
+
+  if (openAlarms.some((alarm) => alarm.severity === AlarmSeverity.CRITICAL)) {
+    return "red";
+  }
+
+  if (openAlarms.some((alarm) => alarm.severity === AlarmSeverity.WARNING)) {
+    return "amber";
+  }
+
+  if (customerId === null) {
+    return "gray";
+  }
+
+  if (!lastSeenAt) {
+    return "gray";
+  }
+
+  const now = new Date();
+  const hoursSinceLastSeen = (now.getTime() - lastSeenAt.getTime()) / (1000 * 60 * 60);
+  if (hoursSinceLastSeen > 24) {
+    return "gray";
+  }
+
+  return "green";
 }

@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { BarChart, Bar, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useAutoRefresh } from "@/lib/auto-refresh";
 
 interface FleetOverviewData {
   totalDevices: number;
@@ -139,6 +140,8 @@ export default function OverviewPage() {
     fetchOverview();
   }, []);
 
+  useAutoRefresh(fetchOverview);
+
   const meterStats = data?.metersOnline;
   const categorySeries = (data?.consumptionByCategory ?? []).map((item) => ({
     ...item,
@@ -225,7 +228,7 @@ export default function OverviewPage() {
             <Factory className="w-5 h-5 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-extrabold text-white">
+            <div className="text-3xl font-extrabold text-forground">
               {loading ? "..." : fmt(categorySeries.find((item) => item.category === "INDUSTRIAL")?.totalVolume ?? 0, 0)}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Latest reading volume</p>
@@ -240,7 +243,7 @@ export default function OverviewPage() {
             <Building2 className="w-5 h-5 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-extrabold text-white">
+            <div className="text-3xl font-extrabold text-forground">
               {loading ? "..." : fmt(categorySeries.find((item) => item.category === "COMMERCIAL")?.totalVolume ?? 0, 0)}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Latest reading volume</p>
@@ -381,8 +384,8 @@ export default function OverviewPage() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 h-[500px]">
+        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 overflow-y-scroll">
           <CardHeader>
             <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white">Consumption by City</CardTitle>
           </CardHeader>
@@ -399,7 +402,7 @@ export default function OverviewPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
+        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 overflow-y-scroll">
           <CardHeader>
             <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white">Live Event Feed</CardTitle>
           </CardHeader>

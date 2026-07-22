@@ -4,18 +4,22 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
+import { RefreshIntervalSelect } from "./RefreshIntervalSelect";
+import { useAutoRefresh } from "@/lib/auto-refresh";
 
 export function Header() {
   const [openAlarmCount, setOpenAlarmCount] = useState<number>(0);
 
-  useEffect(() => {
+  const fetchAlarmCount = () => {
     fetch("/api/alarms/count")
       .then((res) => res.json())
       .then((data) => {
         if (typeof data.count === "number") setOpenAlarmCount(data.count);
       })
-      .catch(() => {});
-  }, []);
+      .catch(() => { });
+  };
+  useEffect(fetchAlarmCount, []);
+  useAutoRefresh(fetchAlarmCount);
 
   return (
     <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur px-6 flex items-center justify-between sticky top-0 z-10 text-slate-900 dark:text-slate-100 transition-colors">
@@ -24,8 +28,9 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-4">
+        <RefreshIntervalSelect />
         <ThemeToggle />
-        
+
         <Link
           href="/dashboard/alarms"
           className="relative p-2 rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
