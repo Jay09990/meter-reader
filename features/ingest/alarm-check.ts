@@ -19,6 +19,12 @@ export async function checkGasOutOfRangeAlarm(
   const windowStart = new Date(readingDate);
   windowStart.setUTCDate(windowStart.getUTCDate() - deviationWindowDays);
 
+  // CHANGED: a device can now have multiple readings per day. Averaging
+  // every raw row would let a chatty day (many pushes) skew the baseline
+  // disproportionately vs. a normal once-a-day day. Fetch all rows in the
+  // window, then collapse to one value per day (the latest push that
+  // day) before averaging — same "latest-wins for display/derived-metric"
+  // rule used everywhere else (features/devices/service.ts).
   const history = await db.reading.findMany({
     where: {
       deviceId,
@@ -30,17 +36,30 @@ export async function checkGasOutOfRangeAlarm(
         not: null,
       },
     },
+    orderBy: [{ readingDate: "asc" }, { receivedAt: "desc" }],
     select: {
+      readingDate: true,
       correctedVolumeVb: true,
     },
   });
 
-  if (history.length < 3) {
-    // Insufficient history to establish a baseline
+  const latestPerDay = new Map<string, number>();
+  for (const r of history) {
+    const key = r.readingDate.toISOString().split("T")[0];
+    if (!latestPerDay.has(key)) {
+      latestPerDay.set(key, r.correctedVolumeVb as number); // first hit per
+      // day = latest push for that day, given the sort order above
+    }
+  }
+
+  if (latestPerDay.size < 3) {
+    // Insufficient distinct days of history to establish a baseline —
+    // note this is now a count of DAYS, not raw rows, so a device with
+    // one day's worth of pushes (however many) still correctly skips.
     return;
   }
 
-  const values = history.map((r) => r.correctedVolumeVb as number);
+  const values = Array.from(latestPerDay.values());
   const sum = values.reduce((acc, val) => acc + val, 0);
   const average = sum / values.length;
 

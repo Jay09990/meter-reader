@@ -71,7 +71,11 @@ export async function getPaginatedDevices(options: GetDevicesOptions) {
       include: {
         readings: {
           take: 1,
-          orderBy: { readingDate: "desc" },
+          // CHANGED: was orderBy readingDate desc, which was ambiguous
+          // once a device can have several rows for the same day. Order
+          // by receivedAt (actual push arrival time) so "latest reading"
+          // always means the most recent push, full stop.
+          orderBy: { receivedAt: "desc" },
           select: {
             readingDate: true,
             correctedVolumeVb: true,
@@ -149,7 +153,8 @@ export async function getDeviceLatest(deviceIdOrSerial: string) {
     include: {
       readings: {
         take: 1,
-        orderBy: { readingDate: "desc" },
+        // CHANGED: same reasoning as getPaginatedDevices above.
+        orderBy: { receivedAt: "desc" },
       },
       alarms: {
         where: { status: "OPEN" },
@@ -219,12 +224,18 @@ export async function getDeviceHistory(deviceIdOrSerial: string, days: number = 
   const startDate = new Date();
   startDate.setUTCDate(startDate.getUTCDate() - days);
 
+  // CHANGED: a device can now have multiple rows per day. Fetch every row
+  // in range ordered (date asc, then latest-push-first within each date),
+  // then keep only the first row seen per date — that's the latest push
+  // for that day, per "latest-wins for display" (trend charts show one
+  // point/day; the full push history still lives in the Reading table for
+  // anyone querying it directly, nothing is deleted or hidden).
   const readings = await db.reading.findMany({
     where: {
       deviceId: device.id,
       readingDate: { gte: startDate },
     },
-    orderBy: { readingDate: "asc" },
+    orderBy: [{ readingDate: "asc" }, { receivedAt: "desc" }],
     select: {
       readingDate: true,
       correctedVolumeVb: true,
@@ -234,7 +245,16 @@ export async function getDeviceHistory(deviceIdOrSerial: string, days: number = 
     },
   });
 
-  return readings.map((r) => ({
+  const latestPerDay = new Map<string, (typeof readings)[number]>();
+  for (const r of readings) {
+    const key = r.readingDate.toISOString().split("T")[0];
+    if (!latestPerDay.has(key)) latestPerDay.set(key, r); // first hit per
+    // day = highest receivedAt for that day, thanks to the sort above
+  }
+
+  // Map preserves insertion order, and we inserted in ascending-date
+  // order, so no re-sort needed before returning.
+  return Array.from(latestPerDay.values()).map((r) => ({
     date: r.readingDate.toISOString().split("T")[0],
     correctedVolumeVb: r.correctedVolumeVb,
     uncorrectedVolumeVm: r.uncorrectedVolumeVm,
@@ -258,22 +278,27 @@ export async function getDeviceHourly(deviceIdOrSerial: string, dateStr?: string
     const targetDate = new Date(dateStr);
     const normalized = new Date(Date.UTC(targetDate.getUTCFullYear(), targetDate.getUTCMonth(), targetDate.getUTCDate()));
 
-    reading = await db.reading.findUnique({
+    // CHANGED: (deviceId, readingDate) is no longer unique, so this can
+    // no longer be a findUnique on that compound key — findFirst ordered
+    // by receivedAt desc gets the latest push for that specific date.
+    reading = await db.reading.findFirst({
       where: {
-        deviceId_readingDate: {
-          deviceId: device.id,
-          readingDate: normalized,
-        },
+        deviceId: device.id,
+        readingDate: normalized,
       },
+      orderBy: { receivedAt: "desc" },
       select: {
         readingDate: true,
         hourlyConsumption: true,
       },
     });
   } else {
+    // CHANGED: tie-break by receivedAt so that if the most recent date
+    // has several pushes, we still get the latest one, not just "some"
+    // row for that date.
     reading = await db.reading.findFirst({
       where: { deviceId: device.id },
-      orderBy: { readingDate: "desc" },
+      orderBy: [{ readingDate: "desc" }, { receivedAt: "desc" }],
       select: {
         readingDate: true,
         hourlyConsumption: true,

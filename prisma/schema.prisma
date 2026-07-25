@@ -65,34 +65,39 @@ model Device {
 }
 
 model Reading {
-  id                  String   @id @default(cuid())
-  deviceId            String
-  device              Device   @relation(fields: [deviceId], references: [id])
-  readingDate         DateTime
+   id                  String   @id @default(cuid())
+   deviceId            String
+   device              Device   @relation(fields: [deviceId], references: [id])
+   readingDate         DateTime
 
-  correctedVolumeVb   Float?
-  uncorrectedVolumeVm Float?
-  gasPressure         Float?
-  pressureMax         Float?
-  pressureMin         Float?
-  gasTemperature      Float?
-  temperatureMax      Float?
-  temperatureMin      Float?
-  compressibilityZ    Float?
-  compressibilityFpv  Float?
-  correctionFactorC   Float?
-  gasDensity          Float?
-  hourlyConsumption   Json?
-  
-  batteryLevel        Float?
-  currentFlowRate     Float?
+   correctedVolumeVb   Float?
+   uncorrectedVolumeVm Float?
+   gasPressure         Float?
+   pressureMax         Float?
+   pressureMin         Float?
+   gasTemperature      Float?
+   temperatureMax      Float?
+   temperatureMin      Float?
+   compressibilityZ    Float?
+   compressibilityFpv  Float?
+   correctionFactorC   Float?
+   gasDensity          Float?
+   hourlyConsumption   Json?
 
-  rawPayload          Json
-  receivedAt          DateTime @default(now())
+   batteryLevel        Float?
+   currentFlowRate     Float?
 
-  @@unique([deviceId, readingDate])
+   rawPayload          Json
+   receivedAt          DateTime @default(now())
+
+  // No longer unique — every push is now its own row (deviceId+readingDate
+  // can repeat). Index kept (now non-unique) since every read-path query
+  // still filters/sorts by these two columns to find "the latest push for
+  // this device/day" — see features/devices/service.ts and
+  // features/ingest/alarm-check.ts.
+  @@index([deviceId, readingDate])
   @@index([readingDate])
-}
+ }
 
 enum AlarmType {
   MISSING_DATA

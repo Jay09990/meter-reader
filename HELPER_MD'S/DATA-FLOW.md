@@ -37,18 +37,71 @@ out-of-order arrival. Nothing new here.
 doesn't resolve that; see v1 DATAFLOW.md §5.2 for the verification path,
 unchanged, still pending).
 
-### 5.1 What's new in the assumed shape
-Two fields added to support the reference-site-driven UI, on top of the
-v1 assumed shape:
+### 5.1 Full assumed shape (v1 fields + v2 additions)
 
 ```json
 {
-  "...": "...(all v1 fields unchanged)...",
+  "deviceSerialNo": "EVC-000123",
+  "meterSerialNo": "MTR-98765",
+  "meterSize": "4 inch",
+  "firmwareVersion": "1.2.3",
+  "hardwareVersion": "A1",
+  "deviceModel": "EVC-X200",
+  "configurationVersion": "v5",
+  "timestamp": "2026-07-20T23:59:00+05:30",
+  "readingDate": "2026-07-20",
+  "volume": {
+    "correctedVb": 12345.67,
+    "uncorrectedVm": 12000.12
+  },
+  "pressure": {
+    "value": 4.2,
+    "max": 4.5,
+    "min": 3.9,
+    "unit": "barg"
+  },
+  "temperature": {
+    "value": 28.4,
+    "max": 31.2,
+    "min": 24.1,
+    "unit": "degC"
+  },
+  "gasProperties": {
+    "compressibilityZ": 0.98,
+    "compressibilityFpv": 1.02,
+    "correctionFactorC": 1.015,
+    "density": 0.72
+  },
+  "hourlyConsumption": [
+    { "hour": 0, "value": 12.3 },
+    { "hour": 1, "value": 11.8 },
+    { "hour": 23, "value": 9.8 }
+  ],
   "batteryLevel": 87.5,
   "currentFlowRate": 14.2
 }
 ```
 
+Fields carried over unchanged from v1 (assumptions restated here so this
+doc is self-contained — see v1 DATAFLOW.md §5.1 for the original
+reasoning):
+- `deviceSerialNo` present on every push — it's the upsert key for
+  `Device` and `Reading`.
+- Device info (`firmwareVersion`, `hardwareVersion`, `deviceModel`,
+  `configurationVersion`) assumed present on *every* push, not just the
+  first; ingestion should only overwrite fields actually present rather
+  than nulling out previously-known values if that assumption is wrong.
+- `readingDate` sent explicitly rather than derived from `timestamp`.
+- `hourlyConsumption` is an array of `{hour, value}` objects, not a fixed
+  24-key object.
+- `unit` fields (`barg`, `degC`) are included defensively but not
+  required by the parser — units assumed fixed/known.
+
+New in v2 (see below for the reasoning behind each):
+- `batteryLevel` (%)
+- `currentFlowRate` (SCMH)
+
+### 5.2 What's new in the assumed shape (v2)
 - **`batteryLevel`** (%) — new. Assumed present because the reference
   site's Customers grid shows a live Battery column per meter. If the
   real payload doesn't send this, the column either goes blank or needs a
@@ -65,13 +118,28 @@ v1 assumed shape:
   installations; GPS coordinates are set once during device provisioning
   (DESIGN.md §3 `Device.latitude/longitude`), via the admin assignment
   flow (§7), not sent daily. If the device hardware does report GPS,
-  that's a schema-compatible addition later (add the columns are already
+  that's a schema-compatible addition later (the columns are already
   there — just start populating them from the payload instead of the
   admin form).
 - **No customer/GA/name/address in the payload** — confirmed absent by
   reasoning about what a gas meter actually measures, not assumed away
   for convenience. This drives FR3/FR3a's separate admin-managed write
   path (§7).
+
+### 5.3 Verifying the real shape later (unchanged from v1, still pending)
+1. **Fastest path — read the config directly:** device web UI → Services
+   → Data to Server → the sender instance's "JSON format" field.
+2. **Fallback / cross-check — capture a live payload:** temporarily log
+   `JSON.stringify(req.body)` to a file on `/api/ingest` for one push
+   cycle.
+3. Confirm: field names, whether `hourlyConsumption` is an array or
+   object, units (embedded or implied?), whether device info comes on
+   every push or only sometimes, whether `readingDate` is sent explicitly,
+   and — new for v2 — whether `batteryLevel`/`currentFlowRate` are sent at
+   all, and under what names.
+4. Once confirmed, update this section, DESIGN.md §3, and the parser in
+   the same change (DEVELOPMENT_RULES.md §6) — don't let this doc drift
+   from the real shape once it's known.
 
 ## 6. Alarm Generation Logic — extended with severity + configurable
 thresholds

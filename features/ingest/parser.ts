@@ -1,5 +1,47 @@
 import { RawIngestPayload, ParsedReading } from "./types";
 
+/**
+ * Extracts a calendar date (year/month/day) directly from the front of an
+ * ISO-ish date string via regex, bypassing `new Date(str)`'s local-time
+ * interpretation entirely.
+ *
+ * Why: `new Date("2026-07-25 01:09:00")` (space instead of "T", no
+ * timezone) is implementation-defined — V8 parses it as LOCAL time of
+ * whatever machine runs the code. The exact same payload would then
+ * normalize to a different UTC date depending on whether it's parsed on
+ * a Vercel server (usually UTC) vs. a dev machine set to IST (+5:30),
+ * where it can roll back to the previous day. That's non-deterministic
+ * behavior we don't want anywhere near ingestion.
+ *
+ * This only cares about the YYYY-MM-DD prefix, which is present and
+ * unambiguous in every format we expect (date-only "2026-07-25",
+ * space-separated "2026-07-25 01:09:00", or full ISO with offset
+ * "2026-07-25T01:09:00+05:30") — so it deliberately never looks at the
+ * time-of-day or timezone portion, both to fix the bug and because a
+ * `Reading` row's identity is a calendar day, not a moment.
+ */
+function extractCalendarDateUTC(str: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(str.trim());
+  if (!match) return null;
+
+  const [, yearStr, monthStr, dayStr] = match;
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  // Guard against nonsense like "2026-13-40" silently rolling over into a
+  // different month/year via Date's own overflow behavior.
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+}
+
 export function parseIngestPayload(body: unknown): ParsedReading {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     throw new Error("Invalid payload: Body must be a JSON object");
@@ -11,22 +53,24 @@ export function parseIngestPayload(body: unknown): ParsedReading {
     throw new Error("Invalid payload: Missing or empty deviceSerialNo");
   }
 
-  // Determine reading date
-  let dateObj: Date;
+  // Determine reading date — prefer readingDate, fall back to timestamp,
+  // fall back to "today" (UTC). CHANGED: no longer routes through
+  // `new Date(str)` for the primary parse — see extractCalendarDateUTC
+  // above for why.
+  let normalizedDate: Date | null = null;
+
   if (payload.readingDate && typeof payload.readingDate === "string") {
-    dateObj = new Date(payload.readingDate);
-  } else if (payload.timestamp && typeof payload.timestamp === "string") {
-    dateObj = new Date(payload.timestamp);
-  } else {
-    dateObj = new Date();
+    normalizedDate = extractCalendarDateUTC(payload.readingDate);
   }
 
-  if (isNaN(dateObj.getTime())) {
-    dateObj = new Date();
+  if (!normalizedDate && payload.timestamp && typeof payload.timestamp === "string") {
+    normalizedDate = extractCalendarDateUTC(payload.timestamp);
   }
 
-  // Normalize to start of day (UTC)
-  const normalizedDate = new Date(Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate()));
+  if (!normalizedDate) {
+    const now = new Date();
+    normalizedDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  }
 
   return {
     deviceSerialNo: payload.deviceSerialNo.trim(),
