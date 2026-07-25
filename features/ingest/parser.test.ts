@@ -38,6 +38,24 @@ describe("parseIngestPayload", () => {
     expect(parsed.hourlyConsumption).toEqual([{ hour: 0, value: 12.3 }]);
   });
 
+  it("should correctly parse a wrapped payload with data property", () => {
+    const raw = {
+      data: {
+        deviceSerialNo: "EVC-WRAPPED-001",
+        meterSerialNo: "MTR-200",
+        volume: {
+          correctedVb: 2000.5,
+        },
+      },
+    };
+
+    const parsed = parseIngestPayload(raw);
+
+    expect(parsed.deviceSerialNo).toBe("EVC-WRAPPED-001");
+    expect(parsed.meterSerialNo).toBe("MTR-200");
+    expect(parsed.correctedVolumeVb).toBe(2000.5);
+  });
+
   it("should throw error if deviceSerialNo is missing or empty", () => {
     expect(() => parseIngestPayload({})).toThrow("Invalid payload: Missing or empty deviceSerialNo");
     expect(() => parseIngestPayload({ deviceSerialNo: "   " })).toThrow("Invalid payload: Missing or empty deviceSerialNo");

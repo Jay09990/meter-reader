@@ -1,3 +1,7 @@
+export interface WrappedIngestPayload {
+  data: RawIngestPayload;
+}
+
 export interface RawIngestPayload {
   deviceSerialNo: string;
   meterSerialNo?: string;

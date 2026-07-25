@@ -47,7 +47,13 @@ export function parseIngestPayload(body: unknown): ParsedReading {
     throw new Error("Invalid payload: Body must be a JSON object");
   }
 
-  const payload = body as RawIngestPayload;
+  // Support wrapped payload { data: { ... } } as requested, 
+  // but fall back to flat payload for backward compatibility.
+  const payload = (body as { data?: RawIngestPayload }).data && 
+                  typeof (body as { data?: RawIngestPayload }).data === "object" && 
+                  !Array.isArray((body as { data?: RawIngestPayload }).data)
+    ? (body as { data: RawIngestPayload }).data
+    : body as RawIngestPayload;
 
   if (!payload.deviceSerialNo || typeof payload.deviceSerialNo !== "string" || !payload.deviceSerialNo.trim()) {
     throw new Error("Invalid payload: Missing or empty deviceSerialNo");
