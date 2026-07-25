@@ -7,6 +7,7 @@ import { ThemeToggle } from "./theme-toggle";
 import { RefreshIntervalSelect } from "./RefreshIntervalSelect";
 import { useAutoRefresh } from "@/lib/auto-refresh";
 
+// Header owns global dashboard controls and the live alarm count indicator.
 export function Header() {
   const [openAlarmCount, setOpenAlarmCount] = useState<number>(0);
 
@@ -16,7 +17,7 @@ export function Header() {
       .then((data) => {
         if (typeof data.count === "number") setOpenAlarmCount(data.count);
       })
-      .catch(() => { });
+      .catch(() => {});
   };
   useEffect(fetchAlarmCount, []);
   useAutoRefresh(fetchAlarmCount);

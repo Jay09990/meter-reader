@@ -21,6 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { BarChart, Bar, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAutoRefresh } from "@/lib/auto-refresh";
 
+// Fleet overview dashboard with summary metrics and consumption charts.
 interface FleetOverviewData {
   totalDevices: number;
   reportedToday: number;
@@ -137,6 +138,7 @@ export default function OverviewPage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchOverview();
   }, []);
 

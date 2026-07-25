@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import "leaflet/dist/leaflet.css";
@@ -14,6 +14,13 @@ import L from "leaflet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+import { useAutoRefresh } from "@/lib/auto-refresh";
+
+// Interactive map for fleet location, cluster, and meter detail inspection.
+type ClusterMarker = L.Marker & {
+  options: L.MarkerOptions & { markerColor?: MapDevice["markerColor"] };
+};
 
 interface MapDevice {
   id: string;
@@ -145,19 +152,26 @@ export default function MapComponent() {
   const [selectedDevice, setSelectedDevice] = useState<MapDevice | null>(null);
   const [zoom, setZoom] = useState(6);
 
-  useEffect(() => {
+  const fetchMapDevices = useCallback(() => {
     fetch("/api/map/devices")
       .then((res) => res.json())
       .then((data) => setDevices(data))
       .catch(console.error);
   }, []);
 
+  useEffect(() => {
+    fetchMapDevices();
+  }, [fetchMapDevices]);
+  useAutoRefresh(fetchMapDevices);
+
   const center: [number, number] = [20.5937, 78.9629];
   const tileUrl = theme === "dark" ? TILE_URL.dark : TILE_URL.light;
 
   const clusterIcon = useMemo(() => {
-    return (cluster: any) => {
-      const childColors = cluster.getAllChildMarkers().map((marker: any) => marker.options.markerColor);
+    return (cluster: L.MarkerCluster) => {
+      const childColors = (cluster.getAllChildMarkers() as ClusterMarker[])
+        .map((marker) => marker.options.markerColor)
+        .filter((color): color is MapDevice["markerColor"] => Boolean(color));
       const color = getClusterColor(childColors);
       const count = cluster.getChildCount();
       const size = count >= 100 ? 56 : count >= 20 ? 46 : 38;

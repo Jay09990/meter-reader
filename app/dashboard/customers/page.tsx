@@ -20,6 +20,9 @@ import {
   HelpCircle
 } from "lucide-react";
 
+import { useAutoRefresh } from "@/lib/auto-refresh";
+
+// Customer registry for filtering, viewing, and provisioning AMR endpoints.
 interface DeviceItem {
   id: string;
   deviceSerialNo: string;
@@ -105,12 +108,15 @@ export default function CustomersPage() {
   }, [page, search, statusFilter, categoryFilter, gaFilter]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchGas();
   }, [fetchGas]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDevices();
   }, [fetchDevices]);
+  useAutoRefresh(fetchDevices);
 
   const totalPages = Math.ceil(total / limit) || 1;
 
@@ -161,8 +167,9 @@ export default function CustomersPage() {
 
       setDrawerOpen(false);
       fetchDevices();
-    } catch (err: any) {
-      setFormError(err.message || "An error occurred during submission.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "An error occurred during submission.";
+      setFormError(message);
     } finally {
       setSubmitting(false);
     }

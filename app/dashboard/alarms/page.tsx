@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 import { useAutoRefresh } from "@/lib/auto-refresh";
+// Alarm console for filtering, acknowledging, and exporting system alarms.
 interface AlarmItem {
   id: string;
   deviceId: string;
@@ -98,7 +99,7 @@ export default function AlarmsPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAlarms(1);
   }, [fetchAlarms]);
-  useAutoRefresh(fetchAlarms);
+  useAutoRefresh(() => fetchAlarms(pagination.page));
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">

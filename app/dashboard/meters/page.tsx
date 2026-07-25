@@ -24,6 +24,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { useAutoRefresh } from "@/lib/auto-refresh";
 
+// Meter directory for searching deployed gas meter hardware.
 interface DeviceItem {
   id: string;
   deviceSerialNo: string;
@@ -94,7 +95,7 @@ export default function MetersPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDevices(1);
   }, [fetchDevices]);
-  useAutoRefresh(fetchDevices);
+  useAutoRefresh(() => fetchDevices(pagination.page));
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">

@@ -72,7 +72,9 @@ export function AutoRefreshProvider({ children }: { children: React.ReactNode })
       const stored = window.localStorage.getItem(STORAGE_KEY);
       if (stored !== null) {
         const parsed = Number(stored);
-        if (!Number.isNaN(parsed)) setIntervalMsState(parsed);
+        if (!Number.isNaN(parsed)) {
+          window.setTimeout(() => setIntervalMsState(parsed), 0);
+        }
       }
     } catch {
       // localStorage unavailable (SSR/private mode) — fall back to default
@@ -116,13 +118,16 @@ export function useAutoRefreshInterval() {
  * immediately on mount — pages already fetch once on mount themselves;
  * this only adds the repeating tick on top of that.
  *
- * Pauses while the tab is hidden (visibilitychange) so a background tab
+ * Pauses while the tab is hidden (visibilitychange), so a background tab
  * doesn't keep polling at 5s intervals for no one to see.
  */
 export function useAutoRefresh(callback: () => void) {
   const { intervalMs } = useAutoRefreshContext();
   const callbackRef = useRef(callback);
-  callbackRef.current = callback;
+
+  useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
 
   useEffect(() => {
     if (!intervalMs || intervalMs <= 0) return;
