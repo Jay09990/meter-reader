@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -75,6 +75,7 @@ interface HourlyData {
 
 interface HistoryRow {
   date: string;
+  timestamp: string; // ISO receivedAt — one entry per push, not per day
   correctedVolumeVb: number | null;
   uncorrectedVolumeVm: number | null;
   gasPressure: number | null;
@@ -216,6 +217,23 @@ export default function MeterDetailPage() {
   const staleDays = daysSince(deviceData?.device.lastSeenAt ?? null);
   const isStale = staleDays !== null && staleDays > 0;
 
+  const chartData = useMemo(
+  () =>
+    history.map((h) => {
+      const d = new Date(h.timestamp);
+      // Same calendar day gets a time suffix so repeat pushes are
+      // distinguishable on the x-axis; a lone daily push just shows the
+      // date, same as before.
+      const sameDayCount = history.filter((x) => x.date === h.date).length;
+      const label =
+        sameDayCount > 1
+          ? `${h.date} ${d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`
+          : h.date;
+      return { ...h, label };
+    }),
+  [history]
+);
+
   if (loading) {
     return (
       <div className="space-y-6 max-w-7xl mx-auto">
@@ -247,10 +265,10 @@ export default function MeterDetailPage() {
         </div>
         <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
           <CardHeader className="pb-2">
-             <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-5 w-40" />
           </CardHeader>
           <CardContent>
-             <Skeleton className="h-[200px] w-full" />
+            <Skeleton className="h-[200px] w-full" />
           </CardContent>
         </Card>
       </div>
@@ -452,11 +470,10 @@ export default function MeterDetailPage() {
                 <button
                   key={d}
                   onClick={() => setTrendDays(d)}
-                  className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${
-                    trendDays === d
+                  className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${trendDays === d
                       ? "bg-orange-600 text-slate-900 dark:text-white"
                       : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-200"
-                  }`}
+                    }`}
                 >
                   {d}d
                 </button>
@@ -478,12 +495,12 @@ export default function MeterDetailPage() {
                 </p>
                 <ResponsiveContainer width="100%" height={140}>
                   <LineChart
-                    data={history}
+                    data={chartData}
                     margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-300 dark:text-slate-800" />
                     <XAxis
-                      dataKey="date"
+                      dataKey="label"
                       tick={{ fontSize: 10, fill: "currentColor" }}
                       tickLine={false}
                       axisLine={false}

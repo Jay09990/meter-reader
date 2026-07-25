@@ -71,7 +71,7 @@ export function parseIngestPayload(body: unknown): ParsedReading {
     const now = new Date();
     normalizedDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   }
-
+  
   return {
     deviceSerialNo: payload.deviceSerialNo.trim(),
     meterSerialNo: typeof payload.meterSerialNo === "string" ? payload.meterSerialNo : undefined,

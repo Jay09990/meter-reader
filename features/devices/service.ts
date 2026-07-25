@@ -224,20 +224,28 @@ export async function getDeviceHistory(deviceIdOrSerial: string, days: number = 
   const startDate = new Date();
   startDate.setUTCDate(startDate.getUTCDate() - days);
 
-  // CHANGED: a device can now have multiple rows per day. Fetch every row
-  // in range ordered (date asc, then latest-push-first within each date),
-  // then keep only the first row seen per date — that's the latest push
-  // for that day, per "latest-wins for display" (trend charts show one
-  // point/day; the full push history still lives in the Reading table for
-  // anyone querying it directly, nothing is deleted or hidden).
+  // CHANGED (per request): the trend chart now plots EVERY push in range,
+  // not just the latest one per day — no more latest-per-day collapse.
+  // Ordered chronologically by receivedAt (actual arrival order), which
+  // is what should drive the chart's x-axis, not readingDate alone (two
+  // pushes tagged with the same readingDate still need a stable, real
+  // order to plot left-to-right correctly).
+  //
+  // NOTE: this is deliberately scoped to the trend chart only. KPI cards
+  // (getDeviceLatest, the readings included in getPaginatedDevices) and
+  // the gas-out-of-range alarm baseline (features/ingest/alarm-check.ts)
+  // still use "latest push per day" / "latest push overall" — those
+  // represent "the current true value," which is a different question
+  // from "show me the whole history," so they weren't touched here.
   const readings = await db.reading.findMany({
     where: {
       deviceId: device.id,
       readingDate: { gte: startDate },
     },
-    orderBy: [{ readingDate: "asc" }, { receivedAt: "desc" }],
+    orderBy: { receivedAt: "asc" },
     select: {
       readingDate: true,
+      receivedAt: true,
       correctedVolumeVb: true,
       uncorrectedVolumeVm: true,
       gasPressure: true,
@@ -245,17 +253,10 @@ export async function getDeviceHistory(deviceIdOrSerial: string, days: number = 
     },
   });
 
-  const latestPerDay = new Map<string, (typeof readings)[number]>();
-  for (const r of readings) {
-    const key = r.readingDate.toISOString().split("T")[0];
-    if (!latestPerDay.has(key)) latestPerDay.set(key, r); // first hit per
-    // day = highest receivedAt for that day, thanks to the sort above
-  }
-
-  // Map preserves insertion order, and we inserted in ascending-date
-  // order, so no re-sort needed before returning.
-  return Array.from(latestPerDay.values()).map((r) => ({
+  return readings.map((r) => ({
     date: r.readingDate.toISOString().split("T")[0],
+    timestamp: r.receivedAt.toISOString(), // NEW — lets the frontend tell
+    // apart multiple same-day pushes on the chart's x-axis
     correctedVolumeVb: r.correctedVolumeVb,
     uncorrectedVolumeVm: r.uncorrectedVolumeVm,
     gasPressure: r.gasPressure,
