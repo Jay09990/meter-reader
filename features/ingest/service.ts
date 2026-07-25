@@ -75,6 +75,6 @@ export async function processIngestPayload(rawBody: unknown) {
     deviceId: device.id,
     deviceSerialNo: device.deviceSerialNo,
     readingId: reading.id,
-    readingDate: parsed.readingDate.toISOString().split("T")[0],
+    readingDate: parsed.readingDate.toISOString(),
   };
 }
