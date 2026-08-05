@@ -24,6 +24,8 @@ export async function POST(req: NextRequest) {
   let forDate: Date | undefined;
   try {
     const body = await req.json().catch(() => ({})) as { forDate?: string };
+    console.log("Incoming POST /api/cron/missing-data-alarms", { url: req.url, headers: Object.fromEntries(req.headers) });
+    console.log("Cron missing-data-alarms payload:", body);
     if (body.forDate) {
       const d = new Date(body.forDate);
       if (isNaN(d.getTime())) {

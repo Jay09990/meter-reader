@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    console.log("Incoming POST /api/gas", { url: req.url, headers: Object.fromEntries(req.headers) });
+    console.log("Gas create payload:", body);
     if (!body.name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }

@@ -5,6 +5,8 @@ import { Prisma } from "@prisma/client";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    console.log("Incoming POST /api/customers", { url: req.url, headers: Object.fromEntries(req.headers) });
+    console.log("Customer create payload:", body);
     if (!body.name || !body.gaId || !body.category) {
       return NextResponse.json({ error: "Name, gaId, and category are required" }, { status: 400 });
     }

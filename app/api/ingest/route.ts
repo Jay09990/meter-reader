@@ -18,6 +18,8 @@ export async function POST(req: NextRequest) {
     let body: unknown;
     try {
       body = await req.json();
+      console.log("Incoming POST /api/ingest", { url: req.url, headers: Object.fromEntries(req.headers) });
+      console.log("Ingest payload:", body);
     } catch {
       return NextResponse.json(
         { error: "Bad Request: Request body must be valid JSON" },
