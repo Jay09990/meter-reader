@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { useAutoRefresh } from "@/lib/auto-refresh";
 
-// Interactive map for fleet location, cluster, and meter detail inspection.
+// Interactive map for AMR device location, clustering, and meter detail inspection.
 type ClusterMarker = L.Marker & {
   options: L.MarkerOptions & { markerColor?: MapDevice["markerColor"] };
 };

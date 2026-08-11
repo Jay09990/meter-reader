@@ -40,7 +40,7 @@ export function Header({ onOpenMobileSidebar }: HeaderProps) {
         >
           <Menu className="h-5 w-5" />
         </Button>
-        <h2 className="truncate text-sm font-semibold text-slate-700 dark:text-slate-300">Fleet Operations Center</h2>
+        <h2 className="truncate text-sm font-semibold text-slate-700 dark:text-slate-300">AMR Operations Center</h2>
       </div>
 
       <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:gap-4">
