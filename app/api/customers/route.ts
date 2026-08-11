@@ -5,10 +5,16 @@ import { Prisma } from "@prisma/client";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    console.log("Incoming POST /api/customers", { url: req.url, headers: Object.fromEntries(req.headers) });
+    console.log("Incoming POST /api/customers", {
+      url: req.url,
+      headers: Object.fromEntries(req.headers),
+    });
     console.log("Customer create payload:", body);
     if (!body.name || !body.gaId || !body.category) {
-      return NextResponse.json({ error: "Name, gaId, and category are required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Name, gaId, and category are required" },
+        { status: 400 },
+      );
     }
 
     const customer = await db.customer.create({
@@ -21,7 +27,8 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json(customer, { status: 201 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to create Customer";
+    const message =
+      err instanceof Error ? err.message : "Failed to create Customer";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -39,11 +46,16 @@ export async function GET(req: NextRequest) {
     if (search) {
       where.OR = [
         { name: { contains: search, mode: "insensitive" } },
-        { devices: { some: { deviceSerialNo: { contains: search, mode: "insensitive" } } } },
+        {
+          devices: {
+            some: { deviceSerialNo: { contains: search, mode: "insensitive" } },
+          },
+        },
       ];
     }
     if (gaId) where.gaId = gaId;
-    if (category) where.category = category as Prisma.CustomerWhereInput["category"];
+    if (category)
+      where.category = category as Prisma.CustomerWhereInput["category"];
 
     const [total, data] = await Promise.all([
       db.customer.count({ where }),
@@ -67,7 +79,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ data, total, page, limit });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to list customers";
+    const message =
+      err instanceof Error ? err.message : "Failed to list customers";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

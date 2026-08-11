@@ -6,16 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { 
-  LayoutGrid, 
-  List, 
-  Search, 
-  Activity, 
-  Gauge, 
-  Battery, 
-  X, 
-  PlusCircle, 
-  AlertTriangle, 
+import {
+  LayoutGrid,
+  List,
+  Search,
+  Activity,
+  Gauge,
+  Battery,
+  X,
+  PlusCircle,
+  AlertTriangle,
   CheckCircle,
   HelpCircle
 } from "lucide-react";
@@ -65,7 +65,7 @@ export default function CustomersPage() {
   // Drawer States
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState<DeviceItem | null>(null);
-  
+
   // Drawer Form States
   const [customerName, setCustomerName] = useState("");
   const [meterIdInput, setMeterIdInput] = useState(""); // This will be uneditable
@@ -75,6 +75,14 @@ export default function CustomersPage() {
   const [selectedGaId, setSelectedGaId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+
+  // Provisioning Type
+  const [provisionType, setProvisionType] = useState<"new" | "existing">("new");
+  const [existingCustomers, setExistingCustomers] = useState<any[]>([]);
+  const [selectedExistingCustomerId, setSelectedExistingCustomerId] = useState("");
+  
+  // Confirmation Dialog
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const limit = 12;
 
@@ -107,10 +115,20 @@ export default function CustomersPage() {
     }
   }, [page, search, statusFilter, categoryFilter, gaFilter]);
 
+  // Fetch Existing Customers
+  const fetchExistingCustomers = useCallback(async () => {
+    const res = await fetch("/api/customers?limit=1000");
+    if (res.ok) {
+      const data = await res.json();
+      setExistingCustomers(data.data || []);
+    }
+  }, []);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchGas();
-  }, [fetchGas]);
+    fetchExistingCustomers();
+  }, [fetchGas, fetchExistingCustomers]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -123,6 +141,8 @@ export default function CustomersPage() {
   // Open Drawer Form for Provisioning
   const openProvisionDrawer = (device: DeviceItem) => {
     setSelectedDevice(device);
+    setProvisionType("new");
+    setSelectedExistingCustomerId("");
     setCustomerName("");
     setMeterIdInput(device.deviceSerialNo);
     setDeviceIdInput("");
@@ -138,26 +158,46 @@ export default function CustomersPage() {
     e.preventDefault();
     if (!selectedDevice) return;
 
-    if (!customerName.trim()) {
+    if (provisionType === "new" && !customerName.trim()) {
       setFormError("Customer name is required.");
       return;
     }
+    
+    if (provisionType === "existing" && !selectedExistingCustomerId) {
+      setFormError("Please select an existing customer.");
+      return;
+    }
+
+    setFormError("");
+    setShowConfirmDialog(true);
+  };
+
+  const confirmProvisioning = async () => {
+    if (!selectedDevice) return;
 
     setSubmitting(true);
     setFormError("");
+    setShowConfirmDialog(false);
 
     try {
+      const bodyPayload: any = {
+        provision: true,
+        meterSerialNo: deviceIdInput || null
+      };
+      
+      if (provisionType === "existing") {
+        bodyPayload.existingCustomerId = selectedExistingCustomerId;
+      } else {
+        bodyPayload.customerName = customerName;
+        bodyPayload.category = selectedCategory;
+        bodyPayload.address = address;
+        bodyPayload.gaId = selectedGaId;
+      }
+
       const res = await fetch(`/api/devices/${selectedDevice.id}/assign`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provision: true,
-          customerName,
-          category: selectedCategory,
-          address,
-          gaId: selectedGaId,
-          meterSerialNo: deviceIdInput || null
-        }),
+        body: JSON.stringify(bodyPayload),
       });
 
       if (!res.ok) {
@@ -180,7 +220,7 @@ export default function CustomersPage() {
     switch (device.status) {
       case "NEW":
         return (
-          <Badge 
+          <Badge
             onClick={() => openProvisionDrawer(device)}
             className="bg-sky-500/10 text-sky-500 border border-sky-500/25 hover:bg-sky-500 hover:text-white transition-all cursor-pointer font-bold select-none animate-pulse"
           >
@@ -238,18 +278,18 @@ export default function CustomersPage() {
           </p>
         </div>
         <div className="flex space-x-2 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-lg border border-slate-200 dark:border-slate-800">
-          <Button 
-            variant={view === "grid" ? "default" : "ghost"} 
-            size="sm" 
+          <Button
+            variant={view === "grid" ? "default" : "ghost"}
+            size="sm"
             onClick={() => setView("grid")}
             className="h-8 px-3 text-xs"
           >
             <LayoutGrid className="w-3.5 h-3.5 mr-1.5" />
             Grid View
           </Button>
-          <Button 
-            variant={view === "list" ? "default" : "ghost"} 
-            size="sm" 
+          <Button
+            variant={view === "list" ? "default" : "ghost"}
+            size="sm"
             onClick={() => setView("list")}
             className="h-8 px-3 text-xs"
           >
@@ -264,9 +304,9 @@ export default function CustomersPage() {
         {/* Search */}
         <div className="relative w-full md:w-80">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-          <Input 
-            placeholder="Search customer name or ID..." 
-            value={search} 
+          <Input
+            placeholder="Search customer name or ID..."
+            value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="pl-9 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-500 focus:border-orange-500"
           />
@@ -275,9 +315,9 @@ export default function CustomersPage() {
         {/* Filters */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full md:w-auto md:ml-auto">
           {/* Geographical Area Filter */}
-          <select 
+          <select
             className="h-9 px-3 py-1 rounded-md bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-300 focus:outline-none focus:border-orange-500"
-            value={gaFilter} 
+            value={gaFilter}
             onChange={(e) => { setGaFilter(e.target.value); setPage(1); }}
           >
             <option value="all">All Cities</option>
@@ -287,9 +327,9 @@ export default function CustomersPage() {
           </select>
 
           {/* Status Filter */}
-          <select 
+          <select
             className="h-9 px-3 py-1 rounded-md bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-300 focus:outline-none focus:border-orange-500"
-            value={statusFilter} 
+            value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           >
             <option value="all">All Statuses</option>
@@ -300,9 +340,9 @@ export default function CustomersPage() {
           </select>
 
           {/* Category Filter */}
-          <select 
+          <select
             className="h-9 px-3 py-1 rounded-md bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-300 focus:outline-none focus:border-orange-500"
-            value={categoryFilter} 
+            value={categoryFilter}
             onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
           >
             <option value="all">All Categories</option>
@@ -318,11 +358,10 @@ export default function CustomersPage() {
       {view === "grid" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {devices.map((device) => (
-            <Card 
-              key={device.id} 
-              className={`bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700/80 transition-all shadow-sm flex flex-col justify-between ${
-                device.status === "NEW" ? "border-dashed border-sky-400/50 hover:border-sky-400" : ""
-              }`}
+            <Card
+              key={device.id}
+              className={`bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700/80 transition-all shadow-sm flex flex-col justify-between ${device.status === "NEW" ? "border-dashed border-sky-400/50 hover:border-sky-400" : ""
+                }`}
             >
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
@@ -376,8 +415,8 @@ export default function CustomersPage() {
                   <p className="truncate"><strong>Device ID:</strong> <span className="font-mono text-slate-400">{device.meterSerialNo || "—"}</span></p>
                   <p>
                     <strong>Last Updated:</strong>{" "}
-                    {device.latestReading?.readingDate 
-                      ? new Date(device.latestReading.readingDate).toLocaleString() 
+                    {device.latestReading?.readingDate
+                      ? new Date(device.latestReading.readingDate).toLocaleString()
                       : (device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString() : "No readings")}
                   </p>
                 </div>
@@ -448,9 +487,9 @@ export default function CustomersPage() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex justify-center space-x-2 mt-6">
-          <Button 
-            variant="outline" 
-            disabled={page === 1} 
+          <Button
+            variant="outline"
+            disabled={page === 1}
             onClick={() => setPage(p => Math.max(1, p - 1))}
             className="border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900"
           >
@@ -459,9 +498,9 @@ export default function CustomersPage() {
           <span className="flex items-center px-4 text-sm text-slate-500 dark:text-slate-400">
             Page {page} of {totalPages}
           </span>
-          <Button 
-            variant="outline" 
-            disabled={page === totalPages} 
+          <Button
+            variant="outline"
+            disabled={page === totalPages}
             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             className="border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900"
           >
@@ -475,7 +514,7 @@ export default function CustomersPage() {
         <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm transition-all duration-300">
           {/* Backdrop click to close */}
           <div className="absolute inset-0" onClick={() => setDrawerOpen(false)} />
-          
+
           <div className="relative w-full max-w-md h-full bg-slate-900 border-l border-slate-800 p-6 shadow-2xl flex flex-col justify-between overflow-y-auto transform transition-all duration-300 animate-in slide-in-from-right">
             <div>
               {/* Drawer Header */}
@@ -489,9 +528,9 @@ export default function CustomersPage() {
                     Complete assignment for newly registered gas meter.
                   </p>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={() => setDrawerOpen(false)}
                   className="h-8 w-8 text-slate-400 hover:text-white"
                 >
@@ -511,8 +550,8 @@ export default function CustomersPage() {
                 {/* Meter ID (Prefilled and Uneditable) */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Meter ID (Prefilled)</label>
-                  <Input 
-                    value={meterIdInput} 
+                  <Input
+                    value={meterIdInput}
                     readOnly
                     className="bg-slate-950 border-slate-800 text-slate-400 cursor-not-allowed font-mono text-sm"
                   />
@@ -521,85 +560,152 @@ export default function CustomersPage() {
                 {/* Device ID (Editable - maps to meterSerialNo) */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Device ID / Serial (Optional)</label>
-                  <Input 
+                  <Input
                     placeholder="Enter Device ID or leave blank..."
-                    value={deviceIdInput} 
-                    onChange={(e) => setDeviceIdInput(e.target.value)} 
+                    value={deviceIdInput}
+                    onChange={(e) => setDeviceIdInput(e.target.value)}
                     className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus:border-orange-500 focus:ring-0 font-mono text-sm"
                   />
                 </div>
 
-                {/* Customer Name */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Customer Name</label>
-                  <Input 
-                    placeholder="Enter customer name..."
-                    value={customerName} 
-                    onChange={(e) => setCustomerName(e.target.value)} 
-                    required 
-                    className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus:border-orange-500 focus:ring-0 text-sm"
-                  />
-                </div>
-
-                {/* Category Dropdown */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Category</label>
-                  <select 
-                    className="w-full flex h-9 rounded-md border border-slate-800 bg-slate-950 px-3 py-1 text-sm shadow-sm transition-colors text-white focus:outline-none focus:border-orange-500"
-                    value={selectedCategory} 
-                    onChange={(e) => setSelectedCategory(e.target.value)}
+                {/* Provision Type Toggle */}
+                <div className="flex gap-2 p-1 bg-slate-950 rounded-lg border border-slate-800">
+                  <Button 
+                    type="button"
+                    variant={provisionType === "new" ? "default" : "ghost"} 
+                    className={`flex-1 h-8 text-xs ${provisionType === "new" ? "bg-slate-800 text-white hover:bg-slate-700" : "text-slate-400 hover:text-white"}`}
+                    onClick={() => setProvisionType("new")}
                   >
-                    <option value="RESIDENTIAL">Residential</option>
-                    <option value="COMMERCIAL">Commercial</option>
-                    <option value="INDUSTRIAL">Industrial</option>
-                  </select>
-                </div>
-
-                {/* Geographical Area Dropdown */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Geographical Area (City)</label>
-                  <select 
-                    className="w-full flex h-9 rounded-md border border-slate-800 bg-slate-950 px-3 py-1 text-sm shadow-sm transition-colors text-white focus:outline-none focus:border-orange-500"
-                    value={selectedGaId} 
-                    onChange={(e) => setSelectedGaId(e.target.value)}
-                    required
+                    New Customer
+                  </Button>
+                  <Button 
+                    type="button"
+                    variant={provisionType === "existing" ? "default" : "ghost"} 
+                    className={`flex-1 h-8 text-xs ${provisionType === "existing" ? "bg-slate-800 text-white hover:bg-slate-700" : "text-slate-400 hover:text-white"}`}
+                    onClick={() => setProvisionType("existing")}
                   >
-                    <option value="" disabled>Select a city</option>
-                    {gasList.map((ga) => (
-                      <option key={ga.id} value={ga.id}>{ga.name}</option>
-                    ))}
-                  </select>
+                    Existing Customer
+                  </Button>
                 </div>
 
-                {/* Address */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Address</label>
-                  <Input 
-                    placeholder="Enter address..."
-                    value={address} 
-                    onChange={(e) => setAddress(e.target.value)} 
-                    className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus:border-orange-500 focus:ring-0 text-sm"
-                  />
-                </div>
+                {provisionType === "existing" ? (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Select Existing Customer</label>
+                    <select
+                      className="w-full flex h-9 rounded-md border border-slate-800 bg-slate-950 px-3 py-1 text-sm shadow-sm transition-colors text-white focus:outline-none focus:border-orange-500"
+                      value={selectedExistingCustomerId}
+                      onChange={(e) => setSelectedExistingCustomerId(e.target.value)}
+                      required
+                    >
+                      <option value="" disabled>Select a customer...</option>
+                      {existingCustomers.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.category})</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <>
+                    {/* Customer Name */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Customer Name</label>
+                      <Input
+                        placeholder="Enter customer name..."
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        required={provisionType === "new"}
+                        className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus:border-orange-500 focus:ring-0 text-sm"
+                      />
+                    </div>
+
+                    {/* Category Dropdown */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Category</label>
+                      <select
+                        className="w-full flex h-9 rounded-md border border-slate-800 bg-slate-950 px-3 py-1 text-sm shadow-sm transition-colors text-white focus:outline-none focus:border-orange-500"
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                      >
+                        <option value="RESIDENTIAL">Residential</option>
+                        <option value="COMMERCIAL">Commercial</option>
+                        <option value="INDUSTRIAL">Industrial</option>
+                      </select>
+                    </div>
+
+                    {/* Geographical Area Dropdown */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Geographical Area (City)</label>
+                      <select
+                        className="w-full flex h-9 rounded-md border border-slate-800 bg-slate-950 px-3 py-1 text-sm shadow-sm transition-colors text-white focus:outline-none focus:border-orange-500"
+                        value={selectedGaId}
+                        onChange={(e) => setSelectedGaId(e.target.value)}
+                        required={provisionType === "new"}
+                      >
+                        <option value="" disabled>Select a city</option>
+                        {gasList.map((ga) => (
+                          <option key={ga.id} value={ga.id}>{ga.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Address */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Address</label>
+                      <Input
+                        placeholder="Enter address..."
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus:border-orange-500 focus:ring-0 text-sm"
+                      />
+                    </div>
+                  </>
+                )}
               </form>
             </div>
 
             {/* Drawer Footer Actions */}
             <div className="border-t border-slate-850 pt-4 mt-6 flex gap-3">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setDrawerOpen(false)}
                 className="flex-1 border-slate-800 bg-transparent text-slate-300 hover:bg-slate-800 hover:text-white"
               >
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 form="provision-form"
                 disabled={submitting}
                 className="flex-1 bg-sky-600 hover:bg-sky-500 text-white"
               >
                 {submitting ? "Saving..." : "Submit"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Dialog */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl animate-in zoom-in-95">
+            <h3 className="text-lg font-bold text-white mb-2">Confirm Provisioning</h3>
+            <p className="text-sm text-slate-400 mb-6">
+              Are you sure you want to assign meter <span className="font-mono text-white">{selectedDevice?.deviceSerialNo}</span> to 
+              {provisionType === "new" ? " a new customer" : " the selected customer"}?
+            </p>
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowConfirmDialog(false)}
+                className="flex-1 border-slate-800 bg-transparent text-slate-300 hover:bg-slate-800 hover:text-white"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={confirmProvisioning}
+                className="flex-1 bg-sky-600 hover:bg-sky-500 text-white"
+              >
+                Confirm
               </Button>
             </div>
           </div>
