@@ -194,7 +194,7 @@ export default function MetersPage() {
                   </TableCell>
                   <TableCell className="font-mono text-sm text-slate-600 dark:text-slate-300">
                     {device.latestReading?.readingDate 
-                      ? new Date(device.latestReading.readingDate).toLocaleString()
+                      ? new Date(device.latestReading.readingDate).toLocaleDateString()
                       : (device.lastSeenAt
                         ? new Date(device.lastSeenAt).toLocaleString()
                         : "No data")}

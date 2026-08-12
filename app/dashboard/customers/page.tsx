@@ -377,7 +377,7 @@ export default function CustomersPage() {
                   <p>
                     <strong>Last Updated:</strong>{" "}
                     {device.latestReading?.readingDate 
-                      ? new Date(device.latestReading.readingDate).toLocaleString() 
+                      ? new Date(device.latestReading.readingDate).toLocaleDateString() 
                       : (device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString() : "No readings")}
                   </p>
                 </div>
