@@ -101,7 +101,7 @@ function SidebarContent({ collapsed, showDesktopToggle, onCloseMobile, onToggleD
         {!collapsed && (
           <div className="min-w-0">
             <h1 className="truncate text-sm font-bold tracking-wide text-slate-900 dark:text-white">EVC GAS DASHBOARD</h1>
-            <p className="truncate text-xs text-slate-500 dark:text-slate-400">Fleet Telemetry v1</p>
+            <p className="truncate text-xs text-slate-500 dark:text-slate-400">AMR Telemetry v1</p>
           </div>
         )}
         {showDesktopToggle && (

@@ -21,7 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { BarChart, Bar, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAutoRefresh } from "@/lib/auto-refresh";
 
-// Fleet overview dashboard with summary metrics and consumption charts.
+// AMR overview dashboard with summary metrics and telemetry charts.
 interface FleetOverviewData {
   totalDevices: number;
   reportedToday: number;
@@ -161,13 +161,13 @@ export default function OverviewPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Fleet Consumption Overview</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">AMR Consumption Overview</h1>
             <Badge variant="outline" className="border-orange-500/30 text-orange-400 bg-orange-500/10">
-              Fleet Live
+              AMR Live
             </Badge>
           </div>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Fleet-wide consumption analytics and live telemetry health in one place.
+            Automated Meter Reading analytics and live telemetry health in one place.
           </p>
         </div>
 
@@ -434,7 +434,7 @@ export default function OverviewPage() {
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Meter Directory</h3>
           </div>
           <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-            Browse, filter, and inspect individual gas meters across the fleet with server-side search and pagination.
+            Browse, filter, and inspect individual AMR devices and meter readings with server-side search and pagination.
           </p>
         </div>
         <Link href="/dashboard/meters">

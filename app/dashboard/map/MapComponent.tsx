@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { useAutoRefresh } from "@/lib/auto-refresh";
 
-// Interactive map for fleet location, cluster, and meter detail inspection.
+// Interactive map for AMR device location, clustering, and meter detail inspection.
 type ClusterMarker = L.Marker & {
   options: L.MarkerOptions & { markerColor?: MapDevice["markerColor"] };
 };
@@ -192,7 +192,7 @@ export default function MapComponent() {
 
   return (
     <div className="relative h-full w-full overflow-hidden">
-      <div className="absolute left-4 top-4 z-[1000] flex items-center gap-3 whitespace-nowrap rounded-full border border-slate-200/80 bg-white/90 px-4 py-2 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
+      <div className="absolute right-4 top-4 z-[1000] flex items-center gap-3 whitespace-nowrap rounded-full border border-slate-200/80 bg-white/90 px-4 py-2 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
         <span className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-700 dark:text-slate-300">
           Meter Clusters
         </span>

@@ -9,7 +9,7 @@ export async function GET() {
       ...analytics,
     }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to fetch fleet overview";
+    const message = err instanceof Error ? err.message : "Failed to fetch AMR overview";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
