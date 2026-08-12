@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 import { useAutoRefresh } from "@/lib/auto-refresh";
+import { formatLocalTs, formatLocalDate } from "@/lib/utils";
 
 // Meter directory for searching deployed gas meter hardware.
 interface DeviceItem {
@@ -194,9 +195,9 @@ export default function MetersPage() {
                   </TableCell>
                   <TableCell className="font-mono text-sm text-slate-600 dark:text-slate-300">
                     {device.latestReading?.readingDate 
-                      ? new Date(device.latestReading.readingDate).toLocaleDateString()
+                      ? formatLocalTs(device.latestReading.readingDate)
                       : (device.lastSeenAt
-                        ? new Date(device.lastSeenAt).toLocaleString()
+                        ? formatLocalTs(device.lastSeenAt)
                         : "No data")}
                   </TableCell>
                   <TableCell>

@@ -31,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAutoRefresh } from "@/lib/auto-refresh";
+import { formatLocalTs, formatLocalDate } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -328,7 +329,7 @@ export default function MeterDetailPage() {
             {device.customerName
               ? `${device.customerName} (${device.gaName || 'Unknown GA'})`
               : "Unassigned"}
-            {r ? ` · Last reading: ${new Date(r.readingDate).toLocaleDateString()}` : " · No reading yet"}
+            {r ? ` · Last reading: ${formatLocalDate(r.readingDate)}` : " · No reading yet"}
           </p>
         </div>
         <Button
@@ -387,15 +388,11 @@ export default function MeterDetailPage() {
           <DataRow label="Meter Size" value={device.meterSize ?? "—"} />
           <DataRow
             label="First Seen"
-            value={new Date(device.firstSeenAt).toLocaleString()}
+            value={formatLocalTs(device.firstSeenAt)}
           />
           <DataRow
             label="Last Seen"
-            value={
-              device.lastSeenAt
-                ? new Date(device.lastSeenAt).toLocaleString()
-                : "—"
-            }
+            value={formatLocalTs(device.lastSeenAt)}
           />
         </KpiCard>
       </div>

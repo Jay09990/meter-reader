@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { BarChart, Bar, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAutoRefresh } from "@/lib/auto-refresh";
+import { formatLocalTs } from "@/lib/utils";
 
 // AMR overview dashboard with summary metrics and telemetry charts.
 interface FleetOverviewData {
@@ -418,7 +419,7 @@ export default function OverviewPage() {
                   </Badge>
                 </div>
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{event.message}</p>
-                <p className="mt-2 text-xs text-slate-400">{new Date(event.timestamp).toLocaleString()}</p>
+                <p className="mt-2 text-xs text-slate-400">{formatLocalTs(event.timestamp)}</p>
               </div>
             ))}
           </CardContent>

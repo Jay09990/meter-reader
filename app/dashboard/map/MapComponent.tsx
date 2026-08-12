@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { useAutoRefresh } from "@/lib/auto-refresh";
+import { formatLocalTs } from "@/lib/utils";
 
 // Interactive map for AMR device location, clustering, and meter detail inspection.
 type ClusterMarker = L.Marker & {
@@ -309,7 +310,7 @@ export default function MapComponent() {
                             {alarm.severity}
                           </Badge>
                         </div>
-                        <div className="mt-2 text-xs text-slate-400">{new Date(alarm.createdAt).toLocaleDateString()}</div>
+                        <div className="mt-2 text-xs text-slate-400">{formatLocalTs(alarm.createdAt)}</div>
                       </div>
                     ))}
                   </div>

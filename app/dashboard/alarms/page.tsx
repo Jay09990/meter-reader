@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 import { useAutoRefresh } from "@/lib/auto-refresh";
+import { formatLocalTs } from "@/lib/utils";
 // Alarm console for filtering, acknowledging, and exporting system alarms.
 interface AlarmItem {
   id: string;
@@ -253,7 +254,7 @@ export default function AlarmsPage() {
                     {alarm.cause}
                   </TableCell>
                   <TableCell className="font-mono text-sm text-slate-600 dark:text-slate-300">
-                    {new Date(alarm.createdAt).toLocaleString()}
+                    {formatLocalTs(alarm.createdAt)}
                   </TableCell>
                   <TableCell>
                     {alarm.status === "OPEN" ? (

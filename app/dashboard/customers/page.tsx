@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { useAutoRefresh } from "@/lib/auto-refresh";
+import { formatLocalTs, formatLocalDate } from "@/lib/utils";
 
 // Customer registry for filtering, viewing, and provisioning AMR endpoints.
 interface DeviceItem {
@@ -416,8 +417,8 @@ export default function CustomersPage() {
                   <p>
                     <strong>Last Updated:</strong>{" "}
                     {device.latestReading?.readingDate 
-                      ? new Date(device.latestReading.readingDate).toLocaleDateString() 
-                      : (device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString() : "No readings")}
+                      ? formatLocalDate(device.latestReading.readingDate) 
+                      : (device.lastSeenAt ? formatLocalTs(device.lastSeenAt) : "No readings")}
                   </p>
                 </div>
               </CardContent>

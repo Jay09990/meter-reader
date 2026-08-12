@@ -23,6 +23,7 @@ import {
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { downloadCustomerReportExcel, groupReadingsByMeter } from "@/lib/report-excel";
 import type { CustomerReport } from "@/features/reports";
+import { formatLocalTs } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Customer {
@@ -299,7 +300,7 @@ export default function ReportsPage() {
                       {paginatedReadings.map((row) => (
                         <TableRow key={row.id} className="border-slate-200 dark:border-slate-800 hover:bg-slate-100/40 dark:hover:bg-slate-800/40">
                           <TableCell className="font-mono text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                            {new Date(row.readingDate).toLocaleString()}
+                            {formatLocalTs(row.readingDate)}
                           </TableCell>
                           <TableCell className="font-mono text-xs text-slate-700 dark:text-slate-300">
                             {row.deviceSerialNo}
