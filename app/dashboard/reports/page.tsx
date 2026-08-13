@@ -300,7 +300,7 @@ export default function ReportsPage() {
                       {paginatedReadings.map((row) => (
                         <TableRow key={row.id} className="border-slate-200 dark:border-slate-800 hover:bg-slate-100/40 dark:hover:bg-slate-800/40">
                           <TableCell className="font-mono text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                            {formatLocalTs(row.readingDate)}
+                            {formatLocalTs(row.receivedAt)}
                           </TableCell>
                           <TableCell className="font-mono text-xs text-slate-700 dark:text-slate-300">
                             {row.deviceSerialNo}

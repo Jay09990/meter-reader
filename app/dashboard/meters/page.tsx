@@ -37,6 +37,7 @@ interface DeviceItem {
   status: "REPORTING" | "STALE";
   latestReading: {
     readingDate: string;
+    receivedAt: string;
     correctedVolumeVb: number | null;
     gasPressure: number | null;
     gasTemperature: number | null;
@@ -194,8 +195,8 @@ export default function MetersPage() {
                       : "Unassigned"}
                   </TableCell>
                   <TableCell className="font-mono text-sm text-slate-600 dark:text-slate-300">
-                    {device.latestReading?.readingDate 
-                      ? formatLocalTs(device.latestReading.readingDate)
+                    {device.latestReading?.receivedAt
+                      ? formatLocalTs(device.latestReading.receivedAt)
                       : (device.lastSeenAt
                         ? formatLocalTs(device.lastSeenAt)
                         : "No data")}

@@ -329,7 +329,7 @@ export default function MeterDetailPage() {
             {device.customerName
               ? `${device.customerName} (${device.gaName || 'Unknown GA'})`
               : "Unassigned"}
-            {r ? ` · Last reading: ${formatLocalDate(r.readingDate)}` : " · No reading yet"}
+            {r ? ` · Last reading: ${formatLocalTs(r.receivedAt)}` : " · No reading yet"}
           </p>
         </div>
         <Button

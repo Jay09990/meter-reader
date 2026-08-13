@@ -78,6 +78,7 @@ export async function getPaginatedDevices(options: GetDevicesOptions) {
           orderBy: { receivedAt: "desc" },
           select: {
             readingDate: true,
+            receivedAt: true,
             correctedVolumeVb: true,
             gasPressure: true,
             gasTemperature: true,
@@ -124,6 +125,7 @@ export async function getPaginatedDevices(options: GetDevicesOptions) {
       latestReading: latestReading
         ? {
             readingDate: latestReading.readingDate.toISOString(),
+            receivedAt: latestReading.receivedAt.toISOString(),
             correctedVolumeVb: latestReading.correctedVolumeVb,
             gasPressure: latestReading.gasPressure,
             gasTemperature: latestReading.gasTemperature,

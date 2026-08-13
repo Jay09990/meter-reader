@@ -9,6 +9,7 @@ function makeReading(overrides: Partial<ReportReading> = {}): ReportReading {
     deviceSerialNo: "DEV-001",
     meterSerialNo: "METER-001",
     readingDate: "2026-08-01T00:00:00.000Z",
+    receivedAt: "2026-08-01T01:00:00.000Z",
     correctedVolumeVb: 100,
     uncorrectedVolumeVm: 95,
     gasPressure: 1.2,

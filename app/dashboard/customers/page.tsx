@@ -37,6 +37,7 @@ interface DeviceItem {
   status: "NEW" | "ONLINE" | "OFFLINE" | "ALERT";
   latestReading: {
     readingDate: string;
+    receivedAt: string;
     correctedVolumeVb: number | null;
     gasPressure: number | null;
     gasTemperature: number | null;
@@ -416,8 +417,8 @@ export default function CustomersPage() {
                   <p className="truncate"><strong>Device ID:</strong> <span className="font-mono text-slate-400">{device.meterSerialNo || "—"}</span></p>
                   <p>
                     <strong>Last Updated:</strong>{" "}
-                    {device.latestReading?.readingDate 
-                      ? formatLocalDate(device.latestReading.readingDate) 
+                    {device.latestReading?.receivedAt 
+                      ? formatLocalTs(device.latestReading.receivedAt) 
                       : (device.lastSeenAt ? formatLocalTs(device.lastSeenAt) : "No readings")}
                   </p>
                 </div>

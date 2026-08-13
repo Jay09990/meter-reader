@@ -20,6 +20,7 @@ export interface ReportReading {
   deviceSerialNo: string;
   meterSerialNo: string | null;
   readingDate: string;
+  receivedAt: string;
   correctedVolumeVb: number | null;
   uncorrectedVolumeVm: number | null;
   gasPressure: number | null;
@@ -101,6 +102,7 @@ export async function getCustomerReport({
     deviceSerialNo: r.device.deviceSerialNo,
     meterSerialNo: r.device.meterSerialNo,
     readingDate: r.readingDate.toISOString(),
+    receivedAt: r.receivedAt.toISOString(),
     correctedVolumeVb: r.correctedVolumeVb,
     uncorrectedVolumeVm: r.uncorrectedVolumeVm,
     gasPressure: r.gasPressure,
