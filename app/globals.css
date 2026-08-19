@@ -266,18 +266,27 @@
   color: #f7f1e8 !important;
 }
 
-/* ── Select / input backgrounds ── */
-.dark select,
-.dark input[type="text"],
-.dark input[type="date"],
-.dark input[type="search"] {
-  background-color: #3f372b;
-  border-color: rgba(194, 157, 102, 0.25);
-  color: #f7f1e8;
+/* ── Native select / input surfaces ── */
+select,
+input[type="text"],
+input[type="date"],
+input[type="search"] {
+  background-color: var(--card);
+  border-color: var(--input);
+  color: var(--foreground);
 }
-.dark select option {
-  background-color: #3f372b;
-  color: #f7f1e8;
+
+select::placeholder,
+input[type="text"]::placeholder,
+input[type="date"]::placeholder,
+input[type="search"]::placeholder {
+  color: var(--muted-foreground);
+  opacity: 1;
+}
+
+select option {
+  background-color: var(--popover);
+  color: var(--popover-foreground);
 }
 
 /* ── Chart tooltip (recharts hardcoded fallback) ── */
