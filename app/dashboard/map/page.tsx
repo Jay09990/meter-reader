@@ -17,7 +17,7 @@ export default function MapPage() {
   // fixed h-16 (4rem) so the map gets the *entire* remaining viewport —
   // no sidebar, no header, no padding eating into it.
   return (
-    <div className="-m-6 h-[calc(100vh-4rem)] w-[calc(100%+3rem)]">
+    <div className="h-[calc(100vh-4rem)] w-full">
       <MapComponent />
     </div>
   );

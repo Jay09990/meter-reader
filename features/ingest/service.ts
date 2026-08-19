@@ -34,6 +34,7 @@ export async function processIngestPayload(rawBody: unknown) {
     update: deviceUpdateData,
   });
 
+
   // 2. Create Reading — CHANGED: every push is now its own row. No more
   // upsert-by-(deviceId, readingDate); a second push for the same day no
   // longer overwrites the first, it's appended. "Which row is authoritative

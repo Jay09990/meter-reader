@@ -24,9 +24,9 @@ IMPLIMENTATION-PLAN.md, do the work, re-run checks, update this file.
 
 ## 1. Current Status
 
-- **Current phase:** All Phases Complete (Project Updated)
+- **Current phase:** UI shape pass — shared spacing and Meter Detail trend layout updated
 - **Last verified green:** 2026-07-22 (Zero Lint & TS Errors, Build Succeeded)
-- **Last session summary:** Completed Phase H and I. Generated reports page, fixed all type and ESLint errors. The codebase is now 100% clean and fully tested for production deployment.
+- **Last session summary:** Increased the shared radius to 0.875rem and default Card spacing to spacing(6). Removed duplicated dashboard/page gutters, made Map full-width, and split Meter Detail Historical Trends into three responsive cards with one shared range toggle. Browser checks passed on Overview, Meter Directory, Alarms, Reports, Customers, Meter Detail, and Map.
 
 ## 2. Phase Checklist (mirror of IMPLIMENTATION-PLAN.md — update both)
 
@@ -69,14 +69,10 @@ IMPLIMENTATION-PLAN.md, do the work, re-run checks, update this file.
 
 ## 5. Isolation Check Log
 
-- _none yet — no code changed against the v2 schema in this session._
+- **2026-08-19 — shared UI shape tokens.** Changed `app/globals.css` `--radius` from 0.625rem to 0.875rem and `components/ui/card.tsx` default spacing from `--spacing(4)` to `--spacing(6)`; retained the sm-card spacing. Checked Overview, Meters, Alarms, Reports, Customers, and Meter Detail in the browser; no concrete breakage found.
+- **2026-08-19 — dashboard gutters and trend composition.** Removed shared `<main>` padding, duplicate Customers padding, and Map negative-margin compensation. Replaced the single Historical Trends card with three metric cards and a shared pill toggle; typecheck and browser checks passed.
 
 ## 6. Next Session Should Start With
 
-1. Confirm with the user whether any real data exists yet in the
-   deployed v1 system (affects whether Phase A's migration needs to be
-   data-preserving — see IMPLIMENTATION-PLAN.md Phase A last item).
-2. Phase A: write the Prisma migration for GeographicalArea, Customer,
-   AlarmSettings, and the Device/Reading/Alarm column additions.
-3. Backfill `severity` on any existing Alarm rows per the assumed mapping
-   before making the column non-nullable.
+1. Review the shared gutter removal and separate Meter Detail trend cards.
+2. If approved, continue remaining bento-box shape details for Meter Directory, Reports, Customers, Overview, Header, and Sidebar.

@@ -270,7 +270,7 @@ export default function CustomersPage() {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       {/* Header and Toggle */}
       <div className="flex justify-between items-center border-b border-border pb-5">
         <div>

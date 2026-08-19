@@ -18,10 +18,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { BarChart, Bar, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { BarChart, Bar, CartesianGrid, Cell, XAxis, YAxis, PieChart, Pie } from "recharts";
 import { useAutoRefresh } from "@/lib/auto-refresh";
 import { formatLocalTs } from "@/lib/utils";
 import { getChartTheme } from "@/lib/chart-theme";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
 // AMR overview dashboard with summary metrics and telemetry charts.
 interface FleetOverviewData {
@@ -173,7 +174,7 @@ export default function OverviewPage() {
   const citySeries = (data?.consumptionByCity ?? []).slice(0, 8);
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
+    <div className="space-y-8 w-full">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-5">
         <div>
           <div className="flex items-center gap-2">
@@ -294,14 +295,14 @@ export default function OverviewPage() {
             <CardTitle className="text-lg font-semibold text-foreground">Monthly Consumption</CardTitle>
           </CardHeader>
           <CardContent className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
+            <ChartContainer config={{ value: { label: "Consumption", color: "var(--chart-1)" } }} className="h-full w-full">
               <BarChart data={monthlySeries}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} opacity={0.7} />
                 <XAxis dataKey="month" tick={{ fill: chartTheme.tick, fontSize: 12 }} />
                 <YAxis tick={{ fill: chartTheme.tick, fontSize: 12 }} />
-                <Tooltip
+                <ChartTooltip
                   cursor={{ fill: "var(--clr-accent-hi)", opacity: 0.07 }}
-                  contentStyle={{ background: chartTheme.tooltipBg, border: `1px solid ${chartTheme.tooltipBorder}`, color: chartTheme.tooltipText, borderRadius: 8 }}
+                  content={<ChartTooltipContent />}
                 />
                 <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                   {monthlySeries.map((entry) => (
@@ -309,7 +310,7 @@ export default function OverviewPage() {
                   ))}
                 </Bar>
               </BarChart>
-            </ResponsiveContainer>
+            </ChartContainer>
           </CardContent>
         </Card>
 
@@ -318,21 +319,34 @@ export default function OverviewPage() {
             <CardTitle className="text-lg font-semibold text-foreground">Consumption by Category</CardTitle>
           </CardHeader>
           <CardContent className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={categorySeries} layout="vertical" margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} opacity={0.7} />
-                <XAxis type="number" tick={{ fill: chartTheme.tick, fontSize: 12 }} />
-                <YAxis dataKey="label" type="category" width={100} tick={{ fill: chartTheme.tick, fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{ background: chartTheme.tooltipBg, border: `1px solid ${chartTheme.tooltipBorder}`, color: chartTheme.tooltipText, borderRadius: 8 }}
-                />
-                <Bar dataKey="totalVolume" radius={[0, 6, 6, 0]}>
+            <ChartContainer
+              config={Object.fromEntries(
+                categorySeries.map((category) => [
+                  category.category,
+                  { label: category.label, color: category.color },
+                ])
+              )}
+              className="h-full w-full"
+            >
+              <PieChart>
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Pie
+                  data={categorySeries}
+                  dataKey="totalVolume"
+                  nameKey="label"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius="70%"
+                  paddingAngle={2}
+                  label={({ name, value }) => `${name}: ${fmt(Number(value), 0)}`}
+                  labelLine={{ stroke: "var(--muted-foreground)", strokeWidth: 1 }}
+                >
                   {categorySeries.map((entry) => (
                     <Cell key={entry.category} fill={entry.color} />
                   ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                </Pie>
+              </PieChart>
+            </ChartContainer>
           </CardContent>
         </Card>
       </div>

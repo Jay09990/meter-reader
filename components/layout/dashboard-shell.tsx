@@ -10,7 +10,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex font-sans antialiased transition-colors">
+    <div className="h-dvh overflow-hidden bg-background text-foreground flex font-sans antialiased transition-colors">
       <Sidebar
         collapsed={desktopCollapsed}
         mobileOpen={mobileOpen}
@@ -18,9 +18,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         onToggleDesktop={() => setDesktopCollapsed((collapsed) => !collapsed)}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 min-h-0 flex-1 flex-col">
         <Header onOpenMobileSidebar={() => setMobileOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
+        <main className="dashboard-content min-h-0 flex-1 overflow-y-auto p-2 sm:p-3">{children}</main>
       </div>
     </div>
   );
