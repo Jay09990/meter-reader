@@ -28,19 +28,19 @@ export function Header({ onOpenMobileSidebar }: HeaderProps) {
   useAutoRefresh(fetchAlarmCount);
 
   return (
-    <header className="sticky top-0 z-10 flex min-h-16 items-center justify-between gap-3 border-b border-slate-200 bg-white/80 px-3 py-3 text-slate-900 backdrop-blur transition-colors dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-100 sm:px-6">
+    <header className="sticky top-0 z-10 flex min-h-16 items-center justify-between gap-3 border-b border-border bg-background/80 px-3 py-3 text-foreground backdrop-blur transition-colors sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="lg:hidden text-slate-600 dark:text-slate-300"
+          className="lg:hidden text-muted-foreground hover:text-foreground"
           onClick={onOpenMobileSidebar}
           aria-label="Open sidebar"
         >
           <Menu className="h-5 w-5" />
         </Button>
-        <h2 className="truncate text-sm font-semibold text-slate-700 dark:text-slate-300">AMR Operations Center</h2>
+        <h2 className="truncate text-sm font-semibold text-muted-foreground">AMR Operations Center</h2>
       </div>
 
       <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:gap-4">
@@ -49,21 +49,24 @@ export function Header({ onOpenMobileSidebar }: HeaderProps) {
 
         <Link
           href="/dashboard/alarms"
-          className="relative rounded-lg border border-slate-200 bg-slate-100 p-2 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+          className="relative rounded-lg border border-border bg-secondary p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           aria-label="Alarms"
         >
           <Bell className="h-5 w-5" />
           {openAlarmCount > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-600 text-[10px] font-bold text-white ring-2 ring-slate-900 animate-pulse dark:ring-slate-950">
+            <span
+              className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white ring-2 ring-background animate-pulse"
+              style={{background:'var(--clr-alert)'}}
+            >
               {openAlarmCount > 99 ? "99+" : openAlarmCount}
             </span>
           )}
         </Link>
 
-        <div className="hidden h-4 w-px bg-slate-200 dark:bg-slate-800 sm:block" />
+        <div className="hidden h-4 w-px bg-border sm:block" />
 
-        <div className="hidden items-center gap-2 text-xs text-slate-500 dark:text-slate-400 sm:flex">
-          <span className="h-2 w-2 rounded-full bg-slate-400 dark:bg-slate-500" />
+        <div className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
+          <span className="h-2 w-2 rounded-full" style={{background:'var(--clr-accent-lo)'}} />
           <span>Live Environment</span>
         </div>
       </div>

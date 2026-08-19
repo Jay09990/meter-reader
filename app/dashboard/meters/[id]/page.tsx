@@ -13,6 +13,7 @@ import {
   LineChart,
   Line,
   CartesianGrid,
+  Cell,
 } from "recharts";
 import {
   ChevronLeft,
@@ -32,6 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAutoRefresh } from "@/lib/auto-refresh";
 import { formatLocalTs, formatLocalDate } from "@/lib/utils";
+import { getChartTheme } from "@/lib/chart-theme";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -106,20 +108,22 @@ function KpiCard({
   title,
   icon: Icon,
   iconColor,
+  iconStyle,
   children,
 }: {
   title: string;
   icon: React.ElementType;
-  iconColor: string;
+  iconColor?: string;
+  iconStyle?: React.CSSProperties;
   children: React.ReactNode;
 }) {
   return (
-    <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
+    <Card className="bg-card border-border">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-        <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {title}
         </CardTitle>
-        <Icon className={`w-4 h-4 ${iconColor}`} />
+        <Icon className={`w-4 h-4 ${iconColor ?? ''}`} style={iconStyle} />
       </CardHeader>
       <CardContent className="space-y-1">{children}</CardContent>
     </Card>
@@ -128,9 +132,9 @@ function KpiCard({
 
 function DataRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between items-center py-1 border-b border-slate-200 dark:border-slate-800/60 last:border-0">
-      <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
-      <span className="font-mono text-sm text-slate-900 dark:text-slate-100">{value}</span>
+    <div className="flex justify-between items-center gap-3 rounded-sm py-1 leading-tight odd:bg-muted/40 border-b border-border last:border-0">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="font-mono text-sm text-foreground">{value}</span>
     </div>
   );
 }
@@ -138,11 +142,11 @@ function DataRow({ label, value }: { label: string; value: string }) {
 function BigValue({ value, unit }: { value: string; unit?: string }) {
   return (
     <div className="flex items-baseline gap-1.5 mb-1">
-      <span className="font-mono text-2xl font-semibold text-slate-900 dark:text-white">
+      <span className="font-mono text-2xl font-semibold text-foreground">
         {value}
       </span>
       {unit && (
-        <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
+        <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
           {unit}
         </span>
       )}
@@ -154,6 +158,7 @@ function BigValue({ value, unit }: { value: string; unit?: string }) {
 
 export default function MeterDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const chartTheme = getChartTheme();
 
   const [deviceData, setDeviceData] = useState<{
     device: DeviceData;
@@ -214,6 +219,7 @@ export default function MeterDetailPage() {
     const match = hourly?.hourlyConsumption?.find((e) => e.hour === h);
     return { hour: `${h}:00`, value: match?.value ?? 0 };
   });
+  const peakHourlyValue = Math.max(...hourlyChartData.map((item) => item.value), 0);
 
   const staleDays = daysSince(deviceData?.device.lastSeenAt ?? null);
   const isStale = staleDays !== null && staleDays > 0;
@@ -238,7 +244,7 @@ export default function MeterDetailPage() {
   if (loading) {
     return (
       <div className="space-y-6 max-w-7xl mx-auto">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-5">
           <div className="space-y-2">
             <Skeleton className="h-8 w-24" />
             <div className="flex items-center gap-3">
@@ -251,7 +257,7 @@ export default function MeterDetailPage() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {[...Array(5)].map((_, i) => (
-            <Card key={i} className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
+            <Card key={i} className="bg-card border-border">
               <CardHeader className="pb-3">
                 <Skeleton className="h-4 w-24" />
               </CardHeader>
@@ -264,7 +270,7 @@ export default function MeterDetailPage() {
             </Card>
           ))}
         </div>
-        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
+        <Card className="bg-card border-border">
           <CardHeader className="pb-2">
             <Skeleton className="h-5 w-40" />
           </CardHeader>
@@ -280,12 +286,12 @@ export default function MeterDetailPage() {
     return (
       <div className="space-y-4 max-w-7xl mx-auto">
         <Link href="/dashboard/meters">
-          <Button variant="ghost" size="sm" className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-white">
+          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
             <ChevronLeft className="w-4 h-4 mr-1" />
             Back to Meters
           </Button>
         </Link>
-        <div className="p-4 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm">
+        <div className="p-4 rounded-lg text-sm" style={{background:'var(--clr-alert)18', border:'1px solid var(--clr-alert)44', color:'var(--clr-alert)'}}>
           {error ?? "Device not found."}
         </div>
       </div>
@@ -297,35 +303,35 @@ export default function MeterDetailPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* ── Breadcrumb / Title ─────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-5">
         <div className="space-y-1">
           <Link href="/dashboard/meters">
             <Button
               variant="ghost"
               size="sm"
-              className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-white -ml-2 mb-1"
+              className="text-muted-foreground hover:text-foreground -ml-2 mb-1"
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
               Meter Directory
             </Button>
           </Link>
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
+            <h1 className="text-2xl font-bold text-foreground font-mono">
               {device.deviceSerialNo}
             </h1>
             {isStale ? (
-              <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20">
+              <Badge style={{background:'var(--clr-stale)18', color:'var(--clr-stale)', border:'1px solid var(--clr-stale)44'}}>
                 <Clock className="w-3 h-3 mr-1" />
                 {staleDays}d old data
               </Badge>
             ) : (
-              <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse" />
+              <Badge style={{background:'var(--clr-online)18', color:'var(--clr-online)', border:'1px solid var(--clr-online)44'}}>
+                <span className="w-1.5 h-1.5 rounded-full mr-1.5 animate-pulse" style={{background:'var(--clr-online)'}} />
                 Live
               </Badge>
             )}
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-muted-foreground">
             {device.customerName
               ? `${device.customerName} (${device.gaName || 'Unknown GA'})`
               : "Unassigned"}
@@ -336,7 +342,7 @@ export default function MeterDetailPage() {
           onClick={loadData}
           variant="outline"
           size="sm"
-          className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800"
+          className="border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           <RefreshCw className="w-4 h-4 mr-2" />
           Refresh
@@ -344,9 +350,9 @@ export default function MeterDetailPage() {
       </div>
 
       {/* ── KPI Cards ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Volume */}
-        <KpiCard title="Volume" icon={Activity} iconColor="text-orange-400">
+        <KpiCard title="Volume" icon={Activity} iconStyle={{color:'var(--clr-accent-hi)'}}>
           <BigValue value={fmt(r?.correctedVolumeVb)} unit="Sm³" />
           <DataRow
             label="Corrected (Vb)"
@@ -359,7 +365,7 @@ export default function MeterDetailPage() {
         </KpiCard>
 
         {/* Pressure */}
-        <KpiCard title="Pressure" icon={Gauge} iconColor="text-blue-400">
+        <KpiCard title="Pressure" icon={Gauge} iconStyle={{color:'var(--clr-commercial)'}}>
           <BigValue value={fmt(r?.gasPressure)} unit="barg" />
           <DataRow label="Current" value={`${fmt(r?.gasPressure)} barg`} />
           <DataRow label="Max" value={`${fmt(r?.pressureMax)} barg`} />
@@ -367,7 +373,7 @@ export default function MeterDetailPage() {
         </KpiCard>
 
         {/* Temperature */}
-        <KpiCard title="Temperature" icon={Thermometer} iconColor="text-rose-400">
+        <KpiCard title="Temperature" icon={Thermometer} iconStyle={{color:'var(--clr-stale)'}}>
           <BigValue value={fmt(r?.gasTemperature)} unit="°C" />
           <DataRow label="Current" value={`${fmt(r?.gasTemperature)} °C`} />
           <DataRow label="Max" value={`${fmt(r?.temperatureMax)} °C`} />
@@ -375,7 +381,7 @@ export default function MeterDetailPage() {
         </KpiCard>
 
         {/* Gas Properties */}
-        <KpiCard title="Gas Properties" icon={Layers} iconColor="text-purple-400">
+        <KpiCard title="Gas Properties" icon={Layers} iconStyle={{color:'var(--clr-accent-lo)'}}>
           <DataRow label="Compressibility (Z)" value={fmt(r?.compressibilityZ, 4)} />
           <DataRow label="Compressibility (Fpv)" value={fmt(r?.compressibilityFpv, 4)} />
           <DataRow label="Correction Factor (C)" value={fmt(r?.correctionFactorC, 4)} />
@@ -383,7 +389,7 @@ export default function MeterDetailPage() {
         </KpiCard>
 
         {/* Meter Info */}
-        <KpiCard title="Meter Info" icon={Info} iconColor="text-slate-500 dark:text-slate-400">
+        <KpiCard title="Meter Info" icon={Info} iconColor="text-muted-foreground">
           <DataRow label="Meter Serial" value={device.meterSerialNo ?? "—"} />
           <DataRow label="Meter Size" value={device.meterSize ?? "—"} />
           <DataRow
@@ -398,18 +404,18 @@ export default function MeterDetailPage() {
       </div>
 
       {/* ── Hourly Consumption Chart ────────────────────────────────────── */}
-      <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
+      <Card className="bg-card border-border">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <CardTitle className="text-sm font-semibold text-foreground">
               Hourly Consumption
               {hourly?.date && (
-                <span className="ml-2 text-xs text-slate-500 font-mono">
+                <span className="ml-2 text-xs text-muted-foreground font-mono">
                   {hourly.date}
                 </span>
               )}
             </CardTitle>
-            <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+            <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
               Sm³ / hour
             </span>
           </div>
@@ -423,32 +429,36 @@ export default function MeterDetailPage() {
               >
                 <XAxis
                   dataKey="hour"
-                  tick={{ fontSize: 10, fill: "#64748b" }}
+                  tick={{ fontSize: 10, fill: chartTheme.tick }}
                   interval={3}
                   tickLine={false}
                   axisLine={false}
                 />
                 <YAxis
-                  tick={{ fontSize: 10, fill: "#64748b" }}
+                  tick={{ fontSize: 10, fill: chartTheme.tick }}
                   tickLine={false}
                   axisLine={false}
                   width={40}
                 />
                 <Tooltip
                   contentStyle={{
-                    background: "#0f172a",
-                    border: "1px solid #1e293b",
+                    background: chartTheme.tooltipBg,
+                    border: `1px solid ${chartTheme.tooltipBorder}`,
                     borderRadius: "6px",
                     fontSize: "12px",
-                    color: "#e2e8f0",
+                    color: chartTheme.tooltipText,
                   }}
-                  cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                  cursor={{ fill: "var(--clr-accent-hi)", opacity: 0.07 }}
                 />
-                <Bar dataKey="value" fill="#f97316" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="value" radius={[2, 2, 0, 0]}>
+                  {hourlyChartData.map((entry) => (
+                    <Cell key={entry.hour} fill={entry.value === peakHourlyValue ? "var(--chart-1)" : "var(--chart-5)"} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-[200px] flex items-center justify-center text-slate-500 text-sm">
+            <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
               No hourly data for this reading.
             </div>
           )}
@@ -456,10 +466,10 @@ export default function MeterDetailPage() {
       </Card>
 
       {/* ── Trend Charts ───────────────────────────────────────────────── */}
-      <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
+      <Card className="bg-card border-border">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <CardTitle className="text-sm font-semibold text-foreground">
               Historical Trends
             </CardTitle>
             <div className="flex gap-1">
@@ -467,10 +477,11 @@ export default function MeterDetailPage() {
                 <button
                   key={d}
                   onClick={() => setTrendDays(d)}
-                  className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${trendDays === d
-                      ? "bg-orange-600 text-slate-900 dark:text-white"
-                      : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-200"
-                    }`}
+                  className="px-3 py-1 text-xs font-semibold rounded transition-colors"
+                  style={trendDays === d
+                    ? {background:'var(--clr-accent-hi)', color:'var(--accent-foreground)'}
+                      : {background:'var(--secondary)', color:'var(--muted-foreground)'}
+                  }
                 >
                   {d}d
                 </button>
@@ -480,14 +491,14 @@ export default function MeterDetailPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           {history.length === 0 ? (
-            <div className="h-32 flex items-center justify-center text-slate-500 text-sm">
+            <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">
               No history data available for this range.
             </div>
           ) : (
             <>
               {/* Volume trend */}
               <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-2">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-2">
                   Corrected Volume (Sm³)
                 </p>
                 <ResponsiveContainer width="100%" height={140}>
@@ -495,35 +506,33 @@ export default function MeterDetailPage() {
                     data={chartData}
                     margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-300 dark:text-slate-800" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} opacity={0.7} />
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 10, fill: "currentColor" }}
+                      tick={{ fontSize: 10, fill: chartTheme.tick }}
                       tickLine={false}
                       axisLine={false}
                       interval="preserveStartEnd"
-                      className="text-slate-500 dark:text-slate-400"
                     />
                     <YAxis
-                      tick={{ fontSize: 10, fill: "currentColor" }}
+                      tick={{ fontSize: 10, fill: chartTheme.tick }}
                       tickLine={false}
                       axisLine={false}
                       width={50}
-                      className="text-slate-500 dark:text-slate-400"
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "var(--popover)",
-                        borderColor: "var(--border)",
-                        color: "var(--popover-foreground)",
+                        background: chartTheme.tooltipBg,
+                        border: `1px solid ${chartTheme.tooltipBorder}`,
                         borderRadius: "6px",
                         fontSize: "12px",
+                        color: chartTheme.tooltipText,
                       }}
                     />
                     <Line
                       type="monotone"
                       dataKey="correctedVolumeVb"
-                      stroke="#f97316"
+                      stroke="var(--clr-accent-hi)"
                       strokeWidth={2}
                       dot={false}
                       name="Corrected Vol"
@@ -535,7 +544,7 @@ export default function MeterDetailPage() {
 
               {/* Pressure trend */}
               <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-2">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-2">
                   Gas Pressure (barg)
                 </p>
                 <ResponsiveContainer width="100%" height={140}>
@@ -543,35 +552,33 @@ export default function MeterDetailPage() {
                     data={history}
                     margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-300 dark:text-slate-800" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} opacity={0.7} />
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 10, fill: "currentColor" }}
+                      tick={{ fontSize: 10, fill: chartTheme.tick }}
                       tickLine={false}
                       axisLine={false}
                       interval="preserveStartEnd"
-                      className="text-slate-500 dark:text-slate-400"
                     />
                     <YAxis
-                      tick={{ fontSize: 10, fill: "currentColor" }}
+                      tick={{ fontSize: 10, fill: chartTheme.tick }}
                       tickLine={false}
                       axisLine={false}
                       width={40}
-                      className="text-slate-500 dark:text-slate-400"
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "var(--popover)",
-                        borderColor: "var(--border)",
-                        color: "var(--popover-foreground)",
+                        background: chartTheme.tooltipBg,
+                        border: `1px solid ${chartTheme.tooltipBorder}`,
                         borderRadius: "6px",
                         fontSize: "12px",
+                        color: chartTheme.tooltipText,
                       }}
                     />
                     <Line
                       type="monotone"
                       dataKey="gasPressure"
-                      stroke="#3b82f6"
+                      stroke="var(--clr-commercial)"
                       strokeWidth={2}
                       dot={false}
                       name="Pressure"
@@ -583,7 +590,7 @@ export default function MeterDetailPage() {
 
               {/* Temperature trend */}
               <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-2">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-2">
                   Gas Temperature (°C)
                 </p>
                 <ResponsiveContainer width="100%" height={140}>
@@ -591,35 +598,33 @@ export default function MeterDetailPage() {
                     data={history}
                     margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-300 dark:text-slate-800" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} opacity={0.7} />
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 10, fill: "currentColor" }}
+                      tick={{ fontSize: 10, fill: chartTheme.tick }}
                       tickLine={false}
                       axisLine={false}
                       interval="preserveStartEnd"
-                      className="text-slate-500 dark:text-slate-400"
                     />
                     <YAxis
-                      tick={{ fontSize: 10, fill: "currentColor" }}
+                      tick={{ fontSize: 10, fill: chartTheme.tick }}
                       tickLine={false}
                       axisLine={false}
                       width={40}
-                      className="text-slate-500 dark:text-slate-400"
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "var(--popover)",
-                        borderColor: "var(--border)",
-                        color: "var(--popover-foreground)",
+                        background: chartTheme.tooltipBg,
+                        border: `1px solid ${chartTheme.tooltipBorder}`,
                         borderRadius: "6px",
                         fontSize: "12px",
+                        color: chartTheme.tooltipText,
                       }}
                     />
                     <Line
                       type="monotone"
                       dataKey="gasTemperature"
-                      stroke="#f43f5e"
+                      stroke="var(--clr-stale)"
                       strokeWidth={2}
                       dot={false}
                       name="Temperature"
@@ -634,18 +639,18 @@ export default function MeterDetailPage() {
       </Card>
 
       {/* ── Device Info (collapsible) ────────────────────────────────── */}
-      <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
+      <Card className="bg-card border-border">
         <button
           onClick={() => setShowDeviceInfo((v) => !v)}
           className="w-full flex items-center justify-between px-6 py-4 text-left"
         >
-          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+          <span className="text-sm font-semibold text-foreground">
             Device Information
           </span>
           {showDeviceInfo ? (
-            <ChevronUp className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+            <ChevronUp className="w-4 h-4 text-muted-foreground" />
           ) : (
-            <ChevronDown className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+            <ChevronDown className="w-4 h-4 text-muted-foreground" />
           )}
         </button>
         {showDeviceInfo && (

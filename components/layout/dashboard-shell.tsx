@@ -10,7 +10,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans antialiased transition-colors">
+    <div className="min-h-screen bg-background text-foreground flex font-sans antialiased transition-colors">
       <Sidebar
         collapsed={desktopCollapsed}
         mobileOpen={mobileOpen}

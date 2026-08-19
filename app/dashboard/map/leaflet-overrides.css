@@ -1,7 +1,11 @@
 .leaflet-container {
   height: 100%;
   width: 100%;
-  background: transparent;
+  background: var(--card);
+}
+
+:root:not(.dark) .leaflet-tile-pane img.leaflet-tile {
+  filter: sepia(0.12) saturate(0.82) hue-rotate(345deg);
 }
 
 .leaflet-tile-pane img.leaflet-tile {

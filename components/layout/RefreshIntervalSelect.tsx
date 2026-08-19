@@ -19,7 +19,7 @@ export function RefreshIntervalSelect() {
 
   return (
     <div
-      className="flex items-center gap-1.5 rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2 py-1.5 text-slate-500 dark:text-slate-400"
+      className="flex items-center gap-1.5 rounded-lg bg-secondary border border-border px-2 py-1.5 text-muted-foreground"
       title="Auto-refresh: how often the current page re-checks the database for new data"
     >
       <RefreshCw
@@ -29,13 +29,13 @@ export function RefreshIntervalSelect() {
         aria-label="Auto-refresh interval"
         value={intervalMs}
         onChange={(e) => setIntervalMs(Number(e.target.value))}
-        className="bg-transparent text-xs font-medium outline-none cursor-pointer text-slate-600 dark:text-slate-300"
+        className="bg-transparent text-xs font-medium outline-none cursor-pointer text-foreground"
       >
         {REFRESH_OPTIONS.map((opt) => (
           <option
             key={opt.ms}
             value={opt.ms}
-            className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900"
+            className="text-foreground bg-popover"
           >
             {opt.ms === 0 ? "Off" : `Every ${opt.label}`}
           </option>

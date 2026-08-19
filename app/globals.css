@@ -7,7 +7,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -48,73 +48,133 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * ══════════════════════════════════════════════════════════════
+ *  EVC GAS DASHBOARD — COLOUR SYSTEM
+ *  Neutral graphite monochrome with a rust signal accent.
+ *
+ *  STRUCTURAL HIERARCHY
+ *  --bg-base    #fafafa  page background
+ *  --bg-surface #ffffff  card / panel backgrounds
+ *  --bg-raised  #ffffff  popovers, dropdowns
+ *  --bg-subtle  #f2f1ef  subtle row / section tint
+ *
+ *  ACCENT SCALE (high → low priority)
+ *  --accent-hi  #b8562f  primary CTA, urgent badges   [brightest]
+ *  --accent-mid #7a7a70  secondary actions, bar fills
+ *  --accent-lo  #52525b  tertiary labels, borders     [dimmest]
+ *
+ *  SEMANTIC COLOURS
+ *  online   #5c8a5f  muted sage
+ *  offline  #7a7a70  neutral stone
+ *  stale    #b08a3f  muted gold
+ *  alert    #b8562f  rust alert
+ *  critical #b3402f  critical red
+ *  new      #4c7a82  muted teal
+ *  resolved #5c8a5f  muted sage
+ *
+ *  CATEGORY CHART COLOURS
+ *  Industrial  #b8562f  accent-hi
+ *  Commercial  #4c7a82  steel-teal
+ *  Residential #5c8a5f  sage-green
+ *  Bulk        #b08a3f  dusty gold
+ * ══════════════════════════════════════════════════════════════
+ */
+
+/* ── LIGHT MODE ── */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --background:          #fafafa;
+  --foreground:          #18181b;
+  --card:                #ffffff;
+  --card-foreground:     #18181b;
+  --popover:             #ffffff;
+  --popover-foreground:  #18181b;
+  --primary:             #b8562f;
+  --primary-foreground:  #ffffff;
+  --secondary:           #f2f1ef;
+  --secondary-foreground:#18181b;
+  --muted:               #f2f1ef;
+  --muted-foreground:    #71717a;
+  --accent:              #b8562f;
+  --accent-foreground:   #ffffff;
+  --destructive:         #b3402f;
+  --border:              #e4e4e7;
+  --input:               #e4e4e7;
+  --ring:                #b8562f;
+  --chart-1:             #b8562f;
+  --chart-2:             #4c7a82;
+  --chart-3:             #5c8a5f;
+  --chart-4:             #b08a3f;
+  --chart-5:             #7a7a70;
+  --radius:              0.625rem;
+  --sidebar:             #f7f7f5;
+  --sidebar-foreground:  #18181b;
+  --sidebar-primary:     #b8562f;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent:      #f2f1ef;
+  --sidebar-accent-foreground: #18181b;
+  --sidebar-border:      #e4e4e7;
+  --sidebar-ring:        #b8562f;
 }
 
+/* ── DARK MODE — primary design target ── */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background:          #121316;
+  --foreground:          #eceef0;
+  --card:                #1c1e22;
+  --card-foreground:     #eceef0;
+  --popover:             #24262b;
+  --popover-foreground:  #eceef0;
+  --primary:             #d97a4d;
+  --primary-foreground:  #121316;
+  --secondary:           #24262b;
+  --secondary-foreground:#eceef0;
+  --muted:               #24262b;
+  --muted-foreground:    #8a8d94;
+  --accent:              #d97a4d;
+  --accent-foreground:   #121316;
+  --destructive:         #d9704f;
+  --border:              rgba(255, 255, 255, 0.09);
+  --input:               rgba(255, 255, 255, 0.09);
+  --ring:                #d97a4d;
+  --chart-1:             #d97a4d;
+  --chart-2:             #5fa0aa;
+  --chart-3:             #7fb583;
+  --chart-4:             #d1a862;
+  --chart-5:             #9a9a90;
+
+  --sidebar:             #0e0f11;
+  --sidebar-foreground:  #eceef0;
+  --sidebar-primary:     #d97a4d;
+  --sidebar-primary-foreground: #121316;
+  --sidebar-accent:      #24262b;
+  --sidebar-accent-foreground: #eceef0;
+  --sidebar-border:      rgba(255, 255, 255, 0.09);
+  --sidebar-ring:        #d97a4d;
+}
+
+/* ── GLOBAL TOKEN PROPS (inline styles, JS, chart fills) ── */
+:root {
+  /* Status colours */
+  --clr-online:     #5c8a5f;
+  --clr-offline:    #7a7a70;
+  --clr-stale:      #b08a3f;
+  --clr-alert:      #b8562f;
+  --clr-critical:   #b3402f;
+  --clr-new:        #4c7a82;
+  --clr-resolved:   #5c8a5f;
+  --clr-suspect:    #b08a3f;
+
+  /* Accent scale */
+  --clr-accent-hi:  #b8562f;
+  --clr-accent-mid: #7a7a70;
+  --clr-accent-lo:  #52525b;
+
+  /* Category chart colours */
+  --clr-industrial:  #b8562f;
+  --clr-commercial:  #4c7a82;
+  --clr-residential: #5c8a5f;
+  --clr-bulk:        #b08a3f;
 }
 
 @layer base {
@@ -127,4 +187,102 @@
   html {
     @apply font-sans;
   }
+}
+
+/*
+ * ══════════════════════════════════════════════════════════════
+ *  GLOBAL DARK-MODE SLATE OVERRIDE
+ *  Maps every Tailwind dark:bg-slate-*, dark:border-slate-*,
+ *  dark:text-slate-* class to the warm earthy palette so that
+ *  pages not yet migrated to CSS-var tokens still get the
+ *  correct colour theme automatically.
+ * ══════════════════════════════════════════════════════════════
+ */
+
+/* ── Backgrounds ── */
+.dark .dark\:bg-slate-950,
+.dark .dark\:bg-slate-950\/50,
+.dark .dark\:bg-slate-950\/70,
+.dark .dark\:bg-slate-950\/80 {
+  background-color: #30291f !important;
+}
+.dark .dark\:bg-slate-900,
+.dark .dark\:bg-slate-900\/60,
+.dark .dark\:bg-slate-900\/80 {
+  background-color: #3f372b !important;
+}
+.dark .dark\:bg-slate-800,
+.dark .dark\:bg-slate-800\/40,
+.dark .dark\:bg-slate-800\/60 {
+  background-color: #4d4128 !important;
+}
+.dark .dark\:bg-slate-700 {
+  background-color: #5a4b31 !important;
+}
+
+/* ── Borders ── */
+.dark .dark\:border-slate-800 {
+  border-color: rgba(194, 157, 102, 0.22) !important;
+}
+.dark .dark\:border-slate-700 {
+  border-color: rgba(194, 157, 102, 0.35) !important;
+}
+
+/* ── Text ── */
+.dark .dark\:text-slate-100 {
+  color: #f7f1e8 !important;
+}
+.dark .dark\:text-slate-200 {
+  color: #edddca !important;
+}
+.dark .dark\:text-slate-300 {
+  color: #d8c8b1 !important;
+}
+.dark .dark\:text-slate-400 {
+  color: #c8b99f !important;
+}
+.dark .dark\:text-slate-500 {
+  color: #8d8570 !important;
+}
+.dark .dark\:text-white {
+  color: #f7f1e8 !important;
+}
+
+/* ── Hover backgrounds ── */
+.dark .dark\:hover\:bg-slate-800:hover,
+.dark .dark\:hover\:bg-slate-800\/40:hover,
+.dark .dark\:hover\:bg-slate-800\/60:hover {
+  background-color: #4d4128 !important;
+}
+.dark .dark\:hover\:bg-slate-100:hover {
+  background-color: #4d4128 !important;
+}
+
+/* ── Hover text ── */
+.dark .dark\:hover\:text-slate-200:hover {
+  color: #edddca !important;
+}
+.dark .dark\:hover\:text-white:hover {
+  color: #f7f1e8 !important;
+}
+
+/* ── Select / input backgrounds ── */
+.dark select,
+.dark input[type="text"],
+.dark input[type="date"],
+.dark input[type="search"] {
+  background-color: #3f372b;
+  border-color: rgba(194, 157, 102, 0.25);
+  color: #f7f1e8;
+}
+.dark select option {
+  background-color: #3f372b;
+  color: #f7f1e8;
+}
+
+/* ── Chart tooltip (recharts hardcoded fallback) ── */
+.dark .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: #3f372b !important;
+  border-color: rgba(161, 95, 59, 0.35) !important;
+  color: #f7f1e8 !important;
 }

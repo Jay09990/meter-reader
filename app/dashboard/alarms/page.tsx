@@ -105,15 +105,18 @@ export default function AlarmsPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">System Alarms</h1>
-            <Badge className="bg-rose-500/10 text-rose-400 border-rose-500/20">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">System Alarms</h1>
+            <Badge
+              className=""
+              style={{background:'var(--clr-alert)18', color:'var(--clr-alert)', border:'1px solid var(--clr-alert)44'}}
+            >
               Active Monitoring
             </Badge>
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             Automated missing telemetry detection and gas volume anomaly alarms.
           </p>
         </div>
@@ -129,7 +132,7 @@ export default function AlarmsPage() {
             }}
             variant="outline"
             size="sm"
-            className="border-slate-200 dark:border-slate-800"
+            className="border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             Export CSV
           </Button>
@@ -138,7 +141,7 @@ export default function AlarmsPage() {
             disabled={loading}
             variant="outline"
             size="sm"
-            className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800"
+            className="border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
             Refresh Alarms
@@ -147,13 +150,14 @@ export default function AlarmsPage() {
       </div>
 
       {/* Filter Controls */}
-      <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 p-4 flex flex-col sm:flex-row items-center gap-4">
+      <Card className="bg-card border-border p-4 flex flex-col sm:flex-row items-center gap-4">
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Alarm Type:</label>
+          <label className="text-xs font-semibold text-muted-foreground uppercase">Alarm Type:</label>
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="h-9 px-3 py-1 rounded-md bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-300 focus:outline-none focus:border-orange-500"
+            className="h-9 px-3 py-1 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none"
+            style={{'--tw-ring-color':'var(--clr-accent-mid)'} as React.CSSProperties}
           >
             <option value="all">All Types</option>
             <option value="MISSING_DATA">Missing Data</option>
@@ -162,11 +166,11 @@ export default function AlarmsPage() {
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Status:</label>
+          <label className="text-xs font-semibold text-muted-foreground uppercase">Status:</label>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-9 px-3 py-1 rounded-md bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-300 focus:outline-none focus:border-orange-500"
+            className="h-9 px-3 py-1 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none"
           >
             <option value="OPEN">Open Alarms Only</option>
             <option value="RESOLVED">Resolved Only</option>
@@ -175,11 +179,11 @@ export default function AlarmsPage() {
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Severity:</label>
+          <label className="text-xs font-semibold text-muted-foreground uppercase">Severity:</label>
           <select
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
-            className="h-9 px-3 py-1 rounded-md bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-300 focus:outline-none focus:border-orange-500"
+            className="h-9 px-3 py-1 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none"
           >
             <option value="all">All Severities</option>
             <option value="CRITICAL">Critical</option>
@@ -194,80 +198,97 @@ export default function AlarmsPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && fetchAlarms(1)}
-            className="h-9 px-3 py-1 rounded-md bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-300 focus:outline-none focus:border-orange-500 w-full sm:w-48"
+            className="h-9 px-3 py-1 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none w-full sm:w-48"
           />
         </div>
       </Card>
 
       {error && (
-        <div className="p-4 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm">
+        <div className="p-4 rounded-lg text-sm" style={{background:'var(--clr-alert)18', border:'1px solid var(--clr-alert)44', color:'var(--clr-alert)'}}>
           {error}
         </div>
       )}
 
       {/* Table */}
-      <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 overflow-hidden">
+      <Card className="bg-card border-border overflow-hidden">
         <Table>
-          <TableHeader className="bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800">
-            <TableRow className="border-slate-200 dark:border-slate-800 hover:bg-transparent">
-              <TableHead className="text-slate-500 dark:text-slate-400 font-semibold">Device Serial</TableHead>
-              <TableHead className="text-slate-500 dark:text-slate-400 font-semibold">Type</TableHead>
-              <TableHead className="text-slate-500 dark:text-slate-400 font-semibold">Cause / Explanation</TableHead>
-              <TableHead className="text-slate-500 dark:text-slate-400 font-semibold">Date</TableHead>
-              <TableHead className="text-slate-500 dark:text-slate-400 font-semibold">Status</TableHead>
-              <TableHead className="text-right text-slate-500 dark:text-slate-400 font-semibold">Action</TableHead>
+          <TableHeader className="bg-secondary border-b border-border">
+            <TableRow className="border-border hover:bg-transparent">
+              <TableHead className="text-muted-foreground font-semibold">Device Serial</TableHead>
+              <TableHead className="text-muted-foreground font-semibold">Type</TableHead>
+              <TableHead className="text-muted-foreground font-semibold">Cause / Explanation</TableHead>
+              <TableHead className="text-muted-foreground font-semibold">Date</TableHead>
+              <TableHead className="text-muted-foreground font-semibold">Status</TableHead>
+              <TableHead className="text-right text-muted-foreground font-semibold">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow className="border-slate-200 dark:border-slate-800">
-                <TableCell colSpan={6} className="text-center py-12 text-slate-500 dark:text-slate-400">
+              <TableRow className="border-border">
+                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                   Loading alarms...
                 </TableCell>
               </TableRow>
             ) : alarms.length === 0 ? (
-              <TableRow className="border-slate-200 dark:border-slate-800">
-                <TableCell colSpan={6} className="text-center py-12 text-slate-500 dark:text-slate-400">
+              <TableRow className="border-border">
+                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                   No system alarms found matching the filter criteria.
                 </TableCell>
               </TableRow>
             ) : (
               alarms.map((alarm) => (
-                <TableRow key={alarm.id} className="border-slate-200 dark:border-slate-800 hover:bg-slate-100/40 dark:hover:bg-slate-800/40">
-                  <TableCell className="font-mono text-sm font-medium text-slate-900 dark:text-slate-100">
+                <TableRow key={alarm.id} className="border-border hover:bg-secondary/60">
+                  <TableCell className="font-mono text-sm font-medium text-foreground">
                     {alarm.deviceSerialNo}
                   </TableCell>
                   <TableCell>
                     {alarm.type === "MISSING_DATA" ? (
-                      <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20 flex items-center gap-1 w-fit">
+                      <Badge
+                        className="flex items-center gap-1 w-fit"
+                        style={{background:'var(--clr-stale)18', color:'var(--clr-stale)', border:'1px solid var(--clr-stale)44'}}
+                      >
                         <Clock className="w-3 h-3" />
                         MISSING DATA
                       </Badge>
                     ) : (
-                      <Badge className="bg-rose-500/10 text-rose-400 border-rose-500/20 flex items-center gap-1 w-fit">
+                      <Badge
+                        className="flex items-center gap-1 w-fit"
+                        style={{background:'var(--clr-alert)18', color:'var(--clr-alert)', border:'1px solid var(--clr-alert)44'}}
+                      >
                         <Activity className="w-3 h-3" />
                         OUT OF RANGE
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-sm text-slate-600 dark:text-slate-300 max-w-md">
+                  <TableCell className="text-sm text-muted-foreground max-w-md">
                     {alarm.cause}
                   </TableCell>
-                  <TableCell className="font-mono text-sm text-slate-600 dark:text-slate-300">
+                  <TableCell className="font-mono text-sm text-muted-foreground">
                     {formatLocalTs(alarm.createdAt)}
                   </TableCell>
                   <TableCell>
                     {alarm.status === "OPEN" ? (
-                      <Badge className="bg-rose-600 text-slate-900 dark:text-white font-bold">
+                      <Badge
+                        className="font-bold"
+                        style={{background:'var(--clr-alert)', color:'#fff'}}
+                      >
                         OPEN
                       </Badge>
                     ) : (
-                      <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-700">
+                      <Badge
+                        className="font-bold"
+                        style={{background:'var(--clr-resolved)22', color:'var(--clr-resolved)', border:'1px solid var(--clr-resolved)44'}}
+                      >
                         RESOLVED
                       </Badge>
                     )}
                     {alarm.acknowledged && (
-                      <Badge className="ml-2 bg-green-500/10 text-green-500 border-green-500/20">ACK</Badge>
+                      <Badge
+                        className="ml-2"
+                        style={{background:'var(--clr-online)18', color:'var(--clr-online)', border:'1px solid var(--clr-online)44'}}
+                      >
+                        ACK
+                      </Badge>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
@@ -275,7 +296,8 @@ export default function AlarmsPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-blue-600 hover:text-blue-700"
+                        className="text-muted-foreground hover:text-foreground"
+                        style={{'--tw-text-opacity':'1'} as React.CSSProperties}
                         onClick={async () => {
                           await fetch(`/api/alarms/${alarm.id}/acknowledge`, { method: "POST" });
                           fetchAlarms(pagination.page);
@@ -288,7 +310,7 @@ export default function AlarmsPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800"
+                        className="text-muted-foreground hover:text-foreground hover:bg-accent"
                       >
                         <Eye className="w-4 h-4 mr-1.5" />
                         Inspect
@@ -303,10 +325,10 @@ export default function AlarmsPage() {
 
         {/* Pagination Bar */}
         {!loading && pagination.totalPages > 1 && (
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+          <div className="p-4 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
             <div>
-              Showing page <span className="font-semibold text-slate-700 dark:text-slate-200">{pagination.page}</span> of{" "}
-              <span className="font-semibold text-slate-700 dark:text-slate-200">{pagination.totalPages}</span> ({pagination.totalCount} total alarms)
+              Showing page <span className="font-semibold text-foreground">{pagination.page}</span> of{" "}
+              <span className="font-semibold text-foreground">{pagination.totalPages}</span> ({pagination.totalCount} total alarms)
             </div>
 
             <div className="flex items-center gap-2">
@@ -315,7 +337,7 @@ export default function AlarmsPage() {
                 size="sm"
                 disabled={pagination.page <= 1}
                 onClick={() => fetchAlarms(pagination.page - 1)}
-                className="h-8 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800"
+                className="h-8 border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 <ChevronLeft className="w-4 h-4 mr-1" />
                 Previous
@@ -325,7 +347,7 @@ export default function AlarmsPage() {
                 size="sm"
                 disabled={pagination.page >= pagination.totalPages}
                 onClick={() => fetchAlarms(pagination.page + 1)}
-                className="h-8 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800"
+                className="h-8 border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 Next
                 <ChevronRight className="w-4 h-4 ml-1" />

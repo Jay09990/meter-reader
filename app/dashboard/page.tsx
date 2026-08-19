@@ -21,6 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { BarChart, Bar, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAutoRefresh } from "@/lib/auto-refresh";
 import { formatLocalTs } from "@/lib/utils";
+import { getChartTheme } from "@/lib/chart-theme";
 
 // AMR overview dashboard with summary metrics and telemetry charts.
 interface FleetOverviewData {
@@ -65,10 +66,10 @@ interface FleetOverviewData {
 }
 
 const categoryColors: Record<string, string> = {
-  INDUSTRIAL: "#f97316",
-  COMMERCIAL: "#3b82f6",
-  RESIDENTIAL: "#10b981",
-  BULK: "#8b5cf6",
+  INDUSTRIAL: "var(--clr-industrial)",
+  COMMERCIAL: "var(--clr-commercial)",
+  RESIDENTIAL: "var(--clr-residential)",
+  BULK: "var(--clr-bulk)",
 };
 
 const humanCategoryLabel = (category: string) => category.charAt(0) + category.slice(1).toLowerCase();
@@ -85,28 +86,40 @@ const renderStatus = (status: string) => {
   switch (status) {
     case "ONLINE":
       return (
-        <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 font-bold">
+        <Badge
+          className="font-bold"
+          style={{background:'var(--clr-online)18', color:'var(--clr-online)', border:'1px solid var(--clr-online)44'}}
+        >
           <CheckCircle2 className="w-3 h-3 mr-1" />
           ONLINE
         </Badge>
       );
     case "OFFLINE":
       return (
-        <Badge className="bg-slate-500/10 text-slate-400 border border-slate-500/25 font-bold">
+        <Badge
+          className="font-bold"
+          style={{background:'var(--clr-offline)18', color:'var(--clr-offline)', border:'1px solid var(--clr-offline)44'}}
+        >
           <AlertTriangle className="w-3 h-3 mr-1" />
           OFFLINE
         </Badge>
       );
     case "ALERT":
       return (
-        <Badge className="bg-rose-500/10 text-rose-400 border border-rose-500/25 font-bold">
+        <Badge
+          className="font-bold"
+          style={{background:'var(--clr-alert)18', color:'var(--clr-alert)', border:'1px solid var(--clr-alert)44'}}
+        >
           <AlertTriangle className="w-3 h-3 mr-1 animate-bounce" />
           ALERT
         </Badge>
       );
     case "NEW":
       return (
-        <Badge className="bg-sky-500/10 text-sky-500 border border-sky-500/25 font-bold">
+        <Badge
+          className="font-bold"
+          style={{background:'var(--clr-new)18', color:'var(--clr-new)', border:'1px solid var(--clr-new)44'}}
+        >
           NEW
         </Badge>
       );
@@ -116,6 +129,7 @@ const renderStatus = (status: string) => {
 };
 
 export default function OverviewPage() {
+  const chartTheme = getChartTheme();
   const [data, setData] = useState<FleetOverviewData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -149,25 +163,30 @@ export default function OverviewPage() {
   const categorySeries = (data?.consumptionByCategory ?? []).map((item) => ({
     ...item,
     label: humanCategoryLabel(item.category),
-    color: categoryColors[item.category] ?? "#f97316",
+    color: categoryColors[item.category] ?? "var(--clr-accent-mid)",
   }));
   const monthlySeries = (data?.monthlyConsumption ?? []).map((item) => ({
     ...item,
     value: Number(item.value ?? 0),
   }));
+  const peakMonthlyValue = Math.max(...monthlySeries.map((item) => item.value), 0);
   const citySeries = (data?.consumptionByCity ?? []).slice(0, 8);
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">AMR Consumption Overview</h1>
-            <Badge variant="outline" className="border-orange-500/30 text-orange-400 bg-orange-500/10">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">AMR Consumption Overview</h1>
+            <Badge
+              variant="outline"
+              className="font-semibold"
+              style={{borderColor:'var(--clr-accent-hi)44', color:'var(--clr-accent-hi)', background:'var(--clr-accent-hi)18'}}
+            >
               AMR Live
             </Badge>
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             Automated Meter Reading analytics and live telemetry health in one place.
           </p>
         </div>
@@ -177,7 +196,7 @@ export default function OverviewPage() {
           disabled={loading}
           variant="outline"
           size="sm"
-          className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800 hover:text-slate-900 dark:text-white"
+          className="border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
           Refresh Data
@@ -185,119 +204,128 @@ export default function OverviewPage() {
       </div>
 
       {error && (
-        <div className="p-4 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm">
+        <div className="p-4 rounded-lg text-sm" style={{background:'var(--clr-alert)18', border:'1px solid var(--clr-alert)44', color:'var(--clr-alert)'}}>
           {error}
         </div>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
-        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+        <Card className="bg-card border-border text-card-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Meters Online
             </CardTitle>
-            <Activity className="w-5 h-5 text-orange-500" />
+            <Activity className="w-5 h-5" style={{color:'var(--clr-accent-hi)'}} />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-extrabold text-slate-900 dark:text-white">
+            <div className="text-3xl font-extrabold text-foreground">
               {loading ? "..." : `${meterStats?.value ?? 0}/${meterStats?.totalDevices ?? 0}`}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               {meterStats?.uptimePercent ?? 0}% uptime in last 24h
             </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+        <Card className="bg-card border-border text-card-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Avg Pressure
             </CardTitle>
-            <Gauge className="w-5 h-5 text-emerald-400" />
+            <Gauge className="w-5 h-5" style={{color:'var(--clr-online)'}} />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-extrabold text-emerald-400">
+            <div className="text-3xl font-extrabold" style={{color:'var(--clr-online)'}}>
               {loading ? "..." : fmt(data?.avgPressure, 2)}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Latest reading average</p>
+            <p className="text-xs text-muted-foreground mt-1">Latest reading average</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+        <Card className="bg-card border-border text-card-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Industrial Consumption
             </CardTitle>
-            <Factory className="w-5 h-5 text-orange-500" />
+            <Factory className="w-5 h-5" style={{color:'var(--clr-industrial)'}} />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-extrabold text-forground">
+            <div className="text-3xl font-extrabold text-foreground">
               {loading ? "..." : fmt(categorySeries.find((item) => item.category === "INDUSTRIAL")?.totalVolume ?? 0, 0)}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Latest reading volume</p>
+            <p className="text-xs text-muted-foreground mt-1">Latest reading volume</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+        <Card className="bg-card border-border text-card-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Commercial Consumption
             </CardTitle>
-            <Building2 className="w-5 h-5 text-blue-500" />
+            <Building2 className="w-5 h-5" style={{color:'var(--clr-commercial)'}} />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-extrabold text-forground">
+            <div className="text-3xl font-extrabold text-foreground">
               {loading ? "..." : fmt(categorySeries.find((item) => item.category === "COMMERCIAL")?.totalVolume ?? 0, 0)}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Latest reading volume</p>
+            <p className="text-xs text-muted-foreground mt-1">Latest reading volume</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+        <Card className="bg-card border-border text-card-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Active Alerts
             </CardTitle>
-            <AlertTriangle className="w-5 h-5 text-rose-500" />
+            <AlertTriangle className="w-5 h-5" style={{color:'var(--clr-alert)'}} />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-extrabold text-rose-500">
+            <div className="text-3xl font-extrabold" style={{color:'var(--clr-alert)'}}>
               {loading ? "..." : (data?.activeAlerts ?? data?.openAlarms ?? 0).toLocaleString()}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Open alarms tracked now</p>
+            <p className="text-xs text-muted-foreground mt-1">Open alarms tracked now</p>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
+        <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white">Monthly Consumption</CardTitle>
+            <CardTitle className="text-lg font-semibold text-foreground">Monthly Consumption</CardTitle>
           </CardHeader>
           <CardContent className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlySeries}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#475569" opacity={0.35} />
-                <XAxis dataKey="month" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-                <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} />
-                <Tooltip cursor={{ fill: "rgba(249, 115, 22, 0.08)" }} />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#f97316" />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} opacity={0.7} />
+                <XAxis dataKey="month" tick={{ fill: chartTheme.tick, fontSize: 12 }} />
+                <YAxis tick={{ fill: chartTheme.tick, fontSize: 12 }} />
+                <Tooltip
+                  cursor={{ fill: "var(--clr-accent-hi)", opacity: 0.07 }}
+                  contentStyle={{ background: chartTheme.tooltipBg, border: `1px solid ${chartTheme.tooltipBorder}`, color: chartTheme.tooltipText, borderRadius: 8 }}
+                />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                  {monthlySeries.map((entry) => (
+                    <Cell key={entry.month} fill={entry.value === peakMonthlyValue ? "var(--chart-1)" : "var(--chart-5)"} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
+        <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white">Consumption by Category</CardTitle>
+            <CardTitle className="text-lg font-semibold text-foreground">Consumption by Category</CardTitle>
           </CardHeader>
           <CardContent className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={categorySeries} layout="vertical" margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#475569" opacity={0.35} />
-                <XAxis type="number" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-                <YAxis dataKey="label" type="category" width={100} tick={{ fill: "#94a3b8", fontSize: 12 }} />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} opacity={0.7} />
+                <XAxis type="number" tick={{ fill: chartTheme.tick, fontSize: 12 }} />
+                <YAxis dataKey="label" type="category" width={100} tick={{ fill: chartTheme.tick, fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{ background: chartTheme.tooltipBg, border: `1px solid ${chartTheme.tooltipBorder}`, color: chartTheme.tooltipText, borderRadius: 8 }}
+                />
                 <Bar dataKey="totalVolume" radius={[0, 6, 6, 0]}>
                   {categorySeries.map((entry) => (
                     <Cell key={entry.category} fill={entry.color} />
@@ -310,9 +338,9 @@ export default function OverviewPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
+        <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white">Top 5 Consuming Customers</CardTitle>
+            <CardTitle className="text-lg font-semibold text-foreground">Top 5 Consuming Customers</CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <Table>
@@ -328,12 +356,15 @@ export default function OverviewPage() {
               <TableBody>
                 {(data?.topConsumingCustomers ?? []).map((customer) => (
                   <TableRow key={`${customer.deviceSerialNo}-${customer.customerName}`}>
-                    <TableCell className="font-medium text-slate-900 dark:text-white">{customer.customerName}</TableCell>
-                    <TableCell className="text-slate-500 dark:text-slate-400">{customer.deviceSerialNo}</TableCell>
-                    <TableCell className="text-slate-500 dark:text-slate-400">{customer.city}</TableCell>
-                    <TableCell className="text-slate-500 dark:text-slate-400">
+                    <TableCell className="font-medium text-foreground">{customer.customerName}</TableCell>
+                    <TableCell className="text-muted-foreground">{customer.deviceSerialNo}</TableCell>
+                    <TableCell className="text-muted-foreground">{customer.city}</TableCell>
+                    <TableCell className="text-muted-foreground">
                       {customer.suspect ? (
-                        <Badge variant="outline" className="border-amber-500/30 text-amber-400 bg-amber-500/10">
+                        <Badge
+                          variant="outline"
+                          style={{borderColor:'var(--clr-suspect)55', color:'var(--clr-suspect)', background:'var(--clr-suspect)18'}}
+                        >
                           Suspect
                         </Badge>
                       ) : (
@@ -348,9 +379,9 @@ export default function OverviewPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
+        <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white">Least 5 Consuming Customers</CardTitle>
+            <CardTitle className="text-lg font-semibold text-foreground">Least 5 Consuming Customers</CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <Table>
@@ -366,12 +397,15 @@ export default function OverviewPage() {
               <TableBody>
                 {(data?.leastConsumingCustomers ?? []).map((customer) => (
                   <TableRow key={`${customer.deviceSerialNo}-${customer.customerName}`}>
-                    <TableCell className="font-medium text-slate-900 dark:text-white">{customer.customerName}</TableCell>
-                    <TableCell className="text-slate-500 dark:text-slate-400">{customer.deviceSerialNo}</TableCell>
-                    <TableCell className="text-slate-500 dark:text-slate-400">{customer.city}</TableCell>
-                    <TableCell className="text-slate-500 dark:text-slate-400">
+                    <TableCell className="font-medium text-foreground">{customer.customerName}</TableCell>
+                    <TableCell className="text-muted-foreground">{customer.deviceSerialNo}</TableCell>
+                    <TableCell className="text-muted-foreground">{customer.city}</TableCell>
+                    <TableCell className="text-muted-foreground">
                       {customer.suspect ? (
-                        <Badge variant="outline" className="border-amber-500/30 text-amber-400 bg-amber-500/10">
+                        <Badge
+                          variant="outline"
+                          style={{borderColor:'var(--clr-suspect)55', color:'var(--clr-suspect)', background:'var(--clr-suspect)18'}}
+                        >
                           Suspect
                         </Badge>
                       ) : (
@@ -388,58 +422,61 @@ export default function OverviewPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 h-[500px]">
-        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 overflow-y-scroll">
+        <Card className="bg-card border-border overflow-y-scroll">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white">Consumption by City</CardTitle>
+            <CardTitle className="text-lg font-semibold text-foreground">Consumption by City</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {citySeries.map((city) => (
-              <div key={city.city} className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 px-3 py-2">
-                <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                  <MapPin className="w-4 h-4 text-orange-500" />
+              <div key={city.city} className="flex items-center justify-between rounded-lg border border-border bg-secondary px-3 py-2">
+                <div className="flex items-center gap-2 text-sm text-foreground">
+                  <MapPin className="w-4 h-4" style={{color:'var(--clr-accent-mid)'}} />
                   {city.city}
                 </div>
-                <div className="text-sm font-semibold text-slate-900 dark:text-white">{fmt(city.totalVolume, 0)}</div>
+                <div className="text-sm font-semibold text-foreground">{fmt(city.totalVolume, 0)}</div>
               </div>
             ))}
           </CardContent>
         </Card>
 
-        <Card className="bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 overflow-y-scroll">
+        <Card className="bg-card border-border overflow-y-scroll">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white">Live Event Feed</CardTitle>
+            <CardTitle className="text-lg font-semibold text-foreground">Live Event Feed</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {(data?.liveEvents ?? []).map((event) => (
-              <div key={event.id} className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70 px-3 py-3">
+              <div key={event.id} className="rounded-lg border border-border bg-secondary px-3 py-3">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-slate-900 dark:text-white">{event.label}</div>
-                  <Badge variant="outline" className="border-orange-500/30 text-orange-400 bg-orange-500/10">
+                  <div className="text-sm font-medium text-foreground">{event.label}</div>
+                  <Badge
+                    variant="outline"
+                    style={{borderColor:'var(--clr-accent-mid)55', color:'var(--clr-accent-hi)', background:'var(--clr-accent-hi)18'}}
+                  >
                     {event.kind}
                   </Badge>
                 </div>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{event.message}</p>
-                <p className="mt-2 text-xs text-slate-400">{formatLocalTs(event.timestamp)}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{event.message}</p>
+                <p className="mt-2 text-xs" style={{color:'var(--clr-accent-lo)'}}>{formatLocalTs(event.timestamp)}</p>
               </div>
             ))}
           </CardContent>
         </Card>
       </div>
 
-      <Card className="bg-white dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 p-6 flex flex-col justify-between hover:border-orange-500/30 transition-all">
+      <Card className="bg-card border-border hover:border-accent-mid p-6 flex flex-col justify-between transition-all">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-400">
+            <div className="p-2 rounded-lg" style={{background:'var(--clr-accent-hi)1a', color:'var(--clr-accent-hi)'}}>
               <Flame className="w-5 h-5" />
             </div>
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Meter Directory</h3>
+            <h3 className="text-lg font-semibold text-foreground">Meter Directory</h3>
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+          <p className="text-sm text-muted-foreground mb-6">
             Browse, filter, and inspect individual AMR devices and meter readings with server-side search and pagination.
           </p>
         </div>
         <Link href="/dashboard/meters">
-          <Button className="w-full bg-orange-600 hover:bg-orange-500 text-white font-medium">
+          <Button className="w-full font-medium text-white" style={{background:'var(--clr-accent-mid)'}}>
             Open Meter Table
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>

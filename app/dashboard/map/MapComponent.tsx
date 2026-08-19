@@ -46,10 +46,10 @@ interface MapDevice {
 }
 
 const COLOR_HEX = {
-  green: "#10b981",
-  amber: "#f59e0b",
-  red: "#ef4444",
-  gray: "#64748b",
+  green: "var(--clr-online)",
+  amber: "var(--clr-stale)",
+  red: "var(--clr-critical)",
+  gray: "var(--clr-offline)",
 } as const;
 
 const TILE_URL = {
@@ -87,9 +87,9 @@ function getMarkerSize(zoom: number) {
 
 function getMarkerIcon(color: MapDevice["markerColor"], theme: string | undefined, zoom: number) {
   const size = getMarkerSize(zoom);
-  const borderColor = theme === "dark" ? "#0f172a" : "#ffffff";
+  const borderColor = "var(--card)";
   return L.divIcon({
-    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${COLOR_HEX[color]};border:2.5px solid ${borderColor};box-shadow:0 0 0 2px rgba(15,23,42,0.15);"></div>`,
+    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${COLOR_HEX[color]};border:2.5px solid ${borderColor};box-shadow:0 0 0 2px color-mix(in srgb, var(--foreground) 18%, transparent);"></div>`,
     className: "marker-dot",
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
@@ -104,10 +104,10 @@ function ClusterLegend() {
     { color: "gray" as const, label: "Offline" },
   ];
   return (
-    <div className="absolute bottom-4 left-4 z-[1000] flex flex-wrap gap-3 rounded-full border border-slate-200/80 bg-white/90 px-3 py-2 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
+    <div className="absolute bottom-4 left-4 z-[1000] flex flex-wrap gap-3 rounded-full border border-border/80 bg-popover/95 px-3 py-2 shadow-sm backdrop-blur">
       {items.map((item) => (
-        <div key={item.label} className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
-          <span className="h-3 w-3 rounded-full border border-white dark:border-slate-900" style={{ backgroundColor: COLOR_HEX[item.color] }} />
+        <div key={item.label} className="flex items-center gap-2 text-xs font-medium text-foreground">
+          <span className="h-3 w-3 rounded-full border border-card" style={{ backgroundColor: COLOR_HEX[item.color] }} />
           {item.label}
         </div>
       ))}
@@ -176,9 +176,9 @@ export default function MapComponent() {
       const color = getClusterColor(childColors);
       const count = cluster.getChildCount();
       const size = count >= 100 ? 56 : count >= 20 ? 46 : 38;
-      const fill = color === "gray" ? (theme === "dark" ? "#475569" : "#cbd5e1") : COLOR_HEX[color];
+      const fill = COLOR_HEX[color];
       return L.divIcon({
-        html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${fill};display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:13px;border:2.5px solid ${theme === "dark" ? "#0f172a" : "#ffffff"};">${count}</div>`,
+        html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${fill};display:flex;align-items:center;justify-content:center;color:var(--primary-foreground);font-weight:700;font-size:13px;border:2.5px solid var(--card);">${count}</div>`,
         className: "cluster-bubble",
         iconSize: [size, size],
       });
@@ -193,11 +193,11 @@ export default function MapComponent() {
 
   return (
     <div className="relative h-full w-full overflow-hidden">
-      <div className="absolute right-4 top-4 z-[1000] flex items-center gap-3 whitespace-nowrap rounded-full border border-slate-200/80 bg-white/90 px-4 py-2 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
-        <span className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-700 dark:text-slate-300">
+      <div className="absolute right-4 top-4 z-[1000] flex items-center gap-3 whitespace-nowrap rounded-full border border-border/80 bg-popover/95 px-4 py-2 shadow-sm backdrop-blur">
+        <span className="text-sm font-semibold uppercase tracking-[0.24em] text-foreground">
           Meter Clusters
         </span>
-        <span className="rounded-full bg-orange-500/10 px-2 py-1 text-xs font-semibold text-orange-500">
+        <span className="rounded-full bg-[color:var(--clr-accent-hi)]/10 px-2 py-1 text-xs font-semibold text-[color:var(--clr-accent-hi)]">
           {devices.length} METERS
         </span>
       </div>
@@ -223,17 +223,17 @@ export default function MapComponent() {
       <ClusterLegend />
 
       {selectedDevice && (
-        <div className="absolute inset-0 z-[1100] flex justify-end bg-slate-950/20 backdrop-blur-[1px]">
-          <div className="h-full w-full max-w-md overflow-y-auto border-l border-slate-200 bg-white/95 p-0 shadow-2xl dark:border-slate-800 dark:bg-slate-950/95">
-            <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+        <div className="absolute inset-0 z-[1100] flex justify-end bg-foreground/20 backdrop-blur-[1px]">
+          <div className="h-full w-full max-w-md overflow-y-auto border-l border-border bg-background/95 p-0 shadow-2xl">
+            <div className="flex items-start justify-between border-b border-border px-5 py-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{selectedDevice.customerName}</h3>
-                  <Badge variant="outline" className="border-orange-500/30 bg-orange-500/10 text-orange-400">
+                  <h3 className="text-lg font-semibold text-foreground">{selectedDevice.customerName}</h3>
+                  <Badge variant="outline" className="border-[color:var(--clr-accent-hi)]/30 bg-[color:var(--clr-accent-hi)]/10 text-[color:var(--clr-accent-hi)]">
                     {selectedDevice.city}
                   </Badge>
                 </div>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{selectedDevice.deviceSerialNo}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{selectedDevice.deviceSerialNo}</p>
               </div>
               <Button variant="ghost" size="icon" onClick={() => setSelectedDevice(null)}>
                 <X className="h-4 w-4" />
@@ -241,11 +241,11 @@ export default function MapComponent() {
             </div>
 
             <div className="space-y-5 px-5 py-4">
-              <div className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
-                <MapPin className="mt-0.5 h-4 w-4 text-orange-500" />
+              <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                <MapPin className="mt-0.5 h-4 w-4 text-[color:var(--clr-accent-hi)]" />
                 <div>
                   <div>{selectedDevice.address}</div>
-                  <div className="mt-1 text-xs text-slate-400">{selectedDevice.city}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{selectedDevice.city}</div>
                 </div>
               </div>
 
@@ -256,73 +256,73 @@ export default function MapComponent() {
                   { label: "Pressure", value: selectedDevice.latestReading?.gasPressure != null ? `${selectedDevice.latestReading.gasPressure.toFixed(2)} bar` : "—" },
                   { label: "Battery", value: selectedDevice.latestReading?.batteryLevel != null ? `${selectedDevice.latestReading.batteryLevel.toFixed(0)}%` : "—" },
                 ].map((metric) => (
-                  <Card key={metric.label} className="border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/60">
+                  <Card key={metric.label} className="border-border bg-card">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">{metric.label}</CardTitle>
+                      <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground">{metric.label}</CardTitle>
                     </CardHeader>
-                    <CardContent className="pt-0 text-sm font-semibold text-slate-900 dark:text-white">{metric.value}</CardContent>
+                    <CardContent className="pt-0 text-sm font-semibold text-foreground">{metric.value}</CardContent>
                   </Card>
                 ))}
               </div>
 
-              <div className="rounded-lg border border-slate-200 p-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300">
+              <div className="rounded-lg border border-border p-3 text-sm text-muted-foreground">
                 <div className="flex items-center justify-between">
                   <span>Update cadence</span>
-                  <span className="font-semibold text-slate-900 dark:text-white">{selectedDevice.updateCadence}</span>
+                  <span className="font-semibold text-foreground">{selectedDevice.updateCadence}</span>
                 </div>
                 <div className="mt-2 flex items-center justify-between">
                   <span>Last synced</span>
-                  <span className="font-semibold text-slate-900 dark:text-white">{formatRelativeTime(selectedDevice.lastSyncedAt)}</span>
+                  <span className="font-semibold text-foreground">{formatRelativeTime(selectedDevice.lastSyncedAt)}</span>
                 </div>
               </div>
 
               <div>
-                <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-                  <TrendingUp className="h-4 w-4 text-orange-500" />
+                <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <TrendingUp className="h-4 w-4 text-[color:var(--clr-accent-hi)]" />
                   Monthly consumption
                 </div>
-                <div className="h-40 rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                <div className="h-40 rounded-lg border border-border p-3">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={selectedDevice.monthlyConsumption}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#475569" opacity={0.25} />
-                      <XAxis dataKey="month" tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                      <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.7} />
+                      <XAxis dataKey="month" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
+                      <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
                       <Tooltip />
-                      <Bar dataKey="value" fill="#f97316" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="value" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
               <div>
-                <div className="mb-3 text-sm font-semibold text-slate-900 dark:text-white">Events</div>
+                <div className="mb-3 text-sm font-semibold text-foreground">Events</div>
                 {selectedDevice.alarms.length === 0 ? (
-                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-600 dark:text-emerald-400">
+                  <div className="rounded-lg border border-[color:var(--clr-online)]/30 bg-[color:var(--clr-online)]/10 p-3 text-sm text-[color:var(--clr-online)]">
                     No events yet — network nominal.
                   </div>
                 ) : (
                   <div className="space-y-2">
                     {selectedDevice.alarms.map((alarm, index) => (
-                      <div key={`${alarm.createdAt}-${index}`} className="rounded-lg border border-slate-200 p-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300">
+                      <div key={`${alarm.createdAt}-${index}`} className="rounded-lg border border-border p-3 text-sm text-muted-foreground">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-slate-900 dark:text-white">{alarm.cause}</span>
-                          <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-400">
+                          <span className="font-semibold text-foreground">{alarm.cause}</span>
+                          <Badge variant="outline" className="border-[color:var(--clr-stale)]/30 bg-[color:var(--clr-stale)]/10 text-[color:var(--clr-stale)]">
                             {alarm.severity}
                           </Badge>
                         </div>
-                        <div className="mt-2 text-xs text-slate-400">{formatLocalTs(alarm.createdAt)}</div>
+                        <div className="mt-2 text-xs text-muted-foreground">{formatLocalTs(alarm.createdAt)}</div>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
 
-              <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-                  <Activity className="h-4 w-4 text-orange-500" />
+              <div className="rounded-lg border border-border p-3">
+                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <Activity className="h-4 w-4 text-[color:var(--clr-accent-hi)]" />
                   Location
                 </div>
-                <div className="h-36 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
+                <div className="h-36 overflow-hidden rounded-lg border border-border">
                   <MapContainer center={[selectedDevice.lat, selectedDevice.lng]} zoom={12} zoomControl={false} dragging={false} scrollWheelZoom={false} className="h-full w-full">
                     <TileLayer url={tileUrl} detectRetina attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>' />
                     <Marker position={[selectedDevice.lat, selectedDevice.lng]} icon={getMarkerIcon(selectedDevice.markerColor, theme, 14)} />
