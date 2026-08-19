@@ -23,6 +23,8 @@ import { formatLocalTs } from "@/lib/utils";
 import { getChartTheme } from "@/lib/chart-theme";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { CapacityBanner } from "@/components/layout/capacity-banner";
+import { PeriodSelector } from "@/components/ui/period-selector";
+import { pickTicks, tickCountForMode, type ConsumptionBucket, type ConsumptionMode } from "@/lib/consumption-series";
 
 // AMR overview dashboard with summary metrics and telemetry charts.
 interface FleetOverviewData {
@@ -36,7 +38,7 @@ interface FleetOverviewData {
   metersOnline?: { value: number; totalDevices: number; uptimePercent: number };
   consumptionByCategory?: Array<{ category: string; totalVolume: number }>;
   activeAlerts?: number;
-  monthlyConsumption?: Array<{ month: string; value: number }>;
+  consumption?: ConsumptionBucket[];
   topConsumingCustomers?: Array<{
     customerName: string;
     deviceSerialNo: string;
@@ -132,13 +134,14 @@ export default function OverviewPage() {
   const chartTheme = getChartTheme();
   const [data, setData] = useState<FleetOverviewData | null>(null);
   const [maxMeterCapacity, setMaxMeterCapacity] = useState<number | null>(null);
+  const [consumptionPeriod, setConsumptionPeriod] = useState<ConsumptionMode>("daily");
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchOverview = () => {
     setLoading(true);
     setError(null);
-    fetch("/api/overview")
+    fetch(`/api/overview?period=${consumptionPeriod}`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load overview data");
         return res.json();
@@ -160,7 +163,7 @@ export default function OverviewPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchOverview();
-  }, []);
+  }, [consumptionPeriod]);
 
   useAutoRefresh(fetchOverview);
 
@@ -170,11 +173,12 @@ export default function OverviewPage() {
     label: humanCategoryLabel(item.category),
     color: categoryColors[item.category] ?? "var(--clr-accent-mid)",
   }));
-  const monthlySeries = (data?.monthlyConsumption ?? []).map((item) => ({
+  const consumptionSeries = (data?.consumption ?? []).map((item) => ({
     ...item,
     value: Number(item.value ?? 0),
   }));
-  const peakMonthlyValue = Math.max(...monthlySeries.map((item) => item.value), 0);
+  const peakConsumptionValue = Math.max(...consumptionSeries.map((item) => item.value), 0);
+  const consumptionTicks = pickTicks(consumptionSeries.map((item) => item.label), tickCountForMode(consumptionPeriod));
   const citySeries = (data?.consumptionByCity ?? []).slice(0, 8);
 
   return (
@@ -298,21 +302,24 @@ export default function OverviewPage() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-foreground">Monthly Consumption</CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <CardTitle className="text-lg font-semibold text-foreground">Consumption</CardTitle>
+              <PeriodSelector value={consumptionPeriod} onChange={setConsumptionPeriod} />
+            </div>
           </CardHeader>
           <CardContent className="h-80">
             <ChartContainer config={{ value: { label: "Consumption", color: "var(--chart-1)" } }} className="h-full w-full">
-              <BarChart data={monthlySeries}>
+              <BarChart data={consumptionSeries}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} opacity={0.7} />
-                <XAxis dataKey="month" tick={{ fill: chartTheme.tick, fontSize: 12 }} />
+                <XAxis dataKey="label" ticks={consumptionTicks} tick={{ fill: chartTheme.tick, fontSize: 12 }} />
                 <YAxis tick={{ fill: chartTheme.tick, fontSize: 12 }} />
                 <ChartTooltip
                   cursor={{ fill: "var(--clr-accent-hi)", opacity: 0.07 }}
                   content={<ChartTooltipContent />}
                 />
                 <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                  {monthlySeries.map((entry) => (
-                    <Cell key={entry.month} fill={entry.value === peakMonthlyValue ? "var(--chart-1)" : "var(--chart-5)"} />
+                  {consumptionSeries.map((entry) => (
+                    <Cell key={entry.label} fill={entry.suspect ? "var(--clr-alert)" : entry.value === peakConsumptionValue ? "var(--chart-1)" : "var(--chart-5)"} />
                   ))}
                 </Bar>
               </BarChart>

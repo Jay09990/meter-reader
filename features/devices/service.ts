@@ -316,3 +316,25 @@ export async function getDeviceHourly(deviceIdOrSerial: string, dateStr?: string
     hourlyConsumption: reading.hourlyConsumption || [],
   };
 }
+
+// ─── Consumption series (delta-based) ────────────────────────────────────────
+
+export async function getDeviceConsumptionSeries(
+  deviceIdOrSerial: string,
+  mode: import("@/lib/consumption-series").ConsumptionMode,
+) {
+  // Resolve to internal id first
+  const device = await db.device.findFirst({
+    where: {
+      OR: [{ id: deviceIdOrSerial }, { deviceSerialNo: deviceIdOrSerial }],
+    },
+    select: { id: true },
+  });
+
+  if (!device) return [];
+
+  const { buildConsumptionSeries } = await import("@/lib/consumption-series");
+  const { makeDeviceBoundaryResolver } = await import("@/lib/boundary-readings");
+
+  return buildConsumptionSeries(mode, makeDeviceBoundaryResolver(device.id));
+}

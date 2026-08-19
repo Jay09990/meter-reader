@@ -1,36 +1,20 @@
 import { AlarmStatus, CustomerCategory } from "@prisma/client";
 import { db } from "../../lib/db";
 import { computeDeviceStatus } from "../../lib/device-status";
+import {
+  buildBucketSpecs,
+  computeBucket,
+  uniqueBoundaryDates,
+  type ConsumptionMode,
+  type ConsumptionBucket,
+} from "../../lib/consumption-series";
+
+import { buildFleetBoundaryMaps } from "../../lib/boundary-readings";
+
 
 const CATEGORY_ORDER = ["INDUSTRIAL", "COMMERCIAL", "RESIDENTIAL", "BULK"] as const;
 const MAX_SUSPECT_VALUE = 1_000_000;
 
-function getUtcMonthKey(date: Date) {
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
-function getMonthLabel(date: Date) {
-  return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][date.getUTCMonth()];
-}
-
-export function buildMonthlyConsumptionSeries(
-  monthlyReadings: Array<{ month: string; value: number }>,
-  asOf: Date = new Date(),
-) {
-  const buckets = new Map(monthlyReadings.map((item) => [item.month, item.value]));
-  const series = [] as Array<{ month: string; value: number }>;
-
-  for (let index = 6; index >= 0; index -= 1) {
-    const monthDate = new Date(Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth() - index, 1));
-    const monthKey = getUtcMonthKey(monthDate);
-    series.push({
-      month: getMonthLabel(monthDate),
-      value: buckets.get(monthKey) ?? 0,
-    });
-  }
-
-  return series;
-}
 
 export function buildCategoryTotals(
   values: Array<{ category: string; totalVolume: number }>,
@@ -51,6 +35,54 @@ export function buildCategoryTotals(
     totalVolume: totals.get(category) ?? 0,
   }));
 }
+
+// ─── Fleet consumption series (delta-based) ───────────────────────────────────
+
+/**
+ * Compute per-device delta sums for a given period mode.
+ *
+ * Strategy:
+ *  1. Derive all unique boundary dates from the bucket specs.
+ *  2. Run one DISTINCT ON query per boundary date (no per-device loops).
+ *  3. For each bucket, sum per-device deltas — skipping devices that are
+ *     missing a reading on either the start or end boundary (avoids treating
+ *     missing-as-zero which would fabricate spikes/drops).
+ *  4. Negative fleet-sum → suspect bucket (rare, but possible during rollover).
+ */
+export async function getFleetConsumptionSeries(
+  mode: ConsumptionMode,
+  today: Date = new Date(),
+): Promise<ConsumptionBucket[]> {
+  const specs = buildBucketSpecs(mode, today);
+  const boundaries = uniqueBoundaryDates(specs);
+
+  // One DISTINCT ON query per unique boundary date (parallel)
+  const boundaryMaps = await buildFleetBoundaryMaps(boundaries);
+
+  return specs.map((spec) => {
+    const startMap = boundaryMaps.get(spec.startDate)!;
+    const endMap   = boundaryMaps.get(spec.endDate)!;
+
+    if (!startMap || !endMap) return { ...spec, value: null, suspect: false };
+
+    // Sum per-device deltas — only for devices present on BOTH sides
+    let total = 0;
+    let deviceCount = 0;
+
+    for (const [deviceId, endVal] of endMap) {
+      const startVal = startMap.get(deviceId);
+      if (startVal == null) continue; // device missing on start side → skip
+      const delta = endVal - startVal;
+      if (delta < 0) continue; // skip individual meter resets from the fleet sum
+      total += delta;
+      deviceCount++;
+    }
+
+    if (deviceCount === 0) return { ...spec, value: null, suspect: false };
+    return computeBucket(spec, 0, total); // total is already the fleet delta
+  });
+}
+
 
 export async function getFleetOverview() {
   const now = new Date();
@@ -100,15 +132,8 @@ export async function getFleetAnalytics() {
   const now = new Date();
   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-  const [openAlertCount, allReadings, devices] = await Promise.all([
+  const [openAlertCount, devices] = await Promise.all([
     db.alarm.count({ where: { status: AlarmStatus.OPEN } }),
-    db.reading.findMany({
-      select: {
-        readingDate: true,
-        correctedVolumeVb: true,
-      },
-      where: { correctedVolumeVb: { not: null } },
-    }),
     db.device.findMany({
       select: {
         id: true,
@@ -159,17 +184,6 @@ export async function getFleetAnalytics() {
         category: device.customer?.category ?? CustomerCategory.RESIDENTIAL,
         totalVolume: device.readings[0]?.correctedVolumeVb ?? 0,
       })),
-  );
-
-  const monthlyTotals = new Map<string, number>();
-  allReadings.forEach((reading) => {
-    const monthKey = getUtcMonthKey(reading.readingDate);
-    monthlyTotals.set(monthKey, (monthlyTotals.get(monthKey) ?? 0) + (reading.correctedVolumeVb ?? 0));
-  });
-
-  const monthlyConsumption = buildMonthlyConsumptionSeries(
-    Array.from(monthlyTotals.entries()).map(([month, value]) => ({ month, value })),
-    now,
   );
 
   const cityTotals = new Map<string, number>();
@@ -264,7 +278,6 @@ export async function getFleetAnalytics() {
     },
     consumptionByCategory: categoryTotals,
     activeAlerts: openAlertCount,
-    monthlyConsumption,
     topConsumingCustomers,
     leastConsumingCustomers,
     consumptionByCity,

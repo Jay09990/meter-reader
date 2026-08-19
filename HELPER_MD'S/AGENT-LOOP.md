@@ -28,6 +28,7 @@ IMPLIMENTATION-PLAN.md, do the work, re-run checks, update this file.
 - **Last verified green:** 2026-07-22 (Zero Lint & TS Errors, Build Succeeded)
 - **Last session summary:** Increased the shared radius to 0.875rem and default Card spacing to spacing(6). Removed duplicated dashboard/page gutters, made Map full-width, and split Meter Detail Historical Trends into three responsive cards with one shared range toggle. Browser checks passed on Overview, Meter Directory, Alarms, Reports, Customers, Meter Detail, and Map.
 - **Current session summary:** Added isolated system-capacity settings/rejection schema, ingest rejection flow, capacity APIs/banners, and Settings UI. Prisma client regeneration is blocked locally because the query engine DLL is held open by a running Node process.
+- **Consumption follow-up:** The delta-based backend existed, but its frontend wiring was incomplete. Added shared Daily/Monthly/Quarterly selector, Overview period-aware refetch, Meter Detail consumption API/card, and sparse deterministic x-axis ticks.
 
 ## 2. Phase Checklist (mirror of IMPLIMENTATION-PLAN.md — update both)
 
@@ -73,6 +74,7 @@ IMPLIMENTATION-PLAN.md, do the work, re-run checks, update this file.
 - **2026-08-19 — shared UI shape tokens.** Changed `app/globals.css` `--radius` from 0.625rem to 0.875rem and `components/ui/card.tsx` default spacing from `--spacing(4)` to `--spacing(6)`; retained the sm-card spacing. Checked Overview, Meters, Alarms, Reports, Customers, and Meter Detail in the browser; no concrete breakage found.
 - **2026-08-19 — dashboard gutters and trend composition.** Removed shared `<main>` padding, duplicate Customers padding, and Map negative-margin compensation. Replaced the single Historical Trends card with three metric cards and a shared pill toggle; typecheck and browser checks passed.
 - **2026-08-19 — meter capacity.** Added `SystemSettings` and `RejectedConnectionAttempt`, isolated from alarm settings/tables. New-device ingest checks the configured cap, records rejected payloads, and returns a typed 409; existing devices bypass the check. The count-then-create check is intentionally non-atomic for the low-concurrency onboarding traffic pattern. Capacity status, acknowledgement, settings APIs, Header/Overview notices, and Settings navigation are isolated to the new system-capacity feature.
+- **2026-08-19 — delta consumption UI.** Reused the shared bucket/period utility for Overview and Meter Detail. Selector changes refetch the selected period; 30 daily, 13 monthly, and 5 quarterly delta buckets remain backend-defined. Historical raw trends intentionally remain separate from the new consumption card.
 
 ## 6. Next Session Should Start With
 

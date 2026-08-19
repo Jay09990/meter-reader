@@ -33,6 +33,8 @@ import { useAutoRefresh } from "@/lib/auto-refresh";
 import { formatLocalTs, formatLocalDate } from "@/lib/utils";
 import { getChartTheme } from "@/lib/chart-theme";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { PeriodSelector } from "@/components/ui/period-selector";
+import { pickTicks, tickCountForMode, type ConsumptionBucket, type ConsumptionMode } from "@/lib/consumption-series";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -165,6 +167,10 @@ export default function MeterDetailPage() {
   } | null>(null);
   const [hourly, setHourly] = useState<HourlyData | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [consumption, setConsumption] = useState<ConsumptionBucket[]>([]);
+  const [consumptionPeriod, setConsumptionPeriod] = useState<ConsumptionMode>("daily");
+  const [consumptionLoading, setConsumptionLoading] = useState(true);
+  const [consumptionError, setConsumptionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [trendDays, setTrendDays] = useState<7 | 30 | 90>(30);
@@ -200,6 +206,21 @@ export default function MeterDetailPage() {
     }
   }, [id, trendDays]);
 
+  const loadConsumption = useCallback(async () => {
+    setConsumptionLoading(true);
+    setConsumptionError(null);
+    try {
+      const response = await fetch(`/api/devices/${id}/consumption?period=${consumptionPeriod}`);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Failed to fetch consumption");
+      setConsumption(result.consumption ?? []);
+    } catch (error) {
+      setConsumptionError(error instanceof Error ? error.message : "Failed to fetch consumption");
+    } finally {
+      setConsumptionLoading(false);
+    }
+  }, [id, consumptionPeriod]);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
@@ -210,8 +231,14 @@ export default function MeterDetailPage() {
     loadHistory();
   }, [loadHistory]);
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadConsumption();
+  }, [loadConsumption]);
+
   useAutoRefresh(loadData);
   useAutoRefresh(loadHistory);
+  useAutoRefresh(loadConsumption);
 
   // Prepare hourly chart data (fill 0–23 gaps with 0)
   const hourlyChartData = Array.from({ length: 24 }, (_, h) => {
@@ -219,6 +246,10 @@ export default function MeterDetailPage() {
     return { hour: `${h}:00`, value: match?.value ?? 0 };
   });
   const peakHourlyValue = Math.max(...hourlyChartData.map((item) => item.value), 0);
+  const consumptionChartData = consumption.map((bucket) => ({ ...bucket, value: bucket.value ?? 0 }));
+  const consumptionTicks = pickTicks(consumptionChartData.map((bucket) => bucket.label), tickCountForMode(consumptionPeriod));
+  const peakConsumptionValue = Math.max(...consumptionChartData.map((bucket) => bucket.value), 0);
+  const hasConsumptionValues = consumption.some((bucket) => bucket.value !== null && bucket.value !== 0);
 
   const staleDays = daysSince(deviceData?.device.lastSeenAt ?? null);
   const isStale = staleDays !== null && staleDays > 0;
@@ -459,6 +490,38 @@ export default function MeterDetailPage() {
         </CardContent>
       </Card>
       </div>
+
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle className="text-sm font-semibold text-foreground">Consumption</CardTitle>
+            <PeriodSelector value={consumptionPeriod} onChange={setConsumptionPeriod} />
+          </div>
+        </CardHeader>
+        <CardContent>
+          {consumptionLoading ? (
+            <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">Loading consumption…</div>
+          ) : consumptionError ? (
+            <div className="flex h-[200px] items-center justify-center text-sm" style={{ color: "var(--clr-alert)" }}>{consumptionError}</div>
+          ) : !hasConsumptionValues ? (
+            <div className="flex h-[200px] items-center justify-center text-center text-sm text-muted-foreground">No consumption change is available for this period. This meter needs readings from both the start and end of a period to calculate a delta.</div>
+          ) : (
+            <ChartContainer config={{ value: { label: "Consumption", color: "var(--chart-1)" } }} className="h-[200px] w-full">
+              <BarChart data={consumptionChartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <XAxis dataKey="label" ticks={consumptionTicks} tick={{ fontSize: 10, fill: chartTheme.tick }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: chartTheme.tick }} tickLine={false} axisLine={false} width={40} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar dataKey="value" radius={[2, 2, 0, 0]}>
+                  {consumptionChartData.map((bucket) => (
+                    <Cell key={bucket.label} fill={bucket.suspect ? "var(--clr-alert)" : bucket.value === peakConsumptionValue ? "var(--chart-1)" : "var(--chart-5)"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ChartContainer>
+          )}
+          {consumption.some((bucket) => bucket.suspect) && <p className="mt-2 text-xs" style={{ color: "var(--clr-alert)" }}>Red bars indicate a meter reset was detected for that period.</p>}
+        </CardContent>
+      </Card>
 
       {/* ── Trend Charts ───────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
