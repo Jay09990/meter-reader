@@ -289,6 +289,12 @@ select option {
   color: var(--popover-foreground);
 }
 
+.refresh-interval-select,
+.refresh-interval-select option {
+  background-color: var(--secondary);
+  color: var(--secondary-foreground);
+}
+
 /* ── Chart tooltip (recharts hardcoded fallback) ── */
 .dark .recharts-tooltip-wrapper .recharts-default-tooltip {
   background-color: #3f372b !important;

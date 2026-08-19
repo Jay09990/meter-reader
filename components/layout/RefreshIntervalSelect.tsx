@@ -29,13 +29,13 @@ export function RefreshIntervalSelect() {
         aria-label="Auto-refresh interval"
         value={intervalMs}
         onChange={(e) => setIntervalMs(Number(e.target.value))}
-        className="bg-transparent text-xs font-medium outline-none cursor-pointer text-foreground"
+        className="refresh-interval-select bg-secondary text-secondary-foreground text-xs font-medium outline-none cursor-pointer"
       >
         {REFRESH_OPTIONS.map((opt) => (
           <option
             key={opt.ms}
             value={opt.ms}
-            className="text-foreground bg-popover"
+            className="bg-secondary text-secondary-foreground"
           >
             {opt.ms === 0 ? "Off" : `Every ${opt.label}`}
           </option>
