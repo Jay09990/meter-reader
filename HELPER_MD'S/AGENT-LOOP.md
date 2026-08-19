@@ -24,9 +24,10 @@ IMPLIMENTATION-PLAN.md, do the work, re-run checks, update this file.
 
 ## 1. Current Status
 
-- **Current phase:** UI shape pass — shared spacing and Meter Detail trend layout updated
+- **Current phase:** System meter-capacity enforcement and operations UI added
 - **Last verified green:** 2026-07-22 (Zero Lint & TS Errors, Build Succeeded)
 - **Last session summary:** Increased the shared radius to 0.875rem and default Card spacing to spacing(6). Removed duplicated dashboard/page gutters, made Map full-width, and split Meter Detail Historical Trends into three responsive cards with one shared range toggle. Browser checks passed on Overview, Meter Directory, Alarms, Reports, Customers, Meter Detail, and Map.
+- **Current session summary:** Added isolated system-capacity settings/rejection schema, ingest rejection flow, capacity APIs/banners, and Settings UI. Prisma client regeneration is blocked locally because the query engine DLL is held open by a running Node process.
 
 ## 2. Phase Checklist (mirror of IMPLIMENTATION-PLAN.md — update both)
 
@@ -71,8 +72,9 @@ IMPLIMENTATION-PLAN.md, do the work, re-run checks, update this file.
 
 - **2026-08-19 — shared UI shape tokens.** Changed `app/globals.css` `--radius` from 0.625rem to 0.875rem and `components/ui/card.tsx` default spacing from `--spacing(4)` to `--spacing(6)`; retained the sm-card spacing. Checked Overview, Meters, Alarms, Reports, Customers, and Meter Detail in the browser; no concrete breakage found.
 - **2026-08-19 — dashboard gutters and trend composition.** Removed shared `<main>` padding, duplicate Customers padding, and Map negative-margin compensation. Replaced the single Historical Trends card with three metric cards and a shared pill toggle; typecheck and browser checks passed.
+- **2026-08-19 — meter capacity.** Added `SystemSettings` and `RejectedConnectionAttempt`, isolated from alarm settings/tables. New-device ingest checks the configured cap, records rejected payloads, and returns a typed 409; existing devices bypass the check. The count-then-create check is intentionally non-atomic for the low-concurrency onboarding traffic pattern. Capacity status, acknowledgement, settings APIs, Header/Overview notices, and Settings navigation are isolated to the new system-capacity feature.
 
 ## 6. Next Session Should Start With
 
-1. Review the shared gutter removal and separate Meter Detail trend cards.
-2. If approved, continue remaining bento-box shape details for Meter Directory, Reports, Customers, Overview, Header, and Sidebar.
+1. Stop/restart the running local Node development process, run `npx prisma generate`, then apply `prisma/migrations/20260819000000_max_meter_capacity/migration.sql` with Prisma.
+2. Configure a capacity through Dashboard Settings and verify a new ingest receives 409 while an existing device continues reporting.

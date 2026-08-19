@@ -152,14 +152,6 @@ export async function getFleetAnalytics() {
     return device.lastSeenAt >= yesterday;
   }).length;
 
-  const pressureValues = devices
-    .map((device) => device.readings[0]?.gasPressure)
-    .filter((value): value is number => value != null);
-
-  const avgPressure = pressureValues.length
-    ? pressureValues.reduce((sum, value) => sum + value, 0) / pressureValues.length
-    : null;
-
   const categoryTotals = buildCategoryTotals(
     devices
       .filter((device) => device.customer && device.readings[0]?.correctedVolumeVb != null)
@@ -270,7 +262,6 @@ export async function getFleetAnalytics() {
       totalDevices: devices.length,
       uptimePercent: devices.length ? Math.round((onlineDevices / devices.length) * 100) : 0,
     },
-    avgPressure,
     consumptionByCategory: categoryTotals,
     activeAlerts: openAlertCount,
     monthlyConsumption,

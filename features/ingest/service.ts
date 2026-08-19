@@ -2,9 +2,37 @@ import { db } from "@/lib/db";
 import { parseIngestPayload } from "./parser";
 import { checkGasOutOfRangeAlarm } from "./alarm-check";
 import { Prisma } from "@prisma/client";
+import { getMaxMeterCapacity, recordRejectedConnection } from "@/features/system-capacity/service";
+
+export class CapacityExceededError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CapacityExceededError";
+  }
+}
 
 export async function processIngestPayload(rawBody: unknown) {
   const parsed = parseIngestPayload(rawBody);
+
+  // Capacity applies only to new devices; existing meters must keep reporting.
+  const existingDevice = await db.device.findUnique({
+    where: { deviceSerialNo: parsed.deviceSerialNo },
+    select: { id: true },
+  });
+
+  if (!existingDevice) {
+    const maxCapacity = await getMaxMeterCapacity();
+
+    if (maxCapacity != null) {
+      const currentCount = await db.device.count();
+      if (currentCount >= maxCapacity) {
+        await recordRejectedConnection(parsed.deviceSerialNo, parsed.rawPayload);
+        throw new CapacityExceededError(
+          `Maximum meter capacity (${maxCapacity}) reached — rejected new device ${parsed.deviceSerialNo}`,
+        );
+      }
+    }
+  }
 
   // 1. Upsert Device registry (unchanged — a device is still one row,
   // identified by deviceSerialNo; only Reading behavior changes below)

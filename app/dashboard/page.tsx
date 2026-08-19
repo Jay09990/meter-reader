@@ -9,7 +9,6 @@ import {
   ArrowRight,
   RefreshCw,
   Activity,
-  Gauge,
   Building2,
   Factory,
   MapPin,
@@ -23,6 +22,7 @@ import { useAutoRefresh } from "@/lib/auto-refresh";
 import { formatLocalTs } from "@/lib/utils";
 import { getChartTheme } from "@/lib/chart-theme";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { CapacityBanner } from "@/components/layout/capacity-banner";
 
 // AMR overview dashboard with summary metrics and telemetry charts.
 interface FleetOverviewData {
@@ -34,7 +34,6 @@ interface FleetOverviewData {
   criticalAlarms: number;
   warningAlarms: number;
   metersOnline?: { value: number; totalDevices: number; uptimePercent: number };
-  avgPressure?: number | null;
   consumptionByCategory?: Array<{ category: string; totalVolume: number }>;
   activeAlerts?: number;
   monthlyConsumption?: Array<{ month: string; value: number }>;
@@ -132,6 +131,7 @@ const renderStatus = (status: string) => {
 export default function OverviewPage() {
   const chartTheme = getChartTheme();
   const [data, setData] = useState<FleetOverviewData | null>(null);
+  const [maxMeterCapacity, setMaxMeterCapacity] = useState<number | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -151,6 +151,10 @@ export default function OverviewPage() {
         setError(err.message);
         setLoading(false);
       });
+    fetch("/api/system/capacity-status")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((status) => setMaxMeterCapacity(status?.maxCapacity ?? null))
+      .catch(() => {});
   };
 
   useEffect(() => {
@@ -210,6 +214,8 @@ export default function OverviewPage() {
         </div>
       )}
 
+      <CapacityBanner variant="full" />
+
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <Card className="bg-card border-border text-card-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -231,15 +237,15 @@ export default function OverviewPage() {
         <Card className="bg-card border-border text-card-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Avg Pressure
+              Maximum Connection Capacity
             </CardTitle>
-            <Gauge className="w-5 h-5" style={{color:'var(--clr-online)'}} />
+            <Activity className="w-5 h-5" style={{color:'var(--clr-accent-mid)'}} />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-extrabold" style={{color:'var(--clr-online)'}}>
-              {loading ? "..." : fmt(data?.avgPressure, 2)}
+            <div className="text-3xl font-extrabold text-foreground">
+              {loading ? "..." : maxMeterCapacity === null ? "Unlimited" : `${meterStats?.totalDevices ?? 0}/${maxMeterCapacity}`}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Latest reading average</p>
+            <p className="text-xs text-muted-foreground mt-1">Connected meters</p>
           </CardContent>
         </Card>
 

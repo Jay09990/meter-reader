@@ -140,3 +140,19 @@ model AlarmSettings {
   gasDeviationPercent      Float    @default(20)
   updatedAt                DateTime @updatedAt
 }
+
+model SystemSettings {
+  id               String   @id @default("singleton")
+  maxMeterCapacity Int?
+  updatedAt        DateTime @updatedAt
+}
+
+model RejectedConnectionAttempt {
+  id             String   @id @default(cuid())
+  deviceSerialNo String
+  rawPayload     Json
+  attemptedAt    DateTime @default(now())
+  acknowledged   Boolean  @default(false)
+
+  @@index([acknowledged, attemptedAt])
+}

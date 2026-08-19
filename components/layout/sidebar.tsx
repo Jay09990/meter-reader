@@ -10,6 +10,7 @@ import {
   FileText,
   LayoutDashboard,
   Map,
+  Settings,
   X,
   Users,
 } from "lucide-react";
@@ -31,6 +32,7 @@ const navigationGroups = [
     items: [
       { name: "Alarms", href: "/dashboard/alarms", icon: AlertTriangle },
       { name: "Reports", href: "/dashboard/reports", icon: FileText },
+      { name: "Settings", href: "/dashboard/settings", icon: Settings },
     ],
   },
 ];

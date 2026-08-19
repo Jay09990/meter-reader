@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { processIngestPayload } from "@/features/ingest";
+import { CapacityExceededError, processIngestPayload } from "@/features/ingest";
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,6 +30,12 @@ export async function POST(req: NextRequest) {
     const result = await processIngestPayload(body);
     return NextResponse.json(result, { status: 200 });
   } catch (err: unknown) {
+    if (err instanceof CapacityExceededError) {
+      return NextResponse.json(
+        { error: "MAX_METER_CAPACITY_REACHED", message: err.message },
+        { status: 409 },
+      );
+    }
     const errorMessage = err instanceof Error ? err.message : "Ingestion processing failed";
     const isValidationError = errorMessage.startsWith("Invalid payload");
     

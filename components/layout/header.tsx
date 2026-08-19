@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Bell, Menu } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
 import { RefreshIntervalSelect } from "./RefreshIntervalSelect";
+import { CapacityBanner } from "./capacity-banner";
 import { Button } from "@/components/ui/button";
 import { useAutoRefresh } from "@/lib/auto-refresh";
 
@@ -46,6 +47,7 @@ export function Header({ onOpenMobileSidebar }: HeaderProps) {
       <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:gap-4">
         <RefreshIntervalSelect />
         <ThemeToggle />
+        <CapacityBanner variant="compact" />
 
         <Link
           href="/dashboard/alarms"
