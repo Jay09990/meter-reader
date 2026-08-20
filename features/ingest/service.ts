@@ -3,6 +3,7 @@ import { parseIngestPayload } from "./parser";
 import { checkGasOutOfRangeAlarm } from "./alarm-check";
 import { Prisma } from "@prisma/client";
 import { getMaxMeterCapacity, recordRejectedConnection } from "@/features/system-capacity/service";
+import { checkDeviceThresholds } from "@/features/alarms/threshold-check";
 
 export class CapacityExceededError extends Error {
   constructor(message: string) {
@@ -98,6 +99,12 @@ export async function processIngestPayload(rawBody: unknown) {
   // 3. Run inline alarm checks (unchanged call site — logic inside now
   // accounts for multiple readings/day, see alarm-check.ts)
   await checkGasOutOfRangeAlarm(device.id, parsed.readingDate, parsed.correctedVolumeVb);
+  await checkDeviceThresholds(device.id, parsed.readingDate, {
+    gasPressure: parsed.gasPressure ?? null,
+    gasTemperature: parsed.gasTemperature ?? null,
+    batteryLevel: parsed.batteryLevel ?? null,
+    correctedVolumeVb: parsed.correctedVolumeVb ?? null,
+  });
 
   return {
     success: true,

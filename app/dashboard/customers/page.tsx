@@ -17,7 +17,8 @@ import {
   PlusCircle,
   AlertTriangle,
   CheckCircle,
-  HelpCircle
+  HelpCircle,
+  Pencil,
 } from "lucide-react";
 
 import { useAutoRefresh } from "@/lib/auto-refresh";
@@ -29,10 +30,12 @@ interface DeviceItem {
   deviceSerialNo: string;
   meterSerialNo: string | null;
   meterSize: string | null;
+  customerId: string | null;
   customerName: string | null;
   category: string | null;
   address: string | null;
   gaName: string | null;
+  gaId: string | null;
   lastSeenAt: string | null;
   status: "NEW" | "ONLINE" | "OFFLINE" | "ALERT";
   latestReading: {
@@ -49,6 +52,21 @@ interface DeviceItem {
 interface GeographicalArea {
   id: string;
   name: string;
+}
+
+interface ExistingCustomer {
+  id: string;
+  name: string;
+  category: string;
+}
+
+function ThresholdInput({ label, value, onChange, step = "0.01", min, max }: { label: string; value: string; onChange: (value: string) => void; step?: string; min?: string; max?: string }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs text-muted-foreground">{label}</label>
+      <Input type="number" step={step} min={min} max={max} value={value} onChange={(event) => onChange(event.target.value)} placeholder="Optional" className="bg-muted border-border text-foreground focus:border-[color:var(--clr-accent-hi)]" />
+    </div>
+  );
 }
 
 export default function CustomersPage() {
@@ -75,16 +93,32 @@ export default function CustomersPage() {
   const [selectedCategory, setSelectedCategory] = useState("RESIDENTIAL");
   const [address, setAddress] = useState("");
   const [selectedGaId, setSelectedGaId] = useState("");
+  const [latitudeInput, setLatitudeInput] = useState("");
+  const [longitudeInput, setLongitudeInput] = useState("");
+  const [pressureUpper, setPressureUpper] = useState("");
+  const [pressureLower, setPressureLower] = useState("");
+  const [temperatureUpper, setTemperatureUpper] = useState("");
+  const [temperatureLower, setTemperatureLower] = useState("");
+  const [consumptionUpper, setConsumptionUpper] = useState("");
+  const [consumptionLower, setConsumptionLower] = useState("");
+  const [batteryLower, setBatteryLower] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
   // Provisioning Type
   const [provisionType, setProvisionType] = useState<"new" | "existing">("new");
-  const [existingCustomers, setExistingCustomers] = useState<any[]>([]);
+  const [existingCustomers, setExistingCustomers] = useState<ExistingCustomer[]>([]);
   const [selectedExistingCustomerId, setSelectedExistingCustomerId] = useState("");
   
   // Confirmation Dialog
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<DeviceItem | null>(null);
+  const [editCustomerName, setEditCustomerName] = useState("");
+  const [editCategory, setEditCategory] = useState("RESIDENTIAL");
+  const [editAddress, setEditAddress] = useState("");
+  const [editGaId, setEditGaId] = useState("");
+  const [editError, setEditError] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const limit = 12;
 
@@ -140,6 +174,41 @@ export default function CustomersPage() {
 
   const totalPages = Math.ceil(total / limit) || 1;
 
+  const openCustomerEditor = (device: DeviceItem) => {
+    if (!device.customerId) return;
+    setEditingCustomer(device);
+    setEditCustomerName(device.customerName ?? "");
+    setEditCategory(device.category ?? "RESIDENTIAL");
+    setEditAddress(device.address ?? "");
+    setEditGaId(device.gaId ?? "");
+    setEditError("");
+  };
+
+  const saveCustomerEdit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editingCustomer?.customerId || !editCustomerName.trim() || !editGaId) {
+      setEditError("Customer name and geographical area are required.");
+      return;
+    }
+    setSavingEdit(true);
+    setEditError("");
+    try {
+      const response = await fetch(`/api/customers/${editingCustomer.customerId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editCustomerName.trim(), category: editCategory, address: editAddress.trim() || null, gaId: editGaId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Failed to update customer");
+      setEditingCustomer(null);
+      fetchDevices();
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : "Failed to update customer");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   // Open Drawer Form for Provisioning
   const openProvisionDrawer = (device: DeviceItem) => {
     setSelectedDevice(device);
@@ -151,6 +220,15 @@ export default function CustomersPage() {
     setSelectedCategory("RESIDENTIAL");
     setAddress("");
     setSelectedGaId(gasList[0]?.id || "");
+    setLatitudeInput("");
+    setLongitudeInput("");
+    setPressureUpper("");
+    setPressureLower("");
+    setTemperatureUpper("");
+    setTemperatureLower("");
+    setConsumptionUpper("");
+    setConsumptionLower("");
+    setBatteryLower("");
     setFormError("");
     setDrawerOpen(true);
   };
@@ -170,6 +248,21 @@ export default function CustomersPage() {
       return;
     }
 
+    if (!latitudeInput.trim() || !longitudeInput.trim()) {
+      setFormError("Latitude and longitude are required for provisioning.");
+      return;
+    }
+    const latitude = Number(latitudeInput);
+    const longitude = Number(longitudeInput);
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+      setFormError("Latitude must be a number between -90 and 90.");
+      return;
+    }
+    if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      setFormError("Longitude must be a number between -180 and 180.");
+      return;
+    }
+
     setFormError("");
     setShowConfirmDialog(true);
   };
@@ -182,9 +275,18 @@ export default function CustomersPage() {
     setShowConfirmDialog(false);
 
     try {
-      const bodyPayload: any = {
+      const bodyPayload: Record<string, unknown> = {
         provision: true,
-        meterSerialNo: deviceIdInput || null
+        meterSerialNo: deviceIdInput || null,
+        latitude: latitudeInput.trim(),
+        longitude: longitudeInput.trim(),
+        pressureUpperLimit: pressureUpper,
+        pressureLowerLimit: pressureLower,
+        temperatureUpperLimit: temperatureUpper,
+        temperatureLowerLimit: temperatureLower,
+        consumptionUpperLimit: consumptionUpper,
+        consumptionLowerLimit: consumptionLower,
+        batteryLowerLimit: batteryLower,
       };
       
       if (provisionType === "existing") {
@@ -447,6 +549,7 @@ export default function CustomersPage() {
                   <TableHead className="text-muted-foreground font-semibold">Pressure</TableHead>
                   <TableHead className="text-muted-foreground font-semibold">Battery</TableHead>
                   <TableHead className="text-muted-foreground font-semibold">Status</TableHead>
+                  <TableHead className="text-right text-muted-foreground font-semibold">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -471,11 +574,19 @@ export default function CustomersPage() {
                       {device.latestReading?.batteryLevel != null ? `${Math.round(device.latestReading.batteryLevel)}%` : "—"}
                     </TableCell>
                     <TableCell className="py-3">{renderStatus(device)}</TableCell>
+                    <TableCell className="py-3 text-right">
+                      {device.customerId && (
+                        <Button type="button" variant="ghost" size="sm" onClick={() => openCustomerEditor(device)} className="text-muted-foreground hover:text-foreground">
+                          <Pencil className="mr-1 h-3.5 w-3.5" />
+                          Edit
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
                 {devices.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground text-sm">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground text-sm">
                       No registered endpoints found.
                     </TableCell>
                   </TableRow>
@@ -484,6 +595,52 @@ export default function CustomersPage() {
             </Table>
           </div>
         </Card>
+      )}
+
+      {editingCustomer && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <Card className="w-full max-w-lg bg-background shadow-2xl">
+            <CardHeader>
+              <CardTitle>Edit Customer Information</CardTitle>
+              <p className="text-xs text-muted-foreground">Updates apply to every meter assigned to this customer.</p>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={saveCustomerEdit} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Customer Name</label>
+                  <Input value={editCustomerName} onChange={(event) => setEditCustomerName(event.target.value)} required />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Category</label>
+                    <select value={editCategory} onChange={(event) => setEditCategory(event.target.value)} className="flex h-9 w-full rounded-md border border-border bg-muted px-3 text-sm text-foreground">
+                      <option value="RESIDENTIAL">Residential</option>
+                      <option value="COMMERCIAL">Commercial</option>
+                      <option value="INDUSTRIAL">Industrial</option>
+                      <option value="BULK">Bulk</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Geographical Area</label>
+                    <select value={editGaId} onChange={(event) => setEditGaId(event.target.value)} required className="flex h-9 w-full rounded-md border border-border bg-muted px-3 text-sm text-foreground">
+                      <option value="" disabled>Select a city</option>
+                      {gasList.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Address</label>
+                  <Input value={editAddress} onChange={(event) => setEditAddress(event.target.value)} />
+                </div>
+                {editError && <p className="text-sm" style={{ color: "var(--clr-alert)" }}>{editError}</p>}
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setEditingCustomer(null)}>Cancel</Button>
+                  <Button type="submit" disabled={savingEdit}>{savingEdit ? "Saving…" : "Save Changes"}</Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* Pagination */}
@@ -569,6 +726,18 @@ export default function CustomersPage() {
                     className="bg-muted border-border text-foreground placeholder:text-muted-foreground focus:border-[color:var(--clr-accent-hi)] focus:ring-0 font-mono text-sm"
                   />
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Latitude</label>
+                    <Input type="number" step="0.000001" placeholder="e.g. 18.5204" value={latitudeInput} onChange={(event) => setLatitudeInput(event.target.value)} required className="bg-muted border-border text-foreground placeholder:text-muted-foreground focus:border-[color:var(--clr-accent-hi)] focus:ring-0 font-mono text-sm" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Longitude</label>
+                    <Input type="number" step="0.000001" placeholder="e.g. 73.8567" value={longitudeInput} onChange={(event) => setLongitudeInput(event.target.value)} required className="bg-muted border-border text-foreground placeholder:text-muted-foreground focus:border-[color:var(--clr-accent-hi)] focus:ring-0 font-mono text-sm" />
+                  </div>
+                </div>
+                <p className="-mt-2 text-[11px] text-muted-foreground">Required so this meter appears on the Map page.</p>
 
                 {/* Provision Type Toggle */}
                 <div className="flex gap-2 p-1 bg-muted rounded-lg border border-border">
@@ -661,6 +830,23 @@ export default function CustomersPage() {
                     </div>
                   </>
                 )}
+
+                <Card className="bg-muted/40 border-border">
+                  <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Pressure Threshold (bar)</CardTitle></CardHeader>
+                  <CardContent className="grid grid-cols-2 gap-3"><ThresholdInput label="Upper Limit" value={pressureUpper} onChange={setPressureUpper} /><ThresholdInput label="Lower Limit" value={pressureLower} onChange={setPressureLower} /></CardContent>
+                </Card>
+                <Card className="bg-muted/40 border-border">
+                  <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Temperature Threshold (°C)</CardTitle></CardHeader>
+                  <CardContent className="grid grid-cols-2 gap-3"><ThresholdInput label="Upper Limit" value={temperatureUpper} onChange={setTemperatureUpper} /><ThresholdInput label="Lower Limit" value={temperatureLower} onChange={setTemperatureLower} /></CardContent>
+                </Card>
+                <Card className="bg-muted/40 border-border">
+                  <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Consumption Threshold (Sm³)</CardTitle></CardHeader>
+                  <CardContent className="grid grid-cols-2 gap-3"><ThresholdInput label="Upper Limit" value={consumptionUpper} onChange={setConsumptionUpper} /><ThresholdInput label="Lower Limit" value={consumptionLower} onChange={setConsumptionLower} /></CardContent>
+                </Card>
+                <Card className="bg-muted/40 border-border">
+                  <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Battery Threshold (%)</CardTitle></CardHeader>
+                  <CardContent><ThresholdInput label="Lower Limit" value={batteryLower} onChange={setBatteryLower} step="1" min="0" max="100" /></CardContent>
+                </Card>
               </form>
             </div>
 

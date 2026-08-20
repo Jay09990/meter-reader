@@ -31,7 +31,7 @@ interface AlarmItem {
   meterSerialNo: string | null;
   customerName: string | null;
   gaName: string | null;
-  type: "MISSING_DATA" | "GAS_OUT_OF_RANGE";
+  type: "MISSING_DATA" | "GAS_OUT_OF_RANGE" | "PRESSURE_OUT_OF_RANGE" | "TEMPERATURE_OUT_OF_RANGE" | "CONSUMPTION_OUT_OF_RANGE" | "BATTERY_LOW";
   cause: string;
   gasValue: number | null;
   averageValue: number | null;
@@ -162,6 +162,10 @@ export default function AlarmsPage() {
             <option value="all">All Types</option>
             <option value="MISSING_DATA">Missing Data</option>
             <option value="GAS_OUT_OF_RANGE">Gas Out Of Range</option>
+            <option value="PRESSURE_OUT_OF_RANGE">Pressure Out Of Range</option>
+            <option value="TEMPERATURE_OUT_OF_RANGE">Temperature Out Of Range</option>
+            <option value="CONSUMPTION_OUT_OF_RANGE">Consumption Out Of Range</option>
+            <option value="BATTERY_LOW">Battery Low</option>
           </select>
         </div>
 
@@ -250,13 +254,21 @@ export default function AlarmsPage() {
                         <Clock className="w-3 h-3" />
                         MISSING DATA
                       </Badge>
+                    ) : alarm.type === "BATTERY_LOW" ? (
+                      <Badge
+                        className="flex items-center gap-1 w-fit"
+                        style={{background:'var(--clr-alert)18', color:'var(--clr-alert)', border:'1px solid var(--clr-alert)44'}}
+                      >
+                        <Activity className="w-3 h-3" />
+                        BATTERY LOW
+                      </Badge>
                     ) : (
                       <Badge
                         className="flex items-center gap-1 w-fit"
                         style={{background:'var(--clr-alert)18', color:'var(--clr-alert)', border:'1px solid var(--clr-alert)44'}}
                       >
                         <Activity className="w-3 h-3" />
-                        OUT OF RANGE
+                        {alarm.type.replace(/_/g, " ")}
                       </Badge>
                     )}
                   </TableCell>

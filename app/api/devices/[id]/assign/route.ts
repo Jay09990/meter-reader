@@ -1,5 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { checkDeviceThresholds } from "@/features/alarms/threshold-check";
+
+const optionalNumber = (value: unknown) => {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+function parseCoordinate(value: unknown, min: number, max: number): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const coordinate = Number(value);
+  if (!Number.isFinite(coordinate) || coordinate < min || coordinate > max) {
+    throw new Error(`Coordinate out of range: ${value}`);
+  }
+  return coordinate;
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -7,7 +25,29 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    
+    // Find device by id (CUID) or deviceSerialNo
+    const foundDevice = await db.device.findFirst({
+      where: {
+        OR: [
+          { id },
+          { deviceSerialNo: id }
+        ]
+      }
+    });
+    if (!foundDevice) {
+      return NextResponse.json({ error: "Device not found" }, { status: 404 });
+    }
+
     const body = await req.json();
+    let latitude: number | null | undefined;
+    let longitude: number | null | undefined;
+    try {
+      latitude = parseCoordinate(body.latitude, -90, 90);
+      longitude = parseCoordinate(body.longitude, -180, 180);
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid coordinate" }, { status: 400 });
+    }
 
     let customerId = body.customerId;
 
@@ -74,15 +114,37 @@ export async function PATCH(
     }
 
     const device = await db.device.update({
-      where: { id },
+      where: { id: foundDevice.id },
       data: {
         customerId: customerId,
         meterSerialNo:
           body.meterSerialNo !== undefined ? body.meterSerialNo : undefined,
-        latitude: body.latitude !== undefined ? body.latitude : undefined,
-        longitude: body.longitude !== undefined ? body.longitude : undefined,
+        latitude,
+        longitude,
+        pressureUpperLimit: optionalNumber(body.pressureUpperLimit),
+        pressureLowerLimit: optionalNumber(body.pressureLowerLimit),
+        temperatureUpperLimit: optionalNumber(body.temperatureUpperLimit),
+        temperatureLowerLimit: optionalNumber(body.temperatureLowerLimit),
+        consumptionUpperLimit: optionalNumber(body.consumptionUpperLimit),
+        consumptionLowerLimit: optionalNumber(body.consumptionLowerLimit),
+        batteryLowerLimit: optionalNumber(body.batteryLowerLimit),
       },
     });
+
+    // Evaluate thresholds immediately against the latest reading of this device
+    const latestReading = await db.reading.findFirst({
+      where: { deviceId: foundDevice.id },
+      orderBy: { readingDate: "desc" },
+    });
+    if (latestReading) {
+      await checkDeviceThresholds(foundDevice.id, latestReading.readingDate, {
+        gasPressure: latestReading.gasPressure,
+        gasTemperature: latestReading.gasTemperature,
+        batteryLevel: latestReading.batteryLevel,
+        correctedVolumeVb: latestReading.correctedVolumeVb,
+      });
+    }
+
     return NextResponse.json(device);
   } catch (err: unknown) {
     const message =

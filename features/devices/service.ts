@@ -2,6 +2,55 @@ import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 import { computeDeviceStatus } from "@/lib/device-status";
 
+interface DailyVolumeDelta {
+  correctedVolumeVb: number | null;
+  uncorrectedVolumeVm: number | null;
+}
+
+function calculateVolumeDelta(
+  currentValue: number | null,
+  previousValue: number | null,
+): number | null {
+  return currentValue == null || previousValue == null ? null : currentValue - previousValue;
+}
+
+async function getDailyVolumeDelta(
+  deviceId: string,
+  latestReading: {
+    readingDate: Date;
+    correctedVolumeVb: number | null;
+    uncorrectedVolumeVm: number | null;
+  },
+): Promise<DailyVolumeDelta> {
+  const currentDayStart = new Date(latestReading.readingDate);
+  currentDayStart.setUTCHours(0, 0, 0, 0);
+  const previousDayStart = new Date(currentDayStart);
+  previousDayStart.setUTCDate(previousDayStart.getUTCDate() - 1);
+
+  const previousReading = await db.reading.findFirst({
+    where: {
+      deviceId,
+      readingDate: { gte: previousDayStart, lt: currentDayStart },
+    },
+    orderBy: { receivedAt: "desc" },
+    select: {
+      correctedVolumeVb: true,
+      uncorrectedVolumeVm: true,
+    },
+  });
+
+  return {
+    correctedVolumeVb: calculateVolumeDelta(
+      latestReading.correctedVolumeVb,
+      previousReading?.correctedVolumeVb ?? null,
+    ),
+    uncorrectedVolumeVm: calculateVolumeDelta(
+      latestReading.uncorrectedVolumeVm,
+      previousReading?.uncorrectedVolumeVm ?? null,
+    ),
+  };
+}
+
 export interface GetDevicesOptions {
   page?: number;
   limit?: number;
@@ -91,11 +140,13 @@ export async function getPaginatedDevices(options: GetDevicesOptions) {
           select: { status: true, severity: true },
         },
         customer: {
-          select: { 
+          select: {
+            id: true,
             name: true, 
             category: true,
             address: true,
-            ga: { select: { name: true } } 
+            gaId: true,
+            ga: { select: { name: true } }
           }
         },
       },
@@ -111,10 +162,12 @@ export async function getPaginatedDevices(options: GetDevicesOptions) {
       deviceSerialNo: d.deviceSerialNo,
       meterSerialNo: d.meterSerialNo,
       meterSize: d.meterSize,
+      customerId: d.customerId,
       customerName: d.customer?.name || null,
       category: d.customer?.category || null,
       address: d.customer?.address || null,
       gaName: d.customer?.ga?.name || null,
+      gaId: d.customer?.gaId || null,
       firmwareVersion: d.firmwareVersion,
       hardwareVersion: d.hardwareVersion,
       deviceModel: d.deviceModel,
@@ -173,6 +226,9 @@ export async function getDeviceLatest(deviceIdOrSerial: string) {
   }
 
   const latestReading = device.readings[0] || null;
+  const dailyVolume = latestReading
+    ? await getDailyVolumeDelta(device.id, latestReading)
+    : null;
 
   return {
     device: {
@@ -189,6 +245,13 @@ export async function getDeviceLatest(deviceIdOrSerial: string) {
       firstSeenAt: device.firstSeenAt,
       lastSeenAt: device.lastSeenAt,
       status: computeDeviceStatus(device.lastSeenAt, device.alarms, device.customerId),
+      batteryLowerLimit: device.batteryLowerLimit,
+      pressureUpperLimit: device.pressureUpperLimit,
+      pressureLowerLimit: device.pressureLowerLimit,
+      temperatureUpperLimit: device.temperatureUpperLimit,
+      temperatureLowerLimit: device.temperatureLowerLimit,
+      consumptionUpperLimit: device.consumptionUpperLimit,
+      consumptionLowerLimit: device.consumptionLowerLimit,
     },
     latestReading: latestReading
       ? {
@@ -207,9 +270,11 @@ export async function getDeviceLatest(deviceIdOrSerial: string) {
           correctionFactorC: latestReading.correctionFactorC,
           gasDensity: latestReading.gasDensity,
           hourlyConsumption: latestReading.hourlyConsumption,
+          batteryLevel: latestReading.batteryLevel,
           receivedAt: latestReading.receivedAt,
         }
       : null,
+    dailyVolume,
   };
 }
 

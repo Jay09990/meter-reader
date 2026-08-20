@@ -29,6 +29,12 @@ IMPLIMENTATION-PLAN.md, do the work, re-run checks, update this file.
 - **Last session summary:** Increased the shared radius to 0.875rem and default Card spacing to spacing(6). Removed duplicated dashboard/page gutters, made Map full-width, and split Meter Detail Historical Trends into three responsive cards with one shared range toggle. Browser checks passed on Overview, Meter Directory, Alarms, Reports, Customers, Meter Detail, and Map.
 - **Current session summary:** Added isolated system-capacity settings/rejection schema, ingest rejection flow, capacity APIs/banners, and Settings UI. Prisma client regeneration is blocked locally because the query engine DLL is held open by a running Node process.
 - **Consumption follow-up:** The delta-based backend existed, but its frontend wiring was incomplete. Added shared Daily/Monthly/Quarterly selector, Overview period-aware refetch, Meter Detail consumption API/card, and sparse deterministic x-axis ticks.
+- **Threshold alarms:** Added optional per-device pressure, temperature, consumption, and battery limits; each breach is checked after ingest and uses the shared notification stub.
+- **Provisioning coordinates:** Latitude/longitude are now mandatory during device provisioning and are range-validated before assignment so new devices render on the Map.
+- **Map consumption:** Replaced the Map drawer's raw cumulative monthly sum with a lazy-loaded daily delta-consumption series for the selected meter.
+- **Customer editing:** Added a table action that edits a customer’s name, category, address, and geographical area through the existing customer API.
+- **Demo fixtures:** Added an idempotent five-meter fixture script with 18 months of daily cumulative readings; database insertion awaits approval.
+- **Yearly consumption:** Added the Yearly option to the shared consumption selector and all period-aware chart paths; it returns five trailing April-March financial-year delta buckets.
 
 ## 2. Phase Checklist (mirror of IMPLIMENTATION-PLAN.md — update both)
 
@@ -75,8 +81,18 @@ IMPLIMENTATION-PLAN.md, do the work, re-run checks, update this file.
 - **2026-08-19 — dashboard gutters and trend composition.** Removed shared `<main>` padding, duplicate Customers padding, and Map negative-margin compensation. Replaced the single Historical Trends card with three metric cards and a shared pill toggle; typecheck and browser checks passed.
 - **2026-08-19 — meter capacity.** Added `SystemSettings` and `RejectedConnectionAttempt`, isolated from alarm settings/tables. New-device ingest checks the configured cap, records rejected payloads, and returns a typed 409; existing devices bypass the check. The count-then-create check is intentionally non-atomic for the low-concurrency onboarding traffic pattern. Capacity status, acknowledgement, settings APIs, Header/Overview notices, and Settings navigation are isolated to the new system-capacity feature.
 - **2026-08-19 — delta consumption UI.** Reused the shared bucket/period utility for Overview and Meter Detail. Selector changes refetch the selected period; 30 daily, 13 monthly, and 5 quarterly delta buckets remain backend-defined. Historical raw trends intentionally remain separate from the new consumption card.
+- **2026-08-20 — per-meter threshold alarms.** Isolated seven optional Device threshold fields and four AlarmType values from existing alarm-settings logic. Added threshold checking after Reading creation, notification stub integration for threshold, gas-deviation, and missing-data alarm creation, assignment API support, and provisioning-only inputs. Existing provisioned meters intentionally have no edit action in this pass.
+- **2026-08-20 — provisioning coordinates.** Added required latitude/longitude inputs to the Customers provisioning drawer. The assignment endpoint parses and range-validates coordinates (latitude -90..90, longitude -180..180) before saving them; Map behavior remains unchanged.
+- **2026-08-20 — Map consumption correction.** Removed per-device raw reading sums from the Map devices endpoint. Selecting a marker now fetches the existing daily delta series from the device consumption endpoint, preventing cumulative meter totals from being displayed as consumption.
+- **2026-08-20 — customer table editing.** Added customer/GA identifiers to the device-list response so the Customer table can open a prefilled editor. Editing intentionally updates shared Customer data for all meters assigned to that customer; meter-specific data remains outside this action.
+- **2026-08-20 — demo meter fixtures.** Added `scripts/add-dummy-meters.mjs`, which only replaces readings for `DEMO-1801` through `DEMO-1805`, preserving all other data. It creates or refreshes their assigned customer/GA data and 548 daily cumulative readings per meter. Execution was not approved in this session.
+
+- **2026-08-20 - yearly consumption.** Extended the shared mode, bucket builder, selector, API parsers, and Map drawer. Yearly reports five trailing April-March financial years, including the current partial year, through the same boundary-reading delta calculation as the other periods.
 
 ## 6. Next Session Should Start With
 
 1. Stop/restart the running local Node development process, run `npx prisma generate`, then apply `prisma/migrations/20260819000000_max_meter_capacity/migration.sql` with Prisma.
 2. Configure a capacity through Dashboard Settings and verify a new ingest receives 409 while an existing device continues reporting.
+3. Run `npx prisma db push` and `npx prisma generate` after stopping the local dev server; verify threshold creation through a provisioned meter ingest.
+
+4. Verify the new Yearly selector on Overview, Meter Detail, and Map; it uses five trailing April-March financial-year delta buckets, including the current partial year.

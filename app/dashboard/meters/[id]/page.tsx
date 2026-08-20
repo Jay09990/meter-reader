@@ -24,6 +24,7 @@ import {
   Layers,
   Info,
   Activity,
+  Battery,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +52,13 @@ interface DeviceData {
   gaName: string | null;
   firstSeenAt: string;
   lastSeenAt: string | null;
+  batteryLowerLimit: number | null;
+  pressureUpperLimit: number | null;
+  pressureLowerLimit: number | null;
+  temperatureUpperLimit: number | null;
+  temperatureLowerLimit: number | null;
+  consumptionUpperLimit: number | null;
+  consumptionLowerLimit: number | null;
 }
 
 interface LatestReading {
@@ -69,7 +77,13 @@ interface LatestReading {
   correctionFactorC: number | null;
   gasDensity: number | null;
   hourlyConsumption: { hour: number; value: number }[] | null;
+  batteryLevel: number | null;
   receivedAt: string;
+}
+
+interface DailyVolume {
+  correctedVolumeVb: number | null;
+  uncorrectedVolumeVm: number | null;
 }
 
 interface HourlyData {
@@ -164,6 +178,7 @@ export default function MeterDetailPage() {
   const [deviceData, setDeviceData] = useState<{
     device: DeviceData;
     latestReading: LatestReading | null;
+    dailyVolume: DailyVolume | null;
   } | null>(null);
   const [hourly, setHourly] = useState<HourlyData | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
@@ -246,10 +261,12 @@ export default function MeterDetailPage() {
     return { hour: `${h}:00`, value: match?.value ?? 0 };
   });
   const peakHourlyValue = Math.max(...hourlyChartData.map((item) => item.value), 0);
+
   const consumptionChartData = consumption.map((bucket) => ({ ...bucket, value: bucket.value ?? 0 }));
   const consumptionTicks = pickTicks(consumptionChartData.map((bucket) => bucket.label), tickCountForMode(consumptionPeriod));
   const peakConsumptionValue = Math.max(...consumptionChartData.map((bucket) => bucket.value), 0);
   const hasConsumptionValues = consumption.some((bucket) => bucket.value !== null && bucket.value !== 0);
+  const todaysConsumption = consumption.at(-1)?.value ?? null;
 
   const staleDays = daysSince(deviceData?.device.lastSeenAt ?? null);
   const isStale = staleDays !== null && staleDays > 0;
@@ -328,7 +345,7 @@ export default function MeterDetailPage() {
     );
   }
 
-  const { device, latestReading: r } = deviceData;
+  const { device, latestReading: r, dailyVolume } = deviceData;
 
   return (
     <div className="space-y-6 w-full">
@@ -383,14 +400,15 @@ export default function MeterDetailPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {/* Volume */}
         <KpiCard title="Volume" icon={Activity} iconStyle={{color:'var(--clr-accent-hi)'}}>
-          <BigValue value={fmt(r?.correctedVolumeVb)} unit="Sm³" />
+          <BigValue value={consumptionLoading ? "..." : fmt(todaysConsumption)} unit="SCM³" />
+          <p className="text-xs text-muted-foreground">Today&apos;s value minus yesterday&apos;s value</p>
           <DataRow
             label="Corrected (Vb)"
-            value={`${fmt(r?.correctedVolumeVb)} Sm³`}
+            value={`${fmt(dailyVolume?.correctedVolumeVb)} SCM³`}
           />
           <DataRow
             label="Uncorrected (Vm)"
-            value={`${fmt(r?.uncorrectedVolumeVm)} m³`}
+            value={`${fmt(dailyVolume?.uncorrectedVolumeVm)} m³`}
           />
         </KpiCard>
 
@@ -424,8 +442,8 @@ export default function MeterDetailPage() {
           <DataRow label="Meter Serial" value={device.meterSerialNo ?? "—"} />
           <DataRow label="Meter Size" value={device.meterSize ?? "—"} />
           <DataRow
-            label="First Seen"
-            value={formatLocalTs(device.firstSeenAt)}
+            label="Battery"
+            value={r?.batteryLevel != null ? `${Math.round(r.batteryLevel)}%` : "—"}
           />
           <DataRow
             label="Last Seen"

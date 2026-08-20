@@ -87,7 +87,7 @@
  *  Industrial  #b8562f  accent-hi
  *  Commercial  #4c7a82  steel-teal
  *  Residential #5c8a5f  sage-green
- *  Bulk        #b08a3f  dusty gold
+ *  DRS         #b08a3f  dusty gold
  * ══════════════════════════════════════════════════════════════
  */
 
@@ -184,7 +184,7 @@
   --clr-industrial:  #b8562f;
   --clr-commercial:  #4c7a82;
   --clr-residential: #5c8a5f;
-  --clr-bulk:        #b08a3f;
+  --clr-drs:         #b08a3f;
 }
 
 @layer base {

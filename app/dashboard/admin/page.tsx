@@ -21,6 +21,13 @@ export default function AdminPage() {
   const [assignCustomerId, setAssignCustomerId] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
+  const [pressureUpperLimit, setPressureUpperLimit] = useState("");
+  const [pressureLowerLimit, setPressureLowerLimit] = useState("");
+  const [temperatureUpperLimit, setTemperatureUpperLimit] = useState("");
+  const [temperatureLowerLimit, setTemperatureLowerLimit] = useState("");
+  const [consumptionUpperLimit, setConsumptionUpperLimit] = useState("");
+  const [consumptionLowerLimit, setConsumptionLowerLimit] = useState("");
+  const [batteryLowerLimit, setBatteryLowerLimit] = useState("");
 
   const fetchGas = async () => {
     const res = await fetch("/api/gas");
@@ -77,11 +84,25 @@ export default function AdminPage() {
         customerId: assignCustomerId || null,
         latitude: latitude ? parseFloat(latitude) : undefined,
         longitude: longitude ? parseFloat(longitude) : undefined,
+        pressureUpperLimit: pressureUpperLimit ? parseFloat(pressureUpperLimit) : null,
+        pressureLowerLimit: pressureLowerLimit ? parseFloat(pressureLowerLimit) : null,
+        temperatureUpperLimit: temperatureUpperLimit ? parseFloat(temperatureUpperLimit) : null,
+        temperatureLowerLimit: temperatureLowerLimit ? parseFloat(temperatureLowerLimit) : null,
+        consumptionUpperLimit: consumptionUpperLimit ? parseFloat(consumptionUpperLimit) : null,
+        consumptionLowerLimit: consumptionLowerLimit ? parseFloat(consumptionLowerLimit) : null,
+        batteryLowerLimit: batteryLowerLimit ? parseFloat(batteryLowerLimit) : null,
       }),
     });
     setDeviceId("");
     setLatitude("");
     setLongitude("");
+    setPressureUpperLimit("");
+    setPressureLowerLimit("");
+    setTemperatureUpperLimit("");
+    setTemperatureLowerLimit("");
+    setConsumptionUpperLimit("");
+    setConsumptionLowerLimit("");
+    setBatteryLowerLimit("");
   };
 
   return (
@@ -183,6 +204,43 @@ export default function AdminPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Longitude</label>
                 <Input type="number" step="any" value={longitude} onChange={e => setLongitude(e.target.value)} />
+              </div>
+              <div className="pt-3 border-t border-border">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Threshold Setpoints</p>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Battery Lower Limit (%)</label>
+                  <Input type="number" min="0" max="100" step="1" value={batteryLowerLimit} onChange={e => setBatteryLowerLimit(e.target.value)} placeholder="e.g. 25" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Pressure Upper (bar)</label>
+                    <Input type="number" step="any" value={pressureUpperLimit} onChange={e => setPressureUpperLimit(e.target.value)} placeholder="Upper" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Pressure Lower (bar)</label>
+                    <Input type="number" step="any" value={pressureLowerLimit} onChange={e => setPressureLowerLimit(e.target.value)} placeholder="Lower" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Temp Upper (°C)</label>
+                    <Input type="number" step="any" value={temperatureUpperLimit} onChange={e => setTemperatureUpperLimit(e.target.value)} placeholder="Upper" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Temp Lower (°C)</label>
+                    <Input type="number" step="any" value={temperatureLowerLimit} onChange={e => setTemperatureLowerLimit(e.target.value)} placeholder="Lower" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Consumption Upper (Sm³)</label>
+                    <Input type="number" step="any" value={consumptionUpperLimit} onChange={e => setConsumptionUpperLimit(e.target.value)} placeholder="Upper" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Consumption Lower (Sm³)</label>
+                    <Input type="number" step="any" value={consumptionLowerLimit} onChange={e => setConsumptionLowerLimit(e.target.value)} placeholder="Lower" />
+                  </div>
+                </div>
               </div>
               <Button type="submit">Assign Device</Button>
             </form>

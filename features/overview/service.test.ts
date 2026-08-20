@@ -7,14 +7,14 @@ describe("overview analytics helpers", () => {
       { category: "INDUSTRIAL", totalVolume: 1000 },
       { category: "COMMERCIAL", totalVolume: 500 },
       { category: "RESIDENTIAL", totalVolume: 250 },
-      { category: "BULK", totalVolume: 125 },
+      { category: "DRS", totalVolume: 125 },
     ]);
 
     expect(result).toEqual([
       { category: "INDUSTRIAL", totalVolume: 1000 },
       { category: "COMMERCIAL", totalVolume: 500 },
       { category: "RESIDENTIAL", totalVolume: 250 },
-      { category: "BULK", totalVolume: 125 },
+      { category: "DRS", totalVolume: 125 },
     ]);
   });
 });

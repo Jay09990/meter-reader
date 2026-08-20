@@ -8,13 +8,31 @@ import {
   type ConsumptionMode,
   type ConsumptionBucket,
 } from "../../lib/consumption-series";
-
 import { buildFleetBoundaryMaps } from "../../lib/boundary-readings";
+import {
+  getCurrentQuarterStart,
+  getFinancialYearStart,
+  getMonthStart,
+  toIsoDate,
+} from "../../lib/financial-calendar";
 
-
-const CATEGORY_ORDER = ["INDUSTRIAL", "COMMERCIAL", "RESIDENTIAL", "BULK"] as const;
+const CATEGORY_ORDER = ["INDUSTRIAL", "COMMERCIAL", "RESIDENTIAL", "DRS"] as const;
 const MAX_SUSPECT_VALUE = 1_000_000;
 
+export type KpiRange = "today" | "month" | "quarter" | "year";
+
+function getRangeStartDate(range: KpiRange, today: Date): Date {
+  switch (range) {
+    case "today":
+      return new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    case "month":
+      return getMonthStart(today);
+    case "quarter":
+      return getCurrentQuarterStart(today);
+    case "year":
+      return getFinancialYearStart(today);
+  }
+}
 
 export function buildCategoryTotals(
   values: Array<{ category: string; totalVolume: number }>,
@@ -128,11 +146,12 @@ export async function getFleetOverview() {
   };
 }
 
-export async function getFleetAnalytics() {
-  const now = new Date();
-  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+export async function getFleetAnalytics(range: KpiRange, today: Date = new Date()) {
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+  const todayIso = toIsoDate(today);
+  const rangeStartIso = toIsoDate(getRangeStartDate(range, today));
 
-  const [openAlertCount, devices] = await Promise.all([
+  const [openAlertCount, devices, boundaryMaps] = await Promise.all([
     db.alarm.count({ where: { status: AlarmStatus.OPEN } }),
     db.device.findMany({
       select: {
@@ -151,16 +170,6 @@ export async function getFleetAnalytics() {
             },
           },
         },
-        readings: {
-          orderBy: { readingDate: "desc" },
-          take: 1,
-          select: {
-            correctedVolumeVb: true,
-            currentFlowRate: true,
-            gasPressure: true,
-            readingDate: true,
-          },
-        },
         alarms: {
           select: {
             status: true,
@@ -170,7 +179,20 @@ export async function getFleetAnalytics() {
         },
       },
     }),
+    buildFleetBoundaryMaps([todayIso, rangeStartIso]),
   ]);
+
+  const endMap = boundaryMaps.get(todayIso)!;
+  const startMap = boundaryMaps.get(rangeStartIso)!;
+  const deviceDeltas = new Map<string, number>();
+
+  for (const [deviceId, endValue] of endMap) {
+    const startValue = startMap.get(deviceId);
+    if (startValue == null) continue;
+
+    const delta = endValue - startValue;
+    if (delta >= 0) deviceDeltas.set(deviceId, delta);
+  }
 
   const onlineDevices = devices.filter((device) => {
     if (!device.lastSeenAt) return false;
@@ -179,33 +201,31 @@ export async function getFleetAnalytics() {
 
   const categoryTotals = buildCategoryTotals(
     devices
-      .filter((device) => device.customer && device.readings[0]?.correctedVolumeVb != null)
+      .filter((device) => device.customer && deviceDeltas.has(device.id))
       .map((device) => ({
         category: device.customer?.category ?? CustomerCategory.RESIDENTIAL,
-        totalVolume: device.readings[0]?.correctedVolumeVb ?? 0,
+        totalVolume: deviceDeltas.get(device.id) ?? 0,
       })),
   );
 
-  const cityTotals = new Map<string, number>();
+  const gaTotals = new Map<string, number>();
   devices.forEach((device) => {
-    const latestReading = device.readings[0];
-    const city = device.customer?.ga?.name;
-    const volume = latestReading?.correctedVolumeVb;
+    const ga = device.customer?.ga?.name;
+    const volume = deviceDeltas.get(device.id);
 
-    if (city && volume != null) {
-      cityTotals.set(city, (cityTotals.get(city) ?? 0) + volume);
+    if (ga && volume != null) {
+      gaTotals.set(ga, (gaTotals.get(ga) ?? 0) + volume);
     }
   });
 
-  const consumptionByCity = Array.from(cityTotals.entries())
-    .map(([city, totalVolume]) => ({ city, totalVolume }))
+  const consumptionByGa = Array.from(gaTotals.entries())
+    .map(([ga, totalVolume]) => ({ ga, totalVolume }))
     .sort((left, right) => right.totalVolume - left.totalVolume);
 
   const rankedCustomers = devices
     .filter((device) => device.customer)
     .map((device) => {
-      const latestReading = device.readings[0];
-      const rawFlowValue = latestReading?.correctedVolumeVb ?? latestReading?.currentFlowRate ?? null;
+      const rawFlowValue = deviceDeltas.get(device.id) ?? null;
       const suspect = rawFlowValue != null && rawFlowValue > MAX_SUSPECT_VALUE;
       const flowValue = suspect ? null : rawFlowValue;
 
@@ -280,7 +300,7 @@ export async function getFleetAnalytics() {
     activeAlerts: openAlertCount,
     topConsumingCustomers,
     leastConsumingCustomers,
-    consumptionByCity,
+    consumptionByGa,
     liveEvents,
   };
 }

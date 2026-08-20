@@ -20,13 +20,14 @@ import {
   getQuarterStart,
   getQuarterEnd,
   getCurrentQuarterStart,
+  getFinancialYearStart,
   formatDayLabel,
   formatMonthLabel,
 } from "./financial-calendar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ConsumptionMode = "daily" | "monthly" | "quarterly";
+export type ConsumptionMode = "daily" | "monthly" | "quarterly" | "yearly";
 
 export interface ConsumptionBucket {
   /** Display label — "14-Aug" / "Aug-25" / "Apr-25" */
@@ -119,11 +120,41 @@ function buildQuarterlySpecs(today: Date): BucketSpec[] {
   return specs;
 }
 
+/** Build 5 financial-year bucket specs: trailing FYs including the current FY. */
+function buildYearlySpecs(today: Date): BucketSpec[] {
+  const specs: BucketSpec[] = [];
+  const todayIso = toIsoDate(today);
+  const currentFinancialYearStart = getFinancialYearStart(today);
+
+  for (let i = 4; i >= 0; i--) {
+    const financialYearStart = new Date(Date.UTC(
+      currentFinancialYearStart.getUTCFullYear() - i,
+      3,
+      1,
+    ));
+    const isCurrentFinancialYear = i === 0;
+    const financialYearEnd = new Date(Date.UTC(
+      financialYearStart.getUTCFullYear() + 1,
+      3,
+      0,
+    ));
+    const startYear = financialYearStart.getUTCFullYear();
+
+    specs.push({
+      label: `FY ${startYear}-${String(startYear + 1).slice(-2)}`,
+      startDate: toIsoDate(financialYearStart),
+      endDate: isCurrentFinancialYear ? todayIso : toIsoDate(financialYearEnd),
+    });
+  }
+  return specs;
+}
+
 export function buildBucketSpecs(mode: ConsumptionMode, today: Date = new Date()): BucketSpec[] {
   switch (mode) {
     case "daily":     return buildDailySpecs(today);
     case "monthly":   return buildMonthlySpecs(today);
     case "quarterly": return buildQuarterlySpecs(today);
+    case "yearly":    return buildYearlySpecs(today);
   }
 }
 
@@ -226,5 +257,6 @@ export function tickCountForMode(mode: ConsumptionMode): number {
     case "daily":     return 4;
     case "monthly":   return 6;
     case "quarterly": return 5; // show all 5
+    case "yearly":    return 5; // show all 5
   }
 }

@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { AlarmType } from "@prisma/client";
+import { notifyAlarmCreated } from "@/features/alarms/notify";
 
 export async function checkGasOutOfRangeAlarm(
   deviceId: string,
@@ -72,28 +73,13 @@ export async function checkGasOutOfRangeAlarm(
     const direction = currentVb > average ? "above" : "below";
     const cause = `Corrected volume (${currentVb.toFixed(2)} Sm³) is ${pctDiff}% ${direction} the ${deviationWindowDays}-day average (${average.toFixed(2)} Sm³)`;
 
-    await db.alarm.upsert({
-      where: {
-        deviceId_type_forDate: {
-          deviceId,
-          type: AlarmType.GAS_OUT_OF_RANGE,
-          forDate: readingDate,
-        },
-      },
-      create: {
-        deviceId,
-        type: AlarmType.GAS_OUT_OF_RANGE,
-        severity: "WARNING",
-        forDate: readingDate,
-        gasValue: currentVb,
-        averageValue: average,
-        cause,
-      },
-      update: {
-        gasValue: currentVb,
-        averageValue: average,
-        cause,
-      },
-    });
+    const existing = await db.alarm.findUnique({ where: { deviceId_type_forDate: { deviceId, type: AlarmType.GAS_OUT_OF_RANGE, forDate: readingDate } } });
+    if (existing) {
+      await db.alarm.update({ where: { id: existing.id }, data: { gasValue: currentVb, averageValue: average, cause } });
+    } else {
+      const device = await db.device.findUnique({ where: { id: deviceId }, select: { deviceSerialNo: true } });
+      await db.alarm.create({ data: { deviceId, type: AlarmType.GAS_OUT_OF_RANGE, severity: "WARNING", forDate: readingDate, gasValue: currentVb, averageValue: average, cause } });
+      if (device) await notifyAlarmCreated({ deviceSerialNo: device.deviceSerialNo, type: AlarmType.GAS_OUT_OF_RANGE, severity: "WARNING", cause, forDate: readingDate });
+    }
   }
 }

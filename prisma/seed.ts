@@ -61,7 +61,7 @@ const DEVICES: DeviceSeed[] = [
     customerName: "Sabarmati Textiles", category: "INDUSTRIAL", address: "GIDC Estate, Naroda, Ahmedabad",
     statusPlan: "ONLINE", baseVolume: 1420, baseFlow: 21, basePressure: 2.48, baseTemp: 19, baseBattery: 91, monthGrowth: 0.06 },
   { serial: "DEV-2102", meterSerial: "MET-6102", city: "AHMEDABAD", latJitter: -0.3, lngJitter: 0.15,
-    customerName: "Gujarat Bulk Gas Co", category: "BULK", address: "Vatva Industrial Estate, Ahmedabad",
+    customerName: "Gujarat DRS Gas Co", category: "DRS", address: "Vatva Industrial Estate, Ahmedabad",
     statusPlan: "WARNING", baseVolume: 2100, baseFlow: 30, basePressure: 2.7, baseTemp: 20, baseBattery: 83, monthGrowth: 0.03 },
   { serial: "DEV-2103", meterSerial: "MET-6103", city: "AHMEDABAD", latJitter: 0.05, lngJitter: 0.35,
     customerName: "Ahmedabad Mall Plaza", category: "COMMERCIAL", address: "SG Highway, Ahmedabad",
@@ -89,7 +89,7 @@ const DEVICES: DeviceSeed[] = [
     customerName: "Andheri Residency", category: "RESIDENTIAL", address: "Andheri West, Mumbai",
     statusPlan: "ONLINE", baseVolume: 310, baseFlow: 4.0, basePressure: 2.15, baseTemp: 21, baseBattery: 93, monthGrowth: 0.02 },
   { serial: "DEV-2304", meterSerial: "MET-6304", city: "MUMBAI", latJitter: 0.05, lngJitter: 0.3,
-    customerName: "Mumbai Bulk Distributors", category: "BULK", address: "JNPT Road, Navi Mumbai",
+    customerName: "Mumbai DRS Distributors", category: "DRS", address: "JNPT Road, Navi Mumbai",
     statusPlan: "OFFLINE", baseVolume: 1900, baseFlow: 0, basePressure: 2.5, baseTemp: 21, baseBattery: 40, monthGrowth: 0.03 },
 
   // ── Hyderabad (2) ──
@@ -108,7 +108,7 @@ const DEVICES: DeviceSeed[] = [
     customerName: "Whitefield Residency", category: "RESIDENTIAL", address: "Whitefield, Bengaluru",
     statusPlan: "CRITICAL", baseVolume: 300, baseFlow: 3.9, basePressure: 2.08, baseTemp: 19, baseBattery: 55, monthGrowth: 0.02 },
   { serial: "DEV-2503", meterSerial: "MET-6503", city: "BENGALURU", latJitter: 0.3, lngJitter: 0.05,
-    customerName: "Electronic City Bulk Supply", category: "BULK", address: "Electronic City Phase 2, Bengaluru",
+    customerName: "Electronic City DRS Supply", category: "DRS", address: "Electronic City Phase 2, Bengaluru",
     statusPlan: "ONLINE", baseVolume: 2050, baseFlow: 28, basePressure: 2.65, baseTemp: 18, baseBattery: 90, monthGrowth: 0.04 },
 
   // ── Pune (2) ──
@@ -219,7 +219,7 @@ async function main() {
         deviceSerialNo: d.serial,
         meterSerialNo: d.meterSerial,
         customerId,
-        meterSize: customerId ? (d.category === "BULK" ? "150mm" : d.category === "INDUSTRIAL" ? "100mm" : "40mm") : null,
+        meterSize: customerId ? (d.category === "DRS" ? "150mm" : d.category === "INDUSTRIAL" ? "100mm" : "40mm") : null,
         firmwareVersion: customerId ? "v2.3.1" : null,
         hardwareVersion: customerId ? "HW-Rev-C" : null,
         deviceModel: customerId ? "Teltonika RUT956 + AMR Gas Meter" : "Teltonika RUT956",

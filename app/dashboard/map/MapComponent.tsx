@@ -14,9 +14,11 @@ import L from "leaflet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PeriodSelector } from "@/components/ui/period-selector";
 
 import { useAutoRefresh } from "@/lib/auto-refresh";
 import { formatLocalTs } from "@/lib/utils";
+import { pickTicks, tickCountForMode, type ConsumptionBucket, type ConsumptionMode } from "@/lib/consumption-series";
 
 // Interactive map for AMR device location, clustering, and meter detail inspection.
 type ClusterMarker = L.Marker & {
@@ -42,7 +44,6 @@ interface MapDevice {
   updateCadence: string;
   lastSyncedAt: string | null;
   alarms: Array<{ severity: string; cause: string; createdAt: string; forDate: string }>;
-  monthlyConsumption: Array<{ month: string; value: number }>;
 }
 
 const COLOR_HEX = {
@@ -151,6 +152,8 @@ export default function MapComponent() {
   const { theme } = useTheme();
   const [devices, setDevices] = useState<MapDevice[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<MapDevice | null>(null);
+  const [consumption, setConsumption] = useState<ConsumptionBucket[]>([]);
+  const [consumptionPeriod, setConsumptionPeriod] = useState<ConsumptionMode>("daily");
   const [zoom, setZoom] = useState(6);
 
   const fetchMapDevices = useCallback(() => {
@@ -164,6 +167,14 @@ export default function MapComponent() {
     fetchMapDevices();
   }, [fetchMapDevices]);
   useAutoRefresh(fetchMapDevices);
+
+  useEffect(() => {
+    if (!selectedDevice) return;
+    fetch(`/api/devices/${selectedDevice.id}/consumption?period=${consumptionPeriod}`)
+      .then((response) => (response.ok ? response.json() : { consumption: [] }))
+      .then((data) => setConsumption(data.consumption ?? []))
+      .catch(() => setConsumption([]));
+  }, [selectedDevice, consumptionPeriod]);
 
   const center: [number, number] = [20.5937, 78.9629];
   const tileUrl = theme === "dark" ? TILE_URL.dark : TILE_URL.light;
@@ -277,15 +288,18 @@ export default function MapComponent() {
               </div>
 
               <div>
-                <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <TrendingUp className="h-4 w-4 text-[color:var(--clr-accent-hi)]" />
-                  Monthly consumption
+                <div className="mb-3 space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <TrendingUp className="h-4 w-4 text-[color:var(--clr-accent-hi)]" />
+                    {consumptionPeriod.charAt(0).toUpperCase() + consumptionPeriod.slice(1)} consumption
+                  </div>
+                  <PeriodSelector value={consumptionPeriod} onChange={setConsumptionPeriod} />
                 </div>
                 <div className="h-40 rounded-lg border border-border p-3">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={selectedDevice.monthlyConsumption}>
+                    <BarChart data={consumption.map((bucket) => ({ ...bucket, value: bucket.value ?? 0 }))}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.7} />
-                      <XAxis dataKey="month" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
+                      <XAxis dataKey="label" ticks={pickTicks(consumption.map((bucket) => bucket.label), tickCountForMode(consumptionPeriod))} tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
                       <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
                       <Tooltip />
                       <Bar dataKey="value" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />

@@ -22,7 +22,7 @@ enum CustomerCategory {
   INDUSTRIAL
   COMMERCIAL
   RESIDENTIAL
-  BULK
+  DRS
 }
 
 model Customer {
@@ -54,6 +54,14 @@ model Device {
 
   latitude             Float?
   longitude            Float?
+
+  pressureUpperLimit      Float?
+  pressureLowerLimit      Float?
+  temperatureUpperLimit   Float?
+  temperatureLowerLimit   Float?
+  consumptionUpperLimit   Float?
+  consumptionLowerLimit   Float?
+  batteryLowerLimit       Float?
 
   firstSeenAt          DateTime  @default(now())
   lastSeenAt           DateTime?
@@ -102,6 +110,10 @@ model Reading {
 enum AlarmType {
   MISSING_DATA
   GAS_OUT_OF_RANGE
+  PRESSURE_OUT_OF_RANGE
+  TEMPERATURE_OUT_OF_RANGE
+  CONSUMPTION_OUT_OF_RANGE
+  BATTERY_LOW
 }
 
 enum AlarmSeverity {

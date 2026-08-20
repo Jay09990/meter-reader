@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Flame,
@@ -25,6 +25,8 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { CapacityBanner } from "@/components/layout/capacity-banner";
 import { PeriodSelector } from "@/components/ui/period-selector";
 import { pickTicks, tickCountForMode, type ConsumptionBucket, type ConsumptionMode } from "@/lib/consumption-series";
+import { KpiRangeSelector } from "@/components/overview/kpi-range-selector";
+import type { KpiRange } from "@/features/overview/service";
 
 // AMR overview dashboard with summary metrics and telemetry charts.
 interface FleetOverviewData {
@@ -57,7 +59,7 @@ interface FleetOverviewData {
     suspect?: boolean;
     status: "NEW" | "ONLINE" | "OFFLINE" | "ALERT";
   }>;
-  consumptionByCity?: Array<{ city: string; totalVolume: number }>;
+  consumptionByGa?: Array<{ ga: string; totalVolume: number }>;
   liveEvents?: Array<{
     id: string;
     kind: "ALARM" | "READING";
@@ -71,7 +73,7 @@ const categoryColors: Record<string, string> = {
   INDUSTRIAL: "var(--clr-industrial)",
   COMMERCIAL: "var(--clr-commercial)",
   RESIDENTIAL: "var(--clr-residential)",
-  BULK: "var(--clr-bulk)",
+  DRS: "var(--clr-drs)",
 };
 
 const humanCategoryLabel = (category: string) => category.charAt(0) + category.slice(1).toLowerCase();
@@ -83,6 +85,23 @@ const fmt = (value: number | null | undefined, decimals = 2) => {
     maximumFractionDigits: decimals,
   });
 };
+
+function ConsumptionKpiValue({
+  loading,
+  value,
+}: {
+  loading: boolean;
+  value: number;
+}) {
+  return (
+    <div className="flex items-baseline gap-1.5">
+      <span className="text-3xl font-extrabold text-foreground">
+        {loading ? "..." : fmt(value, 0)}
+      </span>
+      {!loading && <span className="text-xs font-semibold text-muted-foreground">SCM³</span>}
+    </div>
+  );
+}
 
 const renderStatus = (status: string) => {
   switch (status) {
@@ -135,13 +154,14 @@ export default function OverviewPage() {
   const [data, setData] = useState<FleetOverviewData | null>(null);
   const [maxMeterCapacity, setMaxMeterCapacity] = useState<number | null>(null);
   const [consumptionPeriod, setConsumptionPeriod] = useState<ConsumptionMode>("daily");
+  const [kpiRange, setKpiRange] = useState<KpiRange>("today");
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchOverview = () => {
+  const fetchOverview = useCallback(() => {
     setLoading(true);
     setError(null);
-    fetch(`/api/overview?period=${consumptionPeriod}`)
+    fetch(`/api/overview?period=${consumptionPeriod}&range=${kpiRange}`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load overview data");
         return res.json();
@@ -158,12 +178,12 @@ export default function OverviewPage() {
       .then((res) => (res.ok ? res.json() : null))
       .then((status) => setMaxMeterCapacity(status?.maxCapacity ?? null))
       .catch(() => {});
-  };
+  }, [consumptionPeriod, kpiRange]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchOverview();
-  }, [consumptionPeriod]);
+  }, [fetchOverview]);
 
   useAutoRefresh(fetchOverview);
 
@@ -179,7 +199,7 @@ export default function OverviewPage() {
   }));
   const peakConsumptionValue = Math.max(...consumptionSeries.map((item) => item.value), 0);
   const consumptionTicks = pickTicks(consumptionSeries.map((item) => item.label), tickCountForMode(consumptionPeriod));
-  const citySeries = (data?.consumptionByCity ?? []).slice(0, 8);
+  const gaSeries = (data?.consumptionByGa ?? []).slice(0, 8);
 
   return (
     <div className="space-y-8 w-full">
@@ -200,16 +220,19 @@ export default function OverviewPage() {
           </p>
         </div>
 
-        <Button
-          onClick={fetchOverview}
-          disabled={loading}
-          variant="outline"
-          size="sm"
-          className="border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-          Refresh Data
-        </Button>
+        <div className="flex items-center gap-4">
+          <KpiRangeSelector value={kpiRange} onChange={setKpiRange} />
+          <Button
+            onClick={fetchOverview}
+            disabled={loading}
+            variant="outline"
+            size="sm"
+            className="border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            Refresh Data
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -220,7 +243,7 @@ export default function OverviewPage() {
 
       <CapacityBanner variant="full" />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
         <Card className="bg-card border-border text-card-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -261,10 +284,11 @@ export default function OverviewPage() {
             <Factory className="w-5 h-5" style={{color:'var(--clr-industrial)'}} />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-extrabold text-foreground">
-              {loading ? "..." : fmt(categorySeries.find((item) => item.category === "INDUSTRIAL")?.totalVolume ?? 0, 0)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Latest reading volume</p>
+            <ConsumptionKpiValue
+              loading={loading}
+              value={categorySeries.find((item) => item.category === "INDUSTRIAL")?.totalVolume ?? 0}
+            />
+            <p className="text-xs text-muted-foreground mt-1">Consumption for selected range</p>
           </CardContent>
         </Card>
 
@@ -276,10 +300,27 @@ export default function OverviewPage() {
             <Building2 className="w-5 h-5" style={{color:'var(--clr-commercial)'}} />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-extrabold text-foreground">
-              {loading ? "..." : fmt(categorySeries.find((item) => item.category === "COMMERCIAL")?.totalVolume ?? 0, 0)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Latest reading volume</p>
+            <ConsumptionKpiValue
+              loading={loading}
+              value={categorySeries.find((item) => item.category === "COMMERCIAL")?.totalVolume ?? 0}
+            />
+            <p className="text-xs text-muted-foreground mt-1">Consumption for selected range</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border text-card-foreground">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              DRS Consumption
+            </CardTitle>
+            <Building2 className="w-5 h-5" style={{color:"var(--clr-drs)"}} />
+          </CardHeader>
+          <CardContent>
+            <ConsumptionKpiValue
+              loading={loading}
+              value={categorySeries.find((item) => item.category === "DRS")?.totalVolume ?? 0}
+            />
+            <p className="text-xs text-muted-foreground mt-1">Consumption for selected range</p>
           </CardContent>
         </Card>
 
@@ -451,16 +492,16 @@ export default function OverviewPage() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 h-[500px]">
         <Card className="bg-card border-border overflow-y-scroll">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-foreground">Consumption by City</CardTitle>
+            <CardTitle className="text-lg font-semibold text-foreground">Consumption by GA</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {citySeries.map((city) => (
-              <div key={city.city} className="flex items-center justify-between rounded-lg border border-border bg-secondary px-3 py-2">
+            {gaSeries.map((ga) => (
+              <div key={ga.ga} className="flex items-center justify-between rounded-lg border border-border bg-secondary px-3 py-2">
                 <div className="flex items-center gap-2 text-sm text-foreground">
                   <MapPin className="w-4 h-4" style={{color:'var(--clr-accent-mid)'}} />
-                  {city.city}
+                  {ga.ga}
                 </div>
-                <div className="text-sm font-semibold text-foreground">{fmt(city.totalVolume, 0)}</div>
+                <div className="text-sm font-semibold text-foreground">{fmt(ga.totalVolume, 0)}</div>
               </div>
             ))}
           </CardContent>

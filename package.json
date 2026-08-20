@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed:demo-meters": "node scripts/add-dummy-meters.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
