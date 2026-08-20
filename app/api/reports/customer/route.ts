@@ -3,6 +3,8 @@ import {
   getCustomerReport,
   ReportNotFoundError,
   ReportValidationError,
+  FREQUENCY_OPTIONS,
+  DataFrequency,
 } from "@/features/reports";
 
 export async function GET(req: NextRequest) {
@@ -10,9 +12,16 @@ export async function GET(req: NextRequest) {
   const customerId = searchParams.get("customerId") || "";
   const startDate = searchParams.get("startDate") || "";
   const endDate = searchParams.get("endDate") || "";
+  const frequency = (searchParams.get("frequency") || "1h") as DataFrequency;
+
+  // Validate frequency
+  const isValidFreq = FREQUENCY_OPTIONS.some(f => f.value === frequency);
+  if (!isValidFreq) {
+    return NextResponse.json({ error: "Invalid frequency parameter" }, { status: 400 });
+  }
 
   try {
-    const report = await getCustomerReport({ customerId, startDate, endDate });
+    const report = await getCustomerReport({ customerId, startDate, endDate, frequency });
     return NextResponse.json(report);
   } catch (err: unknown) {
     if (err instanceof ReportValidationError) {

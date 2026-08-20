@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { CustomerCategory, Prisma } from "@prisma/client";
 
-/** Accept the legacy provisioning option while persisting the renamed enum value. */
+/** Parse the category from the request body. */
 function normalizeCustomerCategory(category: unknown): CustomerCategory {
-  return category === "BULK" ? CustomerCategory.DRS : category as CustomerCategory;
+  return category as CustomerCategory;
 }
 
 export async function POST(req: NextRequest) {

@@ -378,7 +378,7 @@ export default function CustomersPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">AMR Customer Registry</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Registered endpoints - Industrial, Commercial, Residential, and Bulk.
+            Registered endpoints - Industrial, Commercial, Residential, and DRS.
           </p>
         </div>
         <div className="flex space-x-2 bg-secondary p-1.5 rounded-lg border border-border">
@@ -453,7 +453,7 @@ export default function CustomersPage() {
             <option value="INDUSTRIAL">Industrial</option>
             <option value="COMMERCIAL">Commercial</option>
             <option value="RESIDENTIAL">Residential</option>
-            <option value="BULK">Bulk</option>
+            <option value="DRS">DRS</option>
           </select>
         </div>
       </Card>
@@ -617,7 +617,7 @@ export default function CustomersPage() {
                       <option value="RESIDENTIAL">Residential</option>
                       <option value="COMMERCIAL">Commercial</option>
                       <option value="INDUSTRIAL">Industrial</option>
-                      <option value="BULK">Bulk</option>
+                      <option value="DRS">DRS</option>
                     </select>
                   </div>
                   <div className="space-y-1.5">

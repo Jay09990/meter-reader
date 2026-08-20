@@ -151,7 +151,7 @@ export default function AdminPage() {
                   <option value="INDUSTRIAL">Industrial</option>
                   <option value="COMMERCIAL">Commercial</option>
                   <option value="RESIDENTIAL">Residential</option>
-                  <option value="BULK">Bulk</option>
+                  <option value="DRS">DRS</option>
                 </select>
               </div>
               <div className="space-y-2">

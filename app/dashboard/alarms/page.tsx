@@ -272,8 +272,10 @@ export default function AlarmsPage() {
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-md">
-                    {alarm.cause}
+                  <TableCell className="max-w-md">
+                    <div className="text-sm text-muted-foreground break-words whitespace-normal">
+                      {alarm.cause}
+                    </div>
                   </TableCell>
                   <TableCell className="font-mono text-sm text-muted-foreground">
                     {formatLocalTs(alarm.createdAt)}

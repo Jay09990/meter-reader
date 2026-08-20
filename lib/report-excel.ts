@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import type { MeterReportGroup, ReportReading } from "@/features/reports";
+import type { MeterReportGroup, ReportReading, CustomerRangeReport } from "@/features/reports";
 
 /**
  * Groups a flat reading list into one bucket per device/meter.
@@ -58,13 +58,28 @@ export function sanitizeSheetName(
   return candidate;
 }
 
-function toExcelRow(row: ReportReading) {
+function autoSizeColumns(worksheet: XLSX.WorkSheet, rows: Record<string, unknown>[]) {
+  if (rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  worksheet["!cols"] = headers.map((header) => {
+    const maxLen = rows.reduce((max, row) => {
+      const val = row[header];
+      const len = val == null ? 0 : String(val).length;
+      return Math.max(max, len);
+    }, header.length);
+    return { wch: maxLen + 4 }; // padding so nothing touches the cell edge
+  });
+}
+
+function toExcelRow(row: ReportReading & { consumption?: number | null }) {
   return {
+    "Customer": row.customerName || "N/A",
     "Reading Date": new Date(row.readingDate).toLocaleString(),
     "Device Serial No": row.deviceSerialNo,
     "Meter Serial No": row.meterSerialNo || "N/A",
+    "Consumption (Sm³)": row.consumption,
     "Corrected Volume (Sm³)": row.correctedVolumeVb,
-    "Uncorrected Volume (m³)": row.uncorrectedVolumeVm,
+    "Uncorrected Volume (Sm³)": row.uncorrectedVolumeVm,
     "Gas Pressure (barg)": row.gasPressure,
     "Gas Temperature (°C)": row.gasTemperature,
     "Battery Level (%)": row.batteryLevel != null ? Math.round(row.batteryLevel) : null,
@@ -84,7 +99,9 @@ export function buildCustomerReportWorkbook(meters: MeterReportGroup[]): XLSX.Wo
     .forEach((meter, index) => {
       const rawName = meter.meterSerialNo || meter.deviceSerialNo;
       const sheetName = sanitizeSheetName(rawName, `Meter-${index + 1}`, usedNames);
-      const worksheet = XLSX.utils.json_to_sheet(meter.readings.map(toExcelRow));
+      const rows = meter.readings.map(toExcelRow);
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      autoSizeColumns(worksheet, rows);
       XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
     });
 
@@ -118,5 +135,46 @@ export function downloadCustomerReportExcel(
   }
 
   const filename = buildCustomerReportFilename(customerName, startDate, endDate);
+  XLSX.writeFile(workbook, filename);
+}
+
+/**
+ * Builds a range summary workbook (one worksheet, one row per meter).
+ */
+export function buildRangeSummaryWorkbook(report: CustomerRangeReport): XLSX.WorkBook {
+  const workbook = XLSX.utils.book_new();
+
+  const rows = report.meters.map((meter) => ({
+    "Customer": meter.customerName || "N/A",
+    "Device Serial No": meter.deviceSerialNo,
+    "Meter Serial No": meter.meterSerialNo || "N/A",
+    "Start Date": meter.startDate,
+    "Start Value (Sm³)": meter.startValue,
+    "End Date": meter.endDate,
+    "End Value (Sm³)": meter.endValue,
+    "Consumption (Sm³)": meter.consumption,
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+  autoSizeColumns(worksheet, rows);
+
+  const sheetName = sanitizeSheetName(report.rangeLabel, "Summary", new Set<string>());
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+  return workbook;
+}
+
+/**
+ * Downloads the range summary report workbook.
+ */
+export function downloadRangeSummaryExcel(report: CustomerRangeReport): void {
+  const workbook = buildRangeSummaryWorkbook(report);
+
+  if (workbook.SheetNames.length === 0) {
+    throw new Error("No range summary data available to export.");
+  }
+
+  const sanitizedCustomerName = report.customerName.replace(/[^a-z0-9]/gi, "_");
+  const filename = `Range_Summary_${sanitizedCustomerName}_${report.startDate}_${report.endDate}.xlsx`;
   XLSX.writeFile(workbook, filename);
 }

@@ -8,6 +8,7 @@ function makeReading(overrides: Partial<ReportReading> = {}): ReportReading {
     deviceId: "device-1",
     deviceSerialNo: "DEV-001",
     meterSerialNo: "METER-001",
+    customerName: null,
     readingDate: "2026-08-01T00:00:00.000Z",
     receivedAt: "2026-08-01T01:00:00.000Z",
     correctedVolumeVb: 100,
@@ -15,6 +16,7 @@ function makeReading(overrides: Partial<ReportReading> = {}): ReportReading {
     gasPressure: 1.2,
     gasTemperature: 20,
     batteryLevel: 80,
+    consumption: null,
     ...overrides,
   };
 }
