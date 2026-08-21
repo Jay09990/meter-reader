@@ -88,16 +88,48 @@ function resampleByFrequency<T extends { receivedAt: string }>(
   return kept;
 }
 
-function withConsumption(
-  readings: Omit<ReportReading, "consumption">[],
-): ReportReading[] {
-  return readings.map((r, i) => {
-    if (i === 0) return { ...r, consumption: null }; // no prior point in range
-    const prev = readings[i - 1];
-    if (r.correctedVolumeVb == null || prev.correctedVolumeVb == null) {
+/**
+ * For each RAW reading (before any frequency resampling), consumption =
+ * this reading's correctedVolumeVb − the immediately preceding raw
+ * reading's correctedVolumeVb for the same device — the true previous
+ * timestamp's value, regardless of whether that reading survives the
+ * later frequency filter.
+ *
+ * This MUST run on the full, unfiltered chronological reading list before
+ * resampleByFrequency is applied. Only the very first raw reading in the
+ * fetched window needs a DB lookup (its true predecessor is outside the
+ * fetched date range) — every other row's predecessor is simply the
+ * previous element in this same array.
+ */
+async function computeConsumption(
+  rawReadings: Omit<ReportReading, "consumption">[],
+): Promise<ReportReading[]> {
+  if (rawReadings.length === 0) return [];
+
+  const first = rawReadings[0];
+  let firstPrevVolume: number | null = null;
+
+  if (first.correctedVolumeVb != null) {
+    const prevReading = await db.reading.findFirst({
+      where: {
+        deviceId: first.deviceId,
+        receivedAt: { lt: new Date(first.receivedAt) },
+      },
+      orderBy: { receivedAt: "desc" },
+      select: { correctedVolumeVb: true },
+    });
+    firstPrevVolume = prevReading?.correctedVolumeVb ?? null;
+  }
+
+  return rawReadings.map((r, i) => {
+    const prevVolume =
+      i === 0 ? firstPrevVolume : rawReadings[i - 1].correctedVolumeVb;
+
+    if (r.correctedVolumeVb == null || prevVolume == null) {
       return { ...r, consumption: null };
     }
-    const delta = r.correctedVolumeVb - prev.correctedVolumeVb;
+
+    const delta = r.correctedVolumeVb - prevVolume;
     return { ...r, consumption: delta < 0 ? null : Number(delta.toFixed(3)) }; // negative = meter reset
   });
 }
@@ -183,8 +215,7 @@ export async function getCustomerReport({
   type RawReading = Omit<ReportReading, "consumption">;
 
   // Group raw readings per meter
-  const meterMap = new Map<
-    string,
+  const meterMap = new Map<string,
     {
       deviceId: string;
       deviceSerialNo: string;
@@ -220,22 +251,25 @@ export async function getCustomerReport({
     });
   }
 
-  // Apply resample + withConsumption independently per meter group
+  // Compute consumption against the FULL raw chronological history first,
+  // THEN resample for display — this is the fix. Each displayed row keeps
+  // the consumption value it earned against its true previous push, not
+  // against whatever row happened to survive the frequency filter next to it.
   const processedMeters: MeterReportGroup[] = [];
   const allProcessedReadings: ReportReading[] = [];
 
   for (const group of meterMap.values()) {
-    const resampled = resampleByFrequency(group.readings, frequencyMs);
-    const withCons = withConsumption(resampled);
+    const withCons = await computeConsumption(group.readings);
+    const resampled = resampleByFrequency(withCons, frequencyMs);
 
     processedMeters.push({
       deviceId: group.deviceId,
       deviceSerialNo: group.deviceSerialNo,
       meterSerialNo: group.meterSerialNo,
-      readings: withCons,
+      readings: resampled,
     });
 
-    allProcessedReadings.push(...withCons);
+    allProcessedReadings.push(...resampled);
   }
 
   // Re-sort flattened array matching ordering convention (by deviceSerialNo then readingDate)
