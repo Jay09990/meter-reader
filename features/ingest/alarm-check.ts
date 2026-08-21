@@ -77,9 +77,31 @@ export async function checkGasOutOfRangeAlarm(
     if (existing) {
       await db.alarm.update({ where: { id: existing.id }, data: { gasValue: currentVb, averageValue: average, cause } });
     } else {
-      const device = await db.device.findUnique({ where: { id: deviceId }, select: { deviceSerialNo: true } });
+      const device = await db.device.findUnique({
+        where: { id: deviceId },
+        select: {
+          deviceSerialNo: true,
+          meterSerialNo: true,
+          customer: { select: { name: true, ga: { select: { name: true } } } },
+        },
+      });
       await db.alarm.create({ data: { deviceId, type: AlarmType.GAS_OUT_OF_RANGE, severity: "WARNING", forDate: readingDate, gasValue: currentVb, averageValue: average, cause } });
-      if (device) await notifyAlarmCreated({ deviceSerialNo: device.deviceSerialNo, type: AlarmType.GAS_OUT_OF_RANGE, severity: "WARNING", cause, forDate: readingDate });
+      if (device) {
+        await notifyAlarmCreated({
+          deviceSerialNo: device.deviceSerialNo,
+          type: AlarmType.GAS_OUT_OF_RANGE,
+          severity: "WARNING",
+          cause,
+          forDate: readingDate,
+          meterSerialNo: device.meterSerialNo,
+          customerName: device.customer?.name,
+          gaName: device.customer?.ga?.name,
+          measuredValue: Number(currentVb.toFixed(2)),
+          unit: "Sm³",
+          thresholdValue: Number(average.toFixed(2)),
+          thresholdDirection: direction,
+        });
+      }
     }
   }
 }

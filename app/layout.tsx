@@ -29,6 +29,9 @@ export const metadata: Metadata = {
     "meter reading",
     "consumption monitoring",
   ],
+  icons: {
+      icon: "/favicon.png",
+    },
 };
 
 export default function RootLayout({

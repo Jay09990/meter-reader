@@ -16,7 +16,17 @@ export async function generateMissingDataAlarms(forDate?: Date): Promise<{ check
   let alarmsFired = 0;
 
   while (true) {
-    const devices = await db.device.findMany({ skip, take: batchSize, select: { id: true, deviceSerialNo: true }, orderBy: { id: "asc" } });
+    const devices = await db.device.findMany({
+      skip,
+      take: batchSize,
+      select: {
+        id: true,
+        deviceSerialNo: true,
+        meterSerialNo: true,
+        customer: { select: { name: true, ga: { select: { name: true } } } },
+      },
+      orderBy: { id: "asc" },
+    });
     if (!devices.length) break;
     const deviceIds = devices.map((device) => device.id);
     const reported = await db.reading.findMany({ where: { deviceId: { in: deviceIds }, readingDate: normalizedDate }, select: { deviceId: true } });
@@ -27,7 +37,16 @@ export async function generateMissingDataAlarms(forDate?: Date): Promise<{ check
       if (existing) continue;
       const cause = `No data received for ${dateLabel}`;
       await db.alarm.create({ data: { deviceId: device.id, type: "MISSING_DATA", severity: "CRITICAL", forDate: normalizedDate, cause, status: "OPEN" } });
-      await notifyAlarmCreated({ deviceSerialNo: device.deviceSerialNo, type: "MISSING_DATA", severity: "CRITICAL", cause, forDate: normalizedDate });
+      await notifyAlarmCreated({
+        deviceSerialNo: device.deviceSerialNo,
+        type: "MISSING_DATA",
+        severity: "CRITICAL",
+        cause,
+        forDate: normalizedDate,
+        meterSerialNo: device.meterSerialNo,
+        customerName: device.customer?.name,
+        gaName: device.customer?.ga?.name,
+      });
       alarmsFired++;
     }
     checked += devices.length;

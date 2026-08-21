@@ -154,9 +154,10 @@ model AlarmSettings {
 }
 
 model SystemSettings {
-  id               String   @id @default("singleton")
-  maxMeterCapacity Int?
-  updatedAt        DateTime @updatedAt
+  id                     String   @id @default("singleton")
+  maxMeterCapacity       Int?
+  alarmNotificationEmail String?
+  updatedAt              DateTime @updatedAt
 }
 
 model RejectedConnectionAttempt {

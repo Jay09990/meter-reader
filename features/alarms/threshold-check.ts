@@ -16,6 +16,8 @@ interface ThresholdBreach {
   value: number;
   limit: number;
   cause: string;
+  unit: string;
+  direction: "above" | "below";
 }
 
 // Evaluates all optional per-meter limits after a reading has been saved.
@@ -24,6 +26,7 @@ export async function checkDeviceThresholds(deviceId: string, readingDate: Date,
     where: { id: deviceId },
     select: {
       deviceSerialNo: true,
+      meterSerialNo: true,
       pressureUpperLimit: true,
       pressureLowerLimit: true,
       temperatureUpperLimit: true,
@@ -31,6 +34,12 @@ export async function checkDeviceThresholds(deviceId: string, readingDate: Date,
       consumptionUpperLimit: true,
       consumptionLowerLimit: true,
       batteryLowerLimit: true,
+      customer: {
+        select: {
+          name: true,
+          ga: { select: { name: true } },
+        },
+      },
     },
   });
   if (!device) return;
@@ -46,9 +55,9 @@ export async function checkDeviceThresholds(deviceId: string, readingDate: Date,
   ) => {
     if (value == null) return;
     if (upperLimit != null && value > upperLimit) {
-      breaches.push({ type, value, limit: upperLimit, cause: `${metric} reading of ${value} ${unit} exceeded the configured upper threshold of ${upperLimit} ${unit} for meter ${device.deviceSerialNo}.` });
+      breaches.push({ type, value, limit: upperLimit, unit, direction: "above", cause: `${metric} reading of ${value} ${unit} exceeded the configured upper threshold of ${upperLimit} ${unit} for meter ${device.deviceSerialNo}.` });
     } else if (lowerLimit != null && value < lowerLimit) {
-      breaches.push({ type, value, limit: lowerLimit, cause: `${metric} reading of ${value} ${unit} fell below the configured lower threshold of ${lowerLimit} ${unit} for meter ${device.deviceSerialNo}.` });
+      breaches.push({ type, value, limit: lowerLimit, unit, direction: "below", cause: `${metric} reading of ${value} ${unit} fell below the configured lower threshold of ${lowerLimit} ${unit} for meter ${device.deviceSerialNo}.` });
     }
   };
 
@@ -71,6 +80,8 @@ export async function checkDeviceThresholds(deviceId: string, readingDate: Date,
       type: AlarmType.BATTERY_LOW,
       value: reading.batteryLevel,
       limit: device.batteryLowerLimit,
+      unit: "%",
+      direction: "below",
       cause: `Battery level of ${reading.batteryLevel}% fell below the configured minimum threshold of ${device.batteryLowerLimit}% for meter ${device.deviceSerialNo}.`,
     });
   }
@@ -82,6 +93,19 @@ export async function checkDeviceThresholds(deviceId: string, readingDate: Date,
       continue;
     }
     await db.alarm.create({ data: { deviceId, type: breach.type, severity: "CRITICAL", forDate: readingDate, gasValue: breach.value, averageValue: breach.limit, cause: breach.cause, status: "OPEN" } });
-    await notifyAlarmCreated({ deviceSerialNo: device.deviceSerialNo, type: breach.type, severity: "CRITICAL", cause: breach.cause, forDate: readingDate });
+    await notifyAlarmCreated({
+      deviceSerialNo: device.deviceSerialNo,
+      type: breach.type,
+      severity: "CRITICAL",
+      cause: breach.cause,
+      forDate: readingDate,
+      meterSerialNo: device.meterSerialNo,
+      customerName: device.customer?.name,
+      gaName: device.customer?.ga?.name,
+      measuredValue: breach.value,
+      unit: breach.unit,
+      thresholdValue: breach.limit,
+      thresholdDirection: breach.direction,
+    });
   }
 }
