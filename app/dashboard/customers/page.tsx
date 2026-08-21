@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,10 +19,20 @@ import {
   CheckCircle,
   HelpCircle,
   Pencil,
+  ChevronDown,
+  ChevronRight,
+  Check,
 } from "lucide-react";
 
 import { useAutoRefresh } from "@/lib/auto-refresh";
-import { formatLocalTs, formatLocalDate } from "@/lib/utils";
+import { formatLocalTs } from "@/lib/utils";
+import { parseAndValidateThresholdInputs } from "@/lib/device-field-parse";
+import {
+  ThresholdCardSet,
+  emptyThresholdFormValues,
+  thresholdFormFromDevice,
+  type ThresholdFormValues,
+} from "@/components/devices/threshold-card-set";
 
 // Customer registry for filtering, viewing, and provisioning AMR endpoints.
 interface DeviceItem {
@@ -30,6 +40,19 @@ interface DeviceItem {
   deviceSerialNo: string;
   meterSerialNo: string | null;
   meterSize: string | null;
+  firmwareVersion: string | null;
+  hardwareVersion: string | null;
+  deviceModel: string | null;
+  configurationVersion: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  pressureUpperLimit: number | null;
+  pressureLowerLimit: number | null;
+  temperatureUpperLimit: number | null;
+  temperatureLowerLimit: number | null;
+  consumptionUpperLimit: number | null;
+  consumptionLowerLimit: number | null;
+  batteryLowerLimit: number | null;
   customerId: string | null;
   customerName: string | null;
   category: string | null;
@@ -60,13 +83,102 @@ interface ExistingCustomer {
   category: string;
 }
 
-function ThresholdInput({ label, value, onChange, step = "0.01", min, max }: { label: string; value: string; onChange: (value: string) => void; step?: string; min?: string; max?: string }) {
-  return (
-    <div className="space-y-1.5">
-      <label className="text-xs text-muted-foreground">{label}</label>
-      <Input type="number" step={step} min={min} max={max} value={value} onChange={(event) => onChange(event.target.value)} placeholder="Optional" className="bg-muted border-border text-foreground focus:border-[color:var(--clr-accent-hi)]" />
-    </div>
-  );
+type DeviceIdentityDraft = {
+  id: string;
+  deviceSerialNo: string;
+  meterSerialNo: string;
+  latitude: string;
+  longitude: string;
+  meterSize: string;
+  deviceModel: string;
+  firmwareVersion: string;
+  hardwareVersion: string;
+  configurationVersion: string;
+  initial: {
+    meterSerialNo: string;
+    latitude: string;
+    longitude: string;
+    meterSize: string;
+    deviceModel: string;
+    firmwareVersion: string;
+    hardwareVersion: string;
+    configurationVersion: string;
+  };
+};
+
+function numToInput(value: number | null | undefined): string {
+  return value == null ? "" : String(value);
+}
+
+function strToInput(value: string | null | undefined): string {
+  return value ?? "";
+}
+
+function deviceToIdentityDraft(device: {
+  id: string;
+  deviceSerialNo: string;
+  meterSerialNo?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  meterSize?: string | null;
+  deviceModel?: string | null;
+  firmwareVersion?: string | null;
+  hardwareVersion?: string | null;
+  configurationVersion?: string | null;
+}): DeviceIdentityDraft {
+  const meterSerialNo = strToInput(device.meterSerialNo);
+  const latitude = numToInput(device.latitude);
+  const longitude = numToInput(device.longitude);
+  const meterSize = strToInput(device.meterSize);
+  const deviceModel = strToInput(device.deviceModel);
+  const firmwareVersion = strToInput(device.firmwareVersion);
+  const hardwareVersion = strToInput(device.hardwareVersion);
+  const configurationVersion = strToInput(device.configurationVersion);
+  return {
+    id: device.id,
+    deviceSerialNo: device.deviceSerialNo,
+    meterSerialNo,
+    latitude,
+    longitude,
+    meterSize,
+    deviceModel,
+    firmwareVersion,
+    hardwareVersion,
+    configurationVersion,
+    initial: {
+      meterSerialNo,
+      latitude,
+      longitude,
+      meterSize,
+      deviceModel,
+      firmwareVersion,
+      hardwareVersion,
+      configurationVersion,
+    },
+  };
+}
+
+function buildDeviceIdentityPatch(draft: DeviceIdentityDraft): Record<string, string | null> | null {
+  const patch: Record<string, string | null> = {};
+  const fields = [
+    "meterSerialNo",
+    "latitude",
+    "longitude",
+    "meterSize",
+    "deviceModel",
+    "firmwareVersion",
+    "hardwareVersion",
+    "configurationVersion",
+  ] as const;
+
+  for (const field of fields) {
+    const next = draft[field].trim();
+    const prev = draft.initial[field].trim();
+    if (next !== prev) {
+      patch[field] = next === "" ? null : next;
+    }
+  }
+  return Object.keys(patch).length > 0 ? patch : null;
 }
 
 export default function CustomersPage() {
@@ -95,13 +207,7 @@ export default function CustomersPage() {
   const [selectedGaId, setSelectedGaId] = useState("");
   const [latitudeInput, setLatitudeInput] = useState("");
   const [longitudeInput, setLongitudeInput] = useState("");
-  const [pressureUpper, setPressureUpper] = useState("");
-  const [pressureLower, setPressureLower] = useState("");
-  const [temperatureUpper, setTemperatureUpper] = useState("");
-  const [temperatureLower, setTemperatureLower] = useState("");
-  const [consumptionUpper, setConsumptionUpper] = useState("");
-  const [consumptionLower, setConsumptionLower] = useState("");
-  const [batteryLower, setBatteryLower] = useState("");
+  const [thresholdValues, setThresholdValues] = useState<ThresholdFormValues>(emptyThresholdFormValues());
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -109,7 +215,7 @@ export default function CustomersPage() {
   const [provisionType, setProvisionType] = useState<"new" | "existing">("new");
   const [existingCustomers, setExistingCustomers] = useState<ExistingCustomer[]>([]);
   const [selectedExistingCustomerId, setSelectedExistingCustomerId] = useState("");
-  
+
   // Confirmation Dialog
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<DeviceItem | null>(null);
@@ -119,6 +225,16 @@ export default function CustomersPage() {
   const [editGaId, setEditGaId] = useState("");
   const [editError, setEditError] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+  const [editDeviceDrafts, setEditDeviceDrafts] = useState<DeviceIdentityDraft[]>([]);
+  const [expandedEditDeviceId, setExpandedEditDeviceId] = useState<string | null>(null);
+  const [loadingEditDevices, setLoadingEditDevices] = useState(false);
+
+  // Expandable threshold editing (list view) — single-expand (table is paginated)
+  const [expandedDeviceId, setExpandedDeviceId] = useState<string | null>(null);
+  const [rowThresholds, setRowThresholds] = useState<ThresholdFormValues>(emptyThresholdFormValues());
+  const [thresholdError, setThresholdError] = useState("");
+  const [savingThresholds, setSavingThresholds] = useState(false);
+  const [thresholdSavedId, setThresholdSavedId] = useState<string | null>(null);
 
   const limit = 12;
 
@@ -174,7 +290,7 @@ export default function CustomersPage() {
 
   const totalPages = Math.ceil(total / limit) || 1;
 
-  const openCustomerEditor = (device: DeviceItem) => {
+  const openCustomerEditor = async (device: DeviceItem) => {
     if (!device.customerId) return;
     setEditingCustomer(device);
     setEditCustomerName(device.customerName ?? "");
@@ -182,6 +298,44 @@ export default function CustomersPage() {
     setEditAddress(device.address ?? "");
     setEditGaId(device.gaId ?? "");
     setEditError("");
+    setExpandedEditDeviceId(null);
+    setEditDeviceDrafts([deviceToIdentityDraft(device)]);
+    setLoadingEditDevices(true);
+    try {
+      const res = await fetch(`/api/customers/${device.customerId}`);
+      if (res.ok) {
+        const customer = await res.json();
+        const drafts = (customer.devices ?? []).map(
+          (d: {
+            id: string;
+            deviceSerialNo: string;
+            meterSerialNo?: string | null;
+            latitude?: number | null;
+            longitude?: number | null;
+            meterSize?: string | null;
+            deviceModel?: string | null;
+            firmwareVersion?: string | null;
+            hardwareVersion?: string | null;
+            configurationVersion?: string | null;
+          }) => deviceToIdentityDraft(d),
+        );
+        setEditDeviceDrafts(drafts);
+      }
+    } catch {
+      // Keep the single-device draft already seeded from the row.
+    } finally {
+      setLoadingEditDevices(false);
+    }
+  };
+
+  const updateEditDeviceDraft = (
+    deviceId: string,
+    field: keyof Omit<DeviceIdentityDraft, "id" | "deviceSerialNo" | "initial">,
+    value: string,
+  ) => {
+    setEditDeviceDrafts((prev) =>
+      prev.map((d) => (d.id === deviceId ? { ...d, [field]: value } : d)),
+    );
   };
 
   const saveCustomerEdit = async (event: React.FormEvent) => {
@@ -190,22 +344,97 @@ export default function CustomersPage() {
       setEditError("Customer name and geographical area are required.");
       return;
     }
+
+    for (const draft of editDeviceDrafts) {
+      if (draft.latitude.trim() || draft.longitude.trim()) {
+        const lat = Number(draft.latitude);
+        const lng = Number(draft.longitude);
+        if (draft.latitude.trim() && (!Number.isFinite(lat) || lat < -90 || lat > 90)) {
+          setEditError(`Latitude for ${draft.deviceSerialNo} must be between -90 and 90.`);
+          return;
+        }
+        if (draft.longitude.trim() && (!Number.isFinite(lng) || lng < -180 || lng > 180)) {
+          setEditError(`Longitude for ${draft.deviceSerialNo} must be between -180 and 180.`);
+          return;
+        }
+      }
+    }
+
     setSavingEdit(true);
     setEditError("");
     try {
       const response = await fetch(`/api/customers/${editingCustomer.customerId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editCustomerName.trim(), category: editCategory, address: editAddress.trim() || null, gaId: editGaId }),
+        body: JSON.stringify({
+          name: editCustomerName.trim(),
+          category: editCategory,
+          address: editAddress.trim() || null,
+          gaId: editGaId,
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Failed to update customer");
+
+      for (const draft of editDeviceDrafts) {
+        const patch = buildDeviceIdentityPatch(draft);
+        if (!patch) continue;
+        const deviceRes = await fetch(`/api/devices/${draft.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        const deviceData = await deviceRes.json();
+        if (!deviceRes.ok) {
+          throw new Error(deviceData.error ?? `Failed to update device ${draft.deviceSerialNo}`);
+        }
+      }
+
       setEditingCustomer(null);
       fetchDevices();
     } catch (error) {
       setEditError(error instanceof Error ? error.message : "Failed to update customer");
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const toggleThresholdExpand = (device: DeviceItem) => {
+    if (expandedDeviceId === device.id) {
+      setExpandedDeviceId(null);
+      setThresholdError("");
+      setThresholdSavedId(null);
+      return;
+    }
+    setExpandedDeviceId(device.id);
+    setRowThresholds(thresholdFormFromDevice(device));
+    setThresholdError("");
+    setThresholdSavedId(null);
+  };
+
+  const saveRowThresholds = async (deviceId: string) => {
+    const parsed = parseAndValidateThresholdInputs(rowThresholds);
+    if (!parsed.ok) {
+      setThresholdError(parsed.error);
+      return;
+    }
+    setSavingThresholds(true);
+    setThresholdError("");
+    try {
+      const res = await fetch(`/api/devices/${deviceId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed.values),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save thresholds");
+      setThresholdSavedId(deviceId);
+      setTimeout(() => setThresholdSavedId((id) => (id === deviceId ? null : id)), 2500);
+      fetchDevices();
+    } catch (err: unknown) {
+      setThresholdError(err instanceof Error ? err.message : "Failed to save thresholds");
+    } finally {
+      setSavingThresholds(false);
     }
   };
 
@@ -222,13 +451,7 @@ export default function CustomersPage() {
     setSelectedGaId(gasList[0]?.id || "");
     setLatitudeInput("");
     setLongitudeInput("");
-    setPressureUpper("");
-    setPressureLower("");
-    setTemperatureUpper("");
-    setTemperatureLower("");
-    setConsumptionUpper("");
-    setConsumptionLower("");
-    setBatteryLower("");
+    setThresholdValues(emptyThresholdFormValues());
     setFormError("");
     setDrawerOpen(true);
   };
@@ -242,7 +465,7 @@ export default function CustomersPage() {
       setFormError("Customer name is required.");
       return;
     }
-    
+
     if (provisionType === "existing" && !selectedExistingCustomerId) {
       setFormError("Please select an existing customer.");
       return;
@@ -263,6 +486,12 @@ export default function CustomersPage() {
       return;
     }
 
+    const thresholdCheck = parseAndValidateThresholdInputs(thresholdValues);
+    if (!thresholdCheck.ok) {
+      setFormError(thresholdCheck.error);
+      return;
+    }
+
     setFormError("");
     setShowConfirmDialog(true);
   };
@@ -275,20 +504,19 @@ export default function CustomersPage() {
     setShowConfirmDialog(false);
 
     try {
+      const thresholdCheck = parseAndValidateThresholdInputs(thresholdValues);
+      if (!thresholdCheck.ok) {
+        throw new Error(thresholdCheck.error);
+      }
+
       const bodyPayload: Record<string, unknown> = {
         provision: true,
         meterSerialNo: deviceIdInput || null,
         latitude: latitudeInput.trim(),
         longitude: longitudeInput.trim(),
-        pressureUpperLimit: pressureUpper,
-        pressureLowerLimit: pressureLower,
-        temperatureUpperLimit: temperatureUpper,
-        temperatureLowerLimit: temperatureLower,
-        consumptionUpperLimit: consumptionUpper,
-        consumptionLowerLimit: consumptionLower,
-        batteryLowerLimit: batteryLower,
+        ...thresholdCheck.values,
       };
-      
+
       if (provisionType === "existing") {
         bodyPayload.existingCustomerId = selectedExistingCustomerId;
       } else {
@@ -519,8 +747,8 @@ export default function CustomersPage() {
                   <p className="truncate"><strong>Device ID:</strong> <span className="font-mono text-muted-foreground">{device.meterSerialNo || "—"}</span></p>
                   <p>
                     <strong>Last Updated:</strong>{" "}
-                    {device.latestReading?.receivedAt 
-                      ? formatLocalTs(device.latestReading.receivedAt) 
+                    {device.latestReading?.receivedAt
+                      ? formatLocalTs(device.latestReading.receivedAt)
                       : (device.lastSeenAt ? formatLocalTs(device.lastSeenAt) : "No readings")}
                   </p>
                 </div>
@@ -540,6 +768,7 @@ export default function CustomersPage() {
             <Table>
               <TableHeader className="bg-muted border-b border-border">
                 <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="w-10 text-muted-foreground font-semibold" />
                   <TableHead className="text-muted-foreground font-semibold">Customer Name</TableHead>
                   <TableHead className="text-muted-foreground font-semibold">Meter ID</TableHead>
                   <TableHead className="text-muted-foreground font-semibold">Device ID</TableHead>
@@ -553,40 +782,104 @@ export default function CustomersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {devices.map((device) => (
-                  <TableRow key={device.id} className="border-border hover:bg-muted/60">
-                    <TableCell className="font-semibold text-foreground py-3 max-w-[150px] truncate">
-                      {device.customerName || <span className="text-muted-foreground italic">Unassigned</span>}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm text-muted-foreground select-all">{device.deviceSerialNo}</TableCell>
-                    <TableCell className="font-mono text-sm text-muted-foreground select-all">{device.meterSerialNo || "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-[10px]">{device.category || "—"}</Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">{device.address || "—"}</TableCell>
-                    <TableCell className="font-mono text-sm font-semibold text-[color:var(--clr-accent-hi)]">
-                      {fmt(device.latestReading?.currentFlowRate)}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm font-semibold text-[color:var(--clr-commercial)]">
-                      {device.latestReading?.gasPressure != null ? `${fmt(device.latestReading.gasPressure)} bar` : "—"}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm font-semibold text-[color:var(--clr-online)]">
-                      {device.latestReading?.batteryLevel != null ? `${Math.round(device.latestReading.batteryLevel)}%` : "—"}
-                    </TableCell>
-                    <TableCell className="py-3">{renderStatus(device)}</TableCell>
-                    <TableCell className="py-3 text-right">
-                      {device.customerId && (
-                        <Button type="button" variant="ghost" size="sm" onClick={() => openCustomerEditor(device)} className="text-muted-foreground hover:text-foreground">
-                          <Pencil className="mr-1 h-3.5 w-3.5" />
-                          Edit
-                        </Button>
+                {devices.map((device) => {
+                  const isExpanded = expandedDeviceId === device.id;
+                  return (
+                    <Fragment key={device.id}>
+                      <TableRow className="border-border hover:bg-muted/60">
+                        <TableCell className="py-3 w-10">
+                          {device.customerId ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground"
+                              onClick={() => toggleThresholdExpand(device)}
+                              aria-label={isExpanded ? "Collapse thresholds" : "Expand thresholds"}
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </Button>
+                          ) : (
+                            <span className="inline-block w-7" />
+                          )}
+                        </TableCell>
+                        <TableCell className="font-semibold text-foreground py-3 max-w-[150px] truncate">
+                          {device.customerName || <span className="text-muted-foreground italic">Unassigned</span>}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm text-muted-foreground select-all">{device.deviceSerialNo}</TableCell>
+                        <TableCell className="font-mono text-sm text-muted-foreground select-all">{device.meterSerialNo || "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-[10px]">{device.category || "—"}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">{device.address || "—"}</TableCell>
+                        <TableCell className="font-mono text-sm font-semibold text-[color:var(--clr-accent-hi)]">
+                          {fmt(device.latestReading?.currentFlowRate)}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm font-semibold text-[color:var(--clr-commercial)]">
+                          {device.latestReading?.gasPressure != null ? `${fmt(device.latestReading.gasPressure)} bar` : "—"}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm font-semibold text-[color:var(--clr-online)]">
+                          {device.latestReading?.batteryLevel != null ? `${Math.round(device.latestReading.batteryLevel)}%` : "—"}
+                        </TableCell>
+                        <TableCell className="py-3">{renderStatus(device)}</TableCell>
+                        <TableCell className="py-3 text-right">
+                          {device.customerId && (
+                            <Button type="button" variant="ghost" size="sm" onClick={() => openCustomerEditor(device)} className="text-muted-foreground hover:text-foreground">
+                              <Pencil className="mr-1 h-3.5 w-3.5" />
+                              Edit
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                      {isExpanded && (
+                        <TableRow className="border-border bg-muted/30 hover:bg-muted/30">
+                          <TableCell colSpan={11} className="px-3 py-2.5">
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                  Thresholds — {device.deviceSerialNo}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  {thresholdSavedId === device.id && (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[color:var(--clr-online)]">
+                                      <Check className="h-3 w-3" />
+                                      Saved
+                                    </span>
+                                  )}
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={savingThresholds}
+                                    onClick={() => saveRowThresholds(device.id)}
+                                    className="h-7 px-3 text-xs bg-[color:var(--clr-accent-hi)] text-[color:var(--accent-foreground)] hover:bg-[color:var(--clr-accent-hi)]"
+                                  >
+                                    {savingThresholds ? "Saving…" : "Save Thresholds"}
+                                  </Button>
+                                </div>
+                              </div>
+                              <ThresholdCardSet
+                                values={rowThresholds}
+                                onChange={(field, value) => {
+                                  setRowThresholds((prev) => ({ ...prev, [field]: value }));
+                                  setThresholdError("");
+                                  setThresholdSavedId(null);
+                                }}
+                                error={thresholdError || null}
+                              />
+                            </div>
+                          </TableCell>
+                        </TableRow>
                       )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                    </Fragment>
+                  );
+                })}
                 {devices.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground text-sm">
+                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground text-sm">
                       No registered endpoints found.
                     </TableCell>
                   </TableRow>
@@ -599,7 +892,7 @@ export default function CustomersPage() {
 
       {editingCustomer && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <Card className="w-full max-w-lg bg-background shadow-2xl">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-background shadow-2xl">
             <CardHeader>
               <CardTitle>Edit Customer Information</CardTitle>
               <p className="text-xs text-muted-foreground">Updates apply to every meter assigned to this customer.</p>
@@ -632,6 +925,131 @@ export default function CustomersPage() {
                   <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Address</label>
                   <Input value={editAddress} onChange={(event) => setEditAddress(event.target.value)} />
                 </div>
+
+                <div className="border-t border-border pt-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Meters</p>
+                    {loadingEditDevices && (
+                      <span className="text-[11px] text-muted-foreground">Loading meters…</span>
+                    )}
+                  </div>
+                  {editDeviceDrafts.length === 0 && !loadingEditDevices && (
+                    <p className="text-sm text-muted-foreground">No meters assigned to this customer.</p>
+                  )}
+                  <div className="space-y-2">
+                    {editDeviceDrafts.map((draft) => {
+                      const isOpen = expandedEditDeviceId === draft.id;
+                      return (
+                        <div key={draft.id} className="rounded-lg border border-border bg-muted/30">
+                          <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                            <div className="min-w-0">
+                              <p className="font-mono text-sm text-muted-foreground truncate">{draft.deviceSerialNo}</p>
+                              <p className="text-[11px] text-muted-foreground italic">Cannot be changed</p>
+                              <p className="text-[11px] text-muted-foreground mt-0.5">
+                                Meter serial: <span className="font-mono not-italic">{draft.meterSerialNo || "—"}</span>
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={() =>
+                                setExpandedEditDeviceId(isOpen ? null : draft.id)
+                              }
+                            >
+                              {isOpen ? "Done" : "Edit"}
+                            </Button>
+                          </div>
+                          {isOpen && (
+                            <div className="space-y-3 border-t border-border px-3 py-3">
+                              <div className="space-y-1.5">
+                                <label className="text-xs text-muted-foreground">Device Serial No</label>
+                                <Input
+                                  value={draft.deviceSerialNo}
+                                  readOnly
+                                  disabled
+                                  className="bg-muted border-border text-muted-foreground cursor-not-allowed font-mono text-sm"
+                                />
+                                <p className="text-[11px] text-muted-foreground">Cannot be changed — ingest identity key.</p>
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-xs text-muted-foreground">Meter Serial No</label>
+                                <Input
+                                  value={draft.meterSerialNo}
+                                  onChange={(e) => updateEditDeviceDraft(draft.id, "meterSerialNo", e.target.value)}
+                                  className="font-mono text-sm"
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                  <label className="text-xs text-muted-foreground">Latitude</label>
+                                  <Input
+                                    type="number"
+                                    step="0.000001"
+                                    value={draft.latitude}
+                                    onChange={(e) => updateEditDeviceDraft(draft.id, "latitude", e.target.value)}
+                                    className="font-mono text-sm"
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs text-muted-foreground">Longitude</label>
+                                  <Input
+                                    type="number"
+                                    step="0.000001"
+                                    value={draft.longitude}
+                                    onChange={(e) => updateEditDeviceDraft(draft.id, "longitude", e.target.value)}
+                                    className="font-mono text-sm"
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                  <label className="text-xs text-muted-foreground">Meter Size</label>
+                                  <Input
+                                    value={draft.meterSize}
+                                    onChange={(e) => updateEditDeviceDraft(draft.id, "meterSize", e.target.value)}
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs text-muted-foreground">Meter Model</label>
+                                  <Input
+                                    value={draft.deviceModel}
+                                    onChange={(e) => updateEditDeviceDraft(draft.id, "deviceModel", e.target.value)}
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                  <label className="text-xs text-muted-foreground">Firmware Version</label>
+                                  <Input
+                                    value={draft.firmwareVersion}
+                                    onChange={(e) => updateEditDeviceDraft(draft.id, "firmwareVersion", e.target.value)}
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs text-muted-foreground">Hardware Version</label>
+                                  <Input
+                                    value={draft.hardwareVersion}
+                                    onChange={(e) => updateEditDeviceDraft(draft.id, "hardwareVersion", e.target.value)}
+                                  />
+                                </div>
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-xs text-muted-foreground">Configuration Version</label>
+                                <Input
+                                  value={draft.configurationVersion}
+                                  onChange={(e) => updateEditDeviceDraft(draft.id, "configurationVersion", e.target.value)}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {editError && <p className="text-sm" style={{ color: "var(--clr-alert)" }}>{editError}</p>}
                 <div className="flex justify-end gap-3 pt-2">
                   <Button type="button" variant="outline" onClick={() => setEditingCustomer(null)}>Cancel</Button>
@@ -741,17 +1159,17 @@ export default function CustomersPage() {
 
                 {/* Provision Type Toggle */}
                 <div className="flex gap-2 p-1 bg-muted rounded-lg border border-border">
-                  <Button 
+                  <Button
                     type="button"
-                    variant={provisionType === "new" ? "default" : "ghost"} 
+                    variant={provisionType === "new" ? "default" : "ghost"}
                     className={`flex-1 h-8 text-xs ${provisionType === "new" ? "bg-[color:var(--clr-accent-hi)] text-[color:var(--accent-foreground)] hover:bg-[color:var(--clr-accent-hi)]" : "text-muted-foreground hover:text-foreground"}`}
                     onClick={() => setProvisionType("new")}
                   >
                     New Customer
                   </Button>
-                  <Button 
+                  <Button
                     type="button"
-                    variant={provisionType === "existing" ? "default" : "ghost"} 
+                    variant={provisionType === "existing" ? "default" : "ghost"}
                     className={`flex-1 h-8 text-xs ${provisionType === "existing" ? "bg-[color:var(--clr-accent-hi)] text-[color:var(--accent-foreground)] hover:bg-[color:var(--clr-accent-hi)]" : "text-muted-foreground hover:text-foreground"}`}
                     onClick={() => setProvisionType("existing")}
                   >
@@ -831,22 +1249,12 @@ export default function CustomersPage() {
                   </>
                 )}
 
-                <Card className="bg-muted/40 border-border">
-                  <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Pressure Threshold (bar)</CardTitle></CardHeader>
-                  <CardContent className="grid grid-cols-2 gap-3"><ThresholdInput label="Upper Limit" value={pressureUpper} onChange={setPressureUpper} /><ThresholdInput label="Lower Limit" value={pressureLower} onChange={setPressureLower} /></CardContent>
-                </Card>
-                <Card className="bg-muted/40 border-border">
-                  <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Temperature Threshold (°C)</CardTitle></CardHeader>
-                  <CardContent className="grid grid-cols-2 gap-3"><ThresholdInput label="Upper Limit" value={temperatureUpper} onChange={setTemperatureUpper} /><ThresholdInput label="Lower Limit" value={temperatureLower} onChange={setTemperatureLower} /></CardContent>
-                </Card>
-                <Card className="bg-muted/40 border-border">
-                  <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Consumption Threshold (Sm³)</CardTitle></CardHeader>
-                  <CardContent className="grid grid-cols-2 gap-3"><ThresholdInput label="Upper Limit" value={consumptionUpper} onChange={setConsumptionUpper} /><ThresholdInput label="Lower Limit" value={consumptionLower} onChange={setConsumptionLower} /></CardContent>
-                </Card>
-                <Card className="bg-muted/40 border-border">
-                  <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Battery Threshold (%)</CardTitle></CardHeader>
-                  <CardContent><ThresholdInput label="Lower Limit" value={batteryLower} onChange={setBatteryLower} step="1" min="0" max="100" /></CardContent>
-                </Card>
+                <ThresholdCardSet
+                  values={thresholdValues}
+                  onChange={(field, value) =>
+                    setThresholdValues((prev) => ({ ...prev, [field]: value }))
+                  }
+                />
               </form>
             </div>
 
@@ -878,18 +1286,18 @@ export default function CustomersPage() {
           <div className="bg-background border border-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl animate-in zoom-in-95">
             <h3 className="text-lg font-bold text-foreground mb-2">Confirm Provisioning</h3>
             <p className="text-sm text-muted-foreground mb-6">
-              Are you sure you want to assign meter <span className="font-mono text-foreground">{selectedDevice?.deviceSerialNo}</span> to 
+              Are you sure you want to assign meter <span className="font-mono text-foreground">{selectedDevice?.deviceSerialNo}</span> to
               {provisionType === "new" ? " a new customer" : " the selected customer"}?
             </p>
             <div className="flex gap-3">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setShowConfirmDialog(false)}
                 className="flex-1 border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 Cancel
               </Button>
-              <Button 
+              <Button
                 onClick={confirmProvisioning}
                 className="flex-1 bg-[color:var(--clr-accent-hi)] hover:bg-[color:var(--clr-accent-hi)] text-[color:var(--accent-foreground)]"
               >

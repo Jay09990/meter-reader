@@ -1,23 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { checkDeviceThresholds } from "@/features/alarms/threshold-check";
-
-const optionalNumber = (value: unknown) => {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
-function parseCoordinate(value: unknown, min: number, max: number): number | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const coordinate = Number(value);
-  if (!Number.isFinite(coordinate) || coordinate < min || coordinate > max) {
-    throw new Error(`Coordinate out of range: ${value}`);
-  }
-  return coordinate;
-}
+import {
+  optionalNumber,
+  parseCoordinate,
+  validateThresholdPairs,
+} from "@/lib/device-field-parse";
 
 export async function PATCH(
   req: NextRequest,
@@ -113,6 +101,26 @@ export async function PATCH(
       }
     }
 
+    const pressureUpperLimit = optionalNumber(body.pressureUpperLimit);
+    const pressureLowerLimit = optionalNumber(body.pressureLowerLimit);
+    const temperatureUpperLimit = optionalNumber(body.temperatureUpperLimit);
+    const temperatureLowerLimit = optionalNumber(body.temperatureLowerLimit);
+    const consumptionUpperLimit = optionalNumber(body.consumptionUpperLimit);
+    const consumptionLowerLimit = optionalNumber(body.consumptionLowerLimit);
+    const batteryLowerLimit = optionalNumber(body.batteryLowerLimit);
+
+    const pairError = validateThresholdPairs({
+      pressureUpperLimit: pressureUpperLimit ?? null,
+      pressureLowerLimit: pressureLowerLimit ?? null,
+      temperatureUpperLimit: temperatureUpperLimit ?? null,
+      temperatureLowerLimit: temperatureLowerLimit ?? null,
+      consumptionUpperLimit: consumptionUpperLimit ?? null,
+      consumptionLowerLimit: consumptionLowerLimit ?? null,
+    });
+    if (pairError) {
+      return NextResponse.json({ error: pairError }, { status: 400 });
+    }
+
     const device = await db.device.update({
       where: { id: foundDevice.id },
       data: {
@@ -121,13 +129,13 @@ export async function PATCH(
           body.meterSerialNo !== undefined ? body.meterSerialNo : undefined,
         latitude,
         longitude,
-        pressureUpperLimit: optionalNumber(body.pressureUpperLimit),
-        pressureLowerLimit: optionalNumber(body.pressureLowerLimit),
-        temperatureUpperLimit: optionalNumber(body.temperatureUpperLimit),
-        temperatureLowerLimit: optionalNumber(body.temperatureLowerLimit),
-        consumptionUpperLimit: optionalNumber(body.consumptionUpperLimit),
-        consumptionLowerLimit: optionalNumber(body.consumptionLowerLimit),
-        batteryLowerLimit: optionalNumber(body.batteryLowerLimit),
+        pressureUpperLimit,
+        pressureLowerLimit,
+        temperatureUpperLimit,
+        temperatureLowerLimit,
+        consumptionUpperLimit,
+        consumptionLowerLimit,
+        batteryLowerLimit,
       },
     });
 
