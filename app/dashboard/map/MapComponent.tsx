@@ -11,6 +11,7 @@ import { X, MapPin, Activity, TrendingUp } from "lucide-react";
 import { useTheme } from "next-themes";
 import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import L from "leaflet";
+import "leaflet.markercluster";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
