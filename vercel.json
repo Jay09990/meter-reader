@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/missing-data-alarms",
+      "schedule": "0 1 * * *"
+    }
+  ]
+}
