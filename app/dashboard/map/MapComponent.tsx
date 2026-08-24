@@ -7,7 +7,7 @@ import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "./leaflet-overrides.css";
-import { X, MapPin, Activity, TrendingUp } from "lucide-react";
+import { X, MapPin, Activity, TrendingUp, RefreshCw } from "lucide-react";
 import { useTheme } from "next-themes";
 import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import L from "leaflet";
@@ -156,12 +156,18 @@ export default function MapComponent() {
   const [consumption, setConsumption] = useState<ConsumptionBucket[]>([]);
   const [consumptionPeriod, setConsumptionPeriod] = useState<ConsumptionMode>("daily");
   const [zoom, setZoom] = useState(6);
+  const [loadingMap, setLoadingMap] = useState(true);
+  const [loadingConsumption, setLoadingConsumption] = useState(false);
 
   const fetchMapDevices = useCallback(() => {
+    setLoadingMap(true);
     fetch("/api/map/devices")
       .then((res) => res.json())
-      .then((data) => setDevices(data))
-      .catch(console.error);
+      .then((data) => {
+        setDevices(data);
+        setLoadingMap(false);
+      })
+      .catch(() => setLoadingMap(false));
   }, []);
 
   useEffect(() => {
@@ -171,10 +177,17 @@ export default function MapComponent() {
 
   useEffect(() => {
     if (!selectedDevice) return;
+    setLoadingConsumption(true);
     fetch(`/api/devices/${selectedDevice.id}/consumption?period=${consumptionPeriod}`)
       .then((response) => (response.ok ? response.json() : { consumption: [] }))
-      .then((data) => setConsumption(data.consumption ?? []))
-      .catch(() => setConsumption([]));
+      .then((data) => {
+        setConsumption(data.consumption ?? []);
+        setLoadingConsumption(false);
+      })
+      .catch(() => {
+        setConsumption([]);
+        setLoadingConsumption(false);
+      });
   }, [selectedDevice, consumptionPeriod]);
 
   const center: [number, number] = [20.5937, 78.9629];
@@ -233,6 +246,15 @@ export default function MapComponent() {
       </MapContainer>
 
       <ClusterLegend />
+
+      {loadingMap && (
+        <div className="absolute inset-0 z-[900] flex items-center justify-center bg-background/60 backdrop-blur-sm">
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-lg">
+            <RefreshCw className="h-4 w-4 animate-spin" style={{ color: "var(--clr-accent-mid)" }} />
+            <span className="text-sm font-medium text-muted-foreground">Loading meter map…</span>
+          </div>
+        </div>
+      )}
 
       {selectedDevice && (
         <div className="absolute inset-0 z-[1100] flex justify-end bg-foreground/20 backdrop-blur-[1px]">
@@ -297,15 +319,22 @@ export default function MapComponent() {
                   <PeriodSelector value={consumptionPeriod} onChange={setConsumptionPeriod} />
                 </div>
                 <div className="h-40 rounded-lg border border-border p-3">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={consumption.map((bucket) => ({ ...bucket, value: bucket.value ?? 0 }))}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.7} />
-                      <XAxis dataKey="label" ticks={pickTicks(consumption.map((bucket) => bucket.label), tickCountForMode(consumptionPeriod))} tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
-                      <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
-                      <Tooltip />
-                      <Bar dataKey="value" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  {loadingConsumption ? (
+                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                      <RefreshCw className="h-4 w-4 animate-spin mr-2" style={{ color: "var(--clr-accent-mid)" }} />
+                      Loading consumption…
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={consumption.map((bucket) => ({ ...bucket, value: bucket.value ?? 0 }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.7} />
+                        <XAxis dataKey="label" ticks={pickTicks(consumption.map((bucket) => bucket.label), tickCountForMode(consumptionPeriod))} tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
+                        <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
                 </div>
               </div>
 

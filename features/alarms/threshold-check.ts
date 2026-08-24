@@ -64,13 +64,44 @@ export async function checkDeviceThresholds(deviceId: string, readingDate: Date,
   thresholdBreach(AlarmType.PRESSURE_OUT_OF_RANGE, reading.gasPressure, device.pressureUpperLimit, device.pressureLowerLimit, "Gas pressure", "bar");
   thresholdBreach(AlarmType.TEMPERATURE_OUT_OF_RANGE, reading.gasTemperature, device.temperatureUpperLimit, device.temperatureLowerLimit, "Gas temperature", "°C");
 
-  if (reading.correctedVolumeVb != null && (device.consumptionUpperLimit != null || device.consumptionLowerLimit != null)) {
+  // Shared across CONSUMPTION_OUT_OF_RANGE and NO_CONSUMPTION so we only
+  // fetch yesterday's boundary reading once per push, regardless of which
+  // check(s) end up needing it.
+  let yesterdayReading: number | null | undefined;
+  const getYesterdayReading = async (): Promise<number | null> => {
+    if (yesterdayReading !== undefined) return yesterdayReading;
     const yesterday = new Date(readingDate.getTime() - 86_400_000);
-    const yesterdayReading = await getDeviceBoundaryReading(deviceId, toIsoDate(yesterday));
-    if (yesterdayReading != null) {
-      const dailyConsumption = reading.correctedVolumeVb - yesterdayReading;
+    yesterdayReading = await getDeviceBoundaryReading(deviceId, toIsoDate(yesterday));
+    return yesterdayReading;
+  };
+
+  if (reading.correctedVolumeVb != null && (device.consumptionUpperLimit != null || device.consumptionLowerLimit != null)) {
+    const prev = await getYesterdayReading();
+    if (prev != null) {
+      const dailyConsumption = reading.correctedVolumeVb - prev;
       if (dailyConsumption >= 0) {
         thresholdBreach(AlarmType.CONSUMPTION_OUT_OF_RANGE, dailyConsumption, device.consumptionUpperLimit, device.consumptionLowerLimit, "Daily consumption", "Sm³");
+      }
+    }
+  }
+
+  // NO_CONSUMPTION — fires when corrected volume hasn't moved at all
+  // relative to the previous reading (diff === 0). Unlike
+  // CONSUMPTION_OUT_OF_RANGE this isn't gated on a per-meter threshold
+  // being configured; a flatlined meter is worth flagging regardless.
+  if (reading.correctedVolumeVb != null) {
+    const prev = await getYesterdayReading();
+    if (prev != null) {
+      const diff = reading.correctedVolumeVb - prev;
+      if (diff === 0) {
+        breaches.push({
+          type: AlarmType.NO_CONSUMPTION,
+          value: reading.correctedVolumeVb,
+          limit: prev,
+          unit: "Sm³",
+          direction: "below",
+          cause: `Corrected volume for meter ${device.deviceSerialNo} is unchanged at ${reading.correctedVolumeVb} Sm³ — no consumption recorded since the previous reading (${prev} Sm³).`,
+        });
       }
     }
   }

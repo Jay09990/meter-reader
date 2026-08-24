@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("DIRECT_URL")
 }
 
 model GeographicalArea {
@@ -114,6 +115,7 @@ enum AlarmType {
   TEMPERATURE_OUT_OF_RANGE
   CONSUMPTION_OUT_OF_RANGE
   BATTERY_LOW
+  NO_CONSUMPTION
 }
 
 enum AlarmSeverity {

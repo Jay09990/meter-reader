@@ -21,20 +21,30 @@ export default function SettingsPage() {
   const [gaCode, setGaCode] = useState("");
   const [creatingGa, setCreatingGa] = useState(false);
   const [gaMessage, setGaMessage] = useState<string | null>(null);
+  const [loadingInitial, setLoadingInitial] = useState(true);
 
   useEffect(() => {
-    fetch("/api/system/settings")
-      .then((res) => res.json())
-      .then((data) => {
-        setCapacity(data.maxMeterCapacity?.toString() ?? "");
-        setAlarmEmail(data.alarmNotificationEmail ?? "");
-      })
-      .catch(() => setMessage("Unable to load system settings."));
-
-    fetch("/api/gas")
-      .then((res) => res.json())
-      .then((data) => setGas(data))
-      .catch(() => setGaMessage("Unable to load geographical areas."));
+    const fetchSettings = () => {
+      fetch("/api/system/settings")
+        .then((res) => res.json())
+        .then((data) => {
+          setCapacity(data.maxMeterCapacity?.toString() ?? "");
+          setAlarmEmail(data.alarmNotificationEmail ?? "");
+          setLoadingInitial(false);
+        })
+        .catch(() => {
+          setMessage("Unable to load system settings.");
+          setLoadingInitial(false);
+        });
+    };
+    const fetchGas = () => {
+      fetch("/api/gas")
+        .then((res) => res.json())
+        .then((data) => setGas(data))
+        .catch(() => setGaMessage("Unable to load geographical areas."));
+    };
+    fetchSettings();
+    fetchGas();
   }, []);
 
   const saveSettings = async (event: React.FormEvent) => {
@@ -110,141 +120,197 @@ export default function SettingsPage() {
       </div>
 
       <Card className="bg-card border-border">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle>Meter Capacity</CardTitle>
-          <Settings className="h-5 w-5 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={saveSettings} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="max-capacity" className="text-sm font-medium text-foreground">
-                Maximum connected meters
-              </label>
-              <Input
-                id="max-capacity"
-                type="number"
-                min="0"
-                step="1"
-                value={capacity}
-                onChange={(event) => setCapacity(event.target.value)}
-                placeholder="Unlimited"
-              />
-              <p className="text-xs text-muted-foreground">
-                Leave blank for unlimited capacity. Existing meters continue reporting after the
-                limit is reached.
-              </p>
+        {loadingInitial ? (
+          <div className="space-y-3 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="h-5 w-5 animate-pulse rounded-full bg-muted" />
+              <div className="h-4 w-28 animate-pulse rounded bg-muted" />
             </div>
-            <Button type="submit" disabled={saving}>
-              {saving ? "Saving…" : "Save"}
-            </Button>
-            {message && (
-              <p className="text-sm text-muted-foreground" role="status">
-                {message}
-              </p>
-            )}
-          </form>
-        </CardContent>
+            <div className="space-y-3">
+              <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+              <div className="h-9 w-full animate-pulse rounded-md bg-muted" />
+              <div className="h-3 w-32 animate-pulse rounded bg-muted" />
+            </div>
+          </div>
+        ) : (
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle>Meter Capacity</CardTitle>
+            <Settings className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+        )}
+        {!loadingInitial && (
+          <CardContent>
+            <form onSubmit={saveSettings} className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="max-capacity" className="text-sm font-medium text-foreground">
+                  Maximum connected meters
+                </label>
+                <Input
+                  id="max-capacity"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={capacity}
+                  onChange={(event) => setCapacity(event.target.value)}
+                  placeholder="Unlimited"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave blank for unlimited capacity. Existing meters continue reporting after the
+                  limit is reached.
+                </p>
+              </div>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving…" : "Save"}
+              </Button>
+              {message && (
+                <p className="text-sm text-muted-foreground" role="status">
+                  {message}
+                </p>
+              )}
+            </form>
+          </CardContent>
+        )}
       </Card>
 
       <Card className="bg-card border-border">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle>Alarm Notifications</CardTitle>
-          <Mail className="h-5 w-5 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={saveAlarmEmail} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="alarm-email" className="text-sm font-medium text-foreground">
-                Notification email
-              </label>
-              <Input
-                id="alarm-email"
-                type="email"
-                value={alarmEmail}
-                onChange={(event) => setAlarmEmail(event.target.value)}
-                placeholder="ops@example.com"
-                autoComplete="email"
-              />
-              <p className="text-xs text-muted-foreground">
-                New alarms are emailed here via Resend. Leave blank to disable email
-                notifications. Requires <code className="text-[11px]">RESEND_API_KEY</code> in
-                the server environment.
-              </p>
+        {loadingInitial ? (
+          <div className="space-y-3 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="h-5 w-5 animate-pulse rounded-full bg-muted" />
+              <div className="h-4 w-44 animate-pulse rounded bg-muted" />
             </div>
-            <Button type="submit" disabled={savingEmail}>
-              {savingEmail ? "Saving…" : "Save email"}
-            </Button>
-            {emailMessage && (
-              <p className="text-sm text-muted-foreground" role="status">
-                {emailMessage}
-              </p>
-            )}
-          </form>
-        </CardContent>
+            <div className="space-y-3">
+              <div className="h-4 w-20 animate-pulse rounded bg-muted" />
+              <div className="h-9 w-full animate-pulse rounded-md bg-muted" />
+              <div className="h-3 w-40 animate-pulse rounded bg-muted" />
+            </div>
+          </div>
+        ) : (
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle>Alarm Notifications</CardTitle>
+            <Mail className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+        )}
+        {!loadingInitial && (
+          <CardContent>
+            <form onSubmit={saveAlarmEmail} className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="alarm-email" className="text-sm font-medium text-foreground">
+                  Notification email
+                </label>
+                <Input
+                  id="alarm-email"
+                  type="email"
+                  value={alarmEmail}
+                  onChange={(event) => setAlarmEmail(event.target.value)}
+                  placeholder="ops@example.com"
+                  autoComplete="email"
+                />
+                <p className="text-xs text-muted-foreground">
+                  New alarms are emailed here via Resend. Leave blank to disable email
+                  notifications. Requires <code className="text-[11px]">RESEND_API_KEY</code> in
+                  the server environment.
+                </p>
+              </div>
+              <Button type="submit" disabled={savingEmail}>
+                {savingEmail ? "Saving…" : "Save email"}
+              </Button>
+              {emailMessage && (
+                <p className="text-sm text-muted-foreground" role="status">
+                  {emailMessage}
+                </p>
+              )}
+            </form>
+          </CardContent>
+        )}
       </Card>
 
       {/* GA Management Card */}
       <Card className="bg-card border-border">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle>Geographical Areas</CardTitle>
-          <Globe className="h-5 w-5 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={createGa} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="ga-name" className="text-sm font-medium text-foreground">
-                GA Name
-              </label>
-              <Input
-                id="ga-name"
-                value={gaName}
-                onChange={(e) => setGaName(e.target.value)}
-                placeholder="e.g. North Region"
-                required
-              />
+        {loadingInitial ? (
+          <div className="space-y-3 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="h-5 w-5 animate-pulse rounded-full bg-muted" />
+              <div className="h-4 w-44 animate-pulse rounded bg-muted" />
             </div>
-            <div className="space-y-2">
-              <label htmlFor="ga-code" className="text-sm font-medium text-foreground">
-                GA Code (Optional)
-              </label>
-              <Input
-                id="ga-code"
-                value={gaCode}
-                onChange={(e) => setGaCode(e.target.value)}
-                placeholder="e.g. GA-NORTH"
-              />
+            <div className="space-y-3">
+              <div className="h-4 w-16 animate-pulse rounded bg-muted" />
+              <div className="h-9 w-full animate-pulse rounded-md bg-muted" />
+              <div className="h-4 w-16 animate-pulse rounded bg-muted" />
+              <div className="h-9 w-full animate-pulse rounded-md bg-muted" />
+              <div className="h-9 w-32 animate-pulse rounded-md bg-muted" />
+              <div className="h-4 w-full animate-pulse rounded bg-muted" />
+              <div className="space-y-2">
+                <div className="h-7 w-full animate-pulse rounded-md bg-muted" />
+                <div className="h-7 w-3/4 animate-pulse rounded-md bg-muted" />
+                <div className="h-7 w-2/3 animate-pulse rounded-md bg-muted" />
+              </div>
             </div>
-            <Button type="submit" disabled={creatingGa}>
-              {creatingGa ? "Creating…" : "Create GA"}
-            </Button>
-            {gaMessage && (
-              <p className="text-sm text-muted-foreground" role="status">
-                {gaMessage}
+          </div>
+        ) : (
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle>Geographical Areas</CardTitle>
+            <Globe className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+        )}
+        {!loadingInitial && (
+          <CardContent>
+            <form onSubmit={createGa} className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="ga-name" className="text-sm font-medium text-foreground">
+                  GA Name
+                </label>
+                <Input
+                  id="ga-name"
+                  value={gaName}
+                  onChange={(e) => setGaName(e.target.value)}
+                  placeholder="e.g. North Region"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="ga-code" className="text-sm font-medium text-foreground">
+                  GA Code (Optional)
+                </label>
+                <Input
+                  id="ga-code"
+                  value={gaCode}
+                  onChange={(e) => setGaCode(e.target.value)}
+                  placeholder="e.g. GA-NORTH"
+                />
+              </div>
+              <Button type="submit" disabled={creatingGa}>
+                {creatingGa ? "Creating…" : "Create GA"}
+              </Button>
+              {gaMessage && (
+                <p className="text-sm text-muted-foreground" role="status">
+                  {gaMessage}
+                </p>
+              )}
+            </form>
+            {gas.length > 0 && (
+              <div className="mt-4 space-y-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Existing Geographical Areas
+                </p>
+                {gas.map((ga) => (
+                  <div
+                    key={ga.id}
+                    className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+                  >
+                    <span>{ga.name}</span>
+                    {ga.code && <span className="text-muted-foreground">{ga.code}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {gas.length === 0 && (
+              <p className="mt-4 text-xs text-muted-foreground">
+                No geographical areas created yet.
               </p>
             )}
-          </form>
-          {gas.length > 0 && (
-            <div className="mt-4 space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Existing Geographical Areas
-              </p>
-              {gas.map((ga) => (
-                <div
-                  key={ga.id}
-                  className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
-                >
-                  <span>{ga.name}</span>
-                  {ga.code && <span className="text-muted-foreground">{ga.code}</span>}
-                </div>
-              ))}
-            </div>
-          )}
-          {gas.length === 0 && (
-            <p className="mt-4 text-xs text-muted-foreground">
-              No geographical areas created yet.
-            </p>
-          )}
-        </CardContent>
+          </CardContent>
+        )}
       </Card>
     </div>
   );

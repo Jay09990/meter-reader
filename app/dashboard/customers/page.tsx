@@ -193,6 +193,7 @@ export default function CustomersPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [gaFilter, setGaFilter] = useState("all");
   const [gasList, setGasList] = useState<GeographicalArea[]>([]);
+  const [loadingRefs, setLoadingRefs] = useState(true);
 
   // Drawer States
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -245,6 +246,7 @@ export default function CustomersPage() {
       const data = await res.json();
       setGasList(data);
     }
+    setLoadingRefs((prev) => prev && false);
   }, []);
 
   // Fetch Devices
@@ -274,6 +276,7 @@ export default function CustomersPage() {
       const data = await res.json();
       setExistingCustomers(data.data || []);
     }
+    setLoadingRefs((prev) => prev && false);
   }, []);
 
   useEffect(() => {
@@ -440,6 +443,7 @@ export default function CustomersPage() {
 
   // Open Drawer Form for Provisioning
   const openProvisionDrawer = (device: DeviceItem) => {
+    if (loadingRefs) return;
     setSelectedDevice(device);
     setProvisionType("new");
     setSelectedExistingCustomerId("");
@@ -1186,10 +1190,16 @@ export default function CustomersPage() {
                       onChange={(e) => setSelectedExistingCustomerId(e.target.value)}
                       required
                     >
-                      <option value="" disabled>Select a customer...</option>
-                      {existingCustomers.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name} ({c.category})</option>
-                      ))}
+                      <option value="" disabled>Select a customer…</option>
+                      {loadingRefs ? (
+                        <option value="" disabled>Loading customers…</option>
+                      ) : existingCustomers.length === 0 ? (
+                        <option value="" disabled>No customers found</option>
+                      ) : (
+                        existingCustomers.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name} ({c.category})</option>
+                        ))
+                      )}
                     </select>
                   </div>
                 ) : (
@@ -1229,10 +1239,16 @@ export default function CustomersPage() {
                         onChange={(e) => setSelectedGaId(e.target.value)}
                         required={provisionType === "new"}
                       >
-                        <option value="" disabled>Select a city</option>
-                        {gasList.map((ga) => (
-                          <option key={ga.id} value={ga.id}>{ga.name}</option>
-                        ))}
+                        <option value="" disabled>Select a city…</option>
+                        {loadingRefs ? (
+                          <option value="" disabled>Loading cities…</option>
+                        ) : gasList.length === 0 ? (
+                          <option value="" disabled>No cities available</option>
+                        ) : (
+                          gasList.map((ga) => (
+                            <option key={ga.id} value={ga.id}>{ga.name}</option>
+                          ))
+                        )}
                       </select>
                     </div>
 

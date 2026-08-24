@@ -349,22 +349,29 @@ export default function OverviewPage() {
             </div>
           </CardHeader>
           <CardContent className="h-80">
-            <ChartContainer config={{ value: { label: "Consumption", color: "var(--chart-1)" } }} className="h-full w-full">
-              <BarChart data={consumptionSeries}>
-                <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} opacity={0.7} />
-                <XAxis dataKey="label" ticks={consumptionTicks} tick={{ fill: chartTheme.tick, fontSize: 12 }} />
-                <YAxis tick={{ fill: chartTheme.tick, fontSize: 12 }} />
-                <ChartTooltip
-                  cursor={{ fill: "var(--clr-accent-hi)", opacity: 0.07 }}
-                  content={<ChartTooltipContent />}
-                />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                  {consumptionSeries.map((entry) => (
-                    <Cell key={entry.label} fill={entry.suspect ? "var(--clr-alert)" : entry.value === peakConsumptionValue ? "var(--chart-1)" : "var(--chart-5)"} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ChartContainer>
+            {loading ? (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                <RefreshCw className="h-4 w-4 animate-spin mr-2" style={{ color: "var(--clr-accent-mid)" }} />
+                Loading consumption…
+              </div>
+            ) : (
+              <ChartContainer config={{ value: { label: "Consumption", color: "var(--chart-1)" } }} className="h-full w-full">
+                <BarChart data={consumptionSeries}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} opacity={0.7} />
+                  <XAxis dataKey="label" ticks={consumptionTicks} tick={{ fill: chartTheme.tick, fontSize: 12 }} />
+                  <YAxis tick={{ fill: chartTheme.tick, fontSize: 12 }} />
+                  <ChartTooltip
+                    cursor={{ fill: "var(--clr-accent-hi)", opacity: 0.07 }}
+                    content={<ChartTooltipContent />}
+                  />
+                  <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                    {consumptionSeries.map((entry) => (
+                      <Cell key={entry.label} fill={entry.suspect ? "var(--clr-alert)" : entry.value === peakConsumptionValue ? "var(--chart-1)" : "var(--chart-5)"} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartContainer>
+            )}
           </CardContent>
         </Card>
 

@@ -15,7 +15,7 @@ interface HeaderProps {
 
 // Header owns global dashboard controls and the live alarm count indicator.
 export function Header({ onOpenMobileSidebar }: HeaderProps) {
-  const [openAlarmCount, setOpenAlarmCount] = useState<number>(0);
+  const [openAlarmCount, setOpenAlarmCount] = useState<number | null>(null);
 
   const fetchAlarmCount = () => {
     fetch("/api/alarms/count")
@@ -55,12 +55,20 @@ export function Header({ onOpenMobileSidebar }: HeaderProps) {
           aria-label="Alarms"
         >
           <Bell className="h-5 w-5" />
-          {openAlarmCount > 0 && (
+          {openAlarmCount !== null && openAlarmCount > 0 && (
             <span
               className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white ring-2 ring-background animate-pulse"
-              style={{background:'var(--clr-alert)'}}
+              style={{ background: "var(--clr-alert)" }}
             >
               {openAlarmCount > 99 ? "99+" : openAlarmCount}
+            </span>
+          )}
+          {openAlarmCount === null && (
+            <span
+              className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white ring-2 ring-background"
+              style={{ background: "var(--clr-accent-lo)" }}
+            >
+              …
             </span>
           )}
         </Link>
