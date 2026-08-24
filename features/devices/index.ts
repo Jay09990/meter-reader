@@ -1,5 +1,6 @@
 export {
   getPaginatedDevices,
+  getPaginatedCustomersWithDevices,
   getDeviceLatest,
   getDeviceHistory,
   getDeviceHourly,

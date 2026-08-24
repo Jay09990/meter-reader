@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { Prisma } from "@prisma/client";
+import { AlarmSeverity, AlarmStatus, Prisma } from "@prisma/client";
 import { computeDeviceStatus } from "@/lib/device-status";
 
 interface DailyVolumeDelta {
@@ -58,6 +58,110 @@ export interface GetDevicesOptions {
   status?: string;
   category?: string;
   gaId?: string;
+}
+
+function mapDeviceToItem(
+  device: {
+    id: string;
+    deviceSerialNo: string;
+    meterSerialNo: string | null;
+    meterSize: string | null;
+    customerId: string | null;
+    firmwareVersion: string | null;
+    hardwareVersion: string | null;
+    deviceModel: string | null;
+    configurationVersion: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    pressureUpperLimit: number | null;
+    pressureLowerLimit: number | null;
+    temperatureUpperLimit: number | null;
+    temperatureLowerLimit: number | null;
+    consumptionUpperLimit: number | null;
+    consumptionLowerLimit: number | null;
+    batteryLowerLimit: number | null;
+    firstSeenAt: Date;
+    lastSeenAt: Date | null;
+    readings: Array<{
+      readingDate: Date;
+      receivedAt: Date;
+      correctedVolumeVb: number | null;
+      gasPressure: number | null;
+      gasTemperature: number | null;
+      currentFlowRate: number | null;
+      batteryLevel: number | null;
+    }>;
+    alarms: Array<{
+      status: AlarmStatus;
+      severity: AlarmSeverity;
+    }>;
+    customer?: {
+      id?: string | null;
+      name?: string | null;
+      category?: string | null;
+      address?: string | null;
+      gaId?: string | null;
+      ga?: { name?: string | null } | null;
+    } | null;
+  },
+  customerOverride?: {
+    id?: string | null;
+    name?: string | null;
+    category?: string | null;
+    address?: string | null;
+    gaId?: string | null;
+    gaName?: string | null;
+  },
+) {
+  const latestReading = device.readings[0] || null;
+  const resolvedCustomer = customerOverride ?? {
+    id: device.customer?.id ?? null,
+    name: device.customer?.name ?? null,
+    category: device.customer?.category ?? null,
+    address: device.customer?.address ?? null,
+    gaId: device.customer?.gaId ?? null,
+    gaName: device.customer?.ga?.name ?? null,
+  };
+
+  return {
+    id: device.id,
+    deviceSerialNo: device.deviceSerialNo,
+    meterSerialNo: device.meterSerialNo,
+    meterSize: device.meterSize,
+    customerId: device.customerId,
+    customerName: resolvedCustomer?.name || null,
+    category: resolvedCustomer?.category || null,
+    address: resolvedCustomer?.address || null,
+    gaName: resolvedCustomer?.gaName || null,
+    gaId: resolvedCustomer?.gaId || null,
+    firmwareVersion: device.firmwareVersion,
+    hardwareVersion: device.hardwareVersion,
+    deviceModel: device.deviceModel,
+    configurationVersion: device.configurationVersion,
+    latitude: device.latitude,
+    longitude: device.longitude,
+    pressureUpperLimit: device.pressureUpperLimit,
+    pressureLowerLimit: device.pressureLowerLimit,
+    temperatureUpperLimit: device.temperatureUpperLimit,
+    temperatureLowerLimit: device.temperatureLowerLimit,
+    consumptionUpperLimit: device.consumptionUpperLimit,
+    consumptionLowerLimit: device.consumptionLowerLimit,
+    batteryLowerLimit: device.batteryLowerLimit,
+    firstSeenAt: device.firstSeenAt,
+    lastSeenAt: device.lastSeenAt,
+    status: computeDeviceStatus(device.lastSeenAt, device.alarms, device.customerId),
+    latestReading: latestReading
+      ? {
+          readingDate: latestReading.readingDate.toISOString(),
+          receivedAt: latestReading.receivedAt.toISOString(),
+          correctedVolumeVb: latestReading.correctedVolumeVb,
+          gasPressure: latestReading.gasPressure,
+          gasTemperature: latestReading.gasTemperature,
+          currentFlowRate: latestReading.currentFlowRate,
+          batteryLevel: latestReading.batteryLevel,
+        }
+      : null,
+  };
 }
 
 export async function getPaginatedDevices(options: GetDevicesOptions) {
@@ -120,10 +224,6 @@ export async function getPaginatedDevices(options: GetDevicesOptions) {
       include: {
         readings: {
           take: 1,
-          // CHANGED: was orderBy readingDate desc, which was ambiguous
-          // once a device can have several rows for the same day. Order
-          // by receivedAt (actual push arrival time) so "latest reading"
-          // always means the most recent push, full stop.
           orderBy: { receivedAt: "desc" },
           select: {
             readingDate: true,
@@ -142,59 +242,146 @@ export async function getPaginatedDevices(options: GetDevicesOptions) {
         customer: {
           select: {
             id: true,
-            name: true, 
+            name: true,
             category: true,
             address: true,
             gaId: true,
-            ga: { select: { name: true } }
-          }
+            ga: { select: { name: true } },
+          },
         },
       },
     }),
     db.device.count({ where }),
   ]);
 
-  const items = devices.map((d) => {
-    const latestReading = d.readings[0] || null;
+  const items = devices.map((d) => mapDeviceToItem(d));
+
+  return {
+    items,
+    pagination: {
+      page,
+      limit,
+      totalCount,
+      totalPages: Math.ceil(totalCount / limit) || 1,
+    },
+  };
+}
+
+export async function getPaginatedCustomersWithDevices(options: GetDevicesOptions) {
+  const page = Math.max(1, options.page || 1);
+  const limit = Math.min(100, Math.max(1, options.limit || 10));
+  const skip = (page - 1) * limit;
+
+  const where: Prisma.CustomerWhereInput = {};
+
+  if (options.search && options.search.trim()) {
+    const s = options.search.trim();
+    where.OR = [
+      { name: { contains: s, mode: "insensitive" } },
+      { ga: { name: { contains: s, mode: "insensitive" } } },
+      { devices: { some: { deviceSerialNo: { contains: s, mode: "insensitive" } } } },
+      { devices: { some: { meterSerialNo: { contains: s, mode: "insensitive" } } } },
+    ];
+  }
+
+  if (options.category) {
+    where.category = options.category as import("@prisma/client").CustomerCategory;
+  }
+
+  if (options.gaId) {
+    where.gaId = options.gaId;
+  }
+
+  const now = new Date();
+  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  if (options.status && options.status !== "all") {
+    const statusVal = options.status.toLowerCase();
+    if (statusVal === "new") {
+      where.devices = { some: { customerId: null } };
+    } else if (statusVal === "online") {
+      where.devices = {
+        some: {
+          customerId: { not: null },
+          lastSeenAt: { gte: twentyFourHoursAgo },
+          alarms: { none: { status: "OPEN" } },
+        },
+      };
+    } else if (statusVal === "offline") {
+      where.devices = {
+        some: {
+          customerId: { not: null },
+          OR: [
+            { lastSeenAt: null },
+            { lastSeenAt: { lt: twentyFourHoursAgo } },
+          ],
+        },
+      };
+    } else if (statusVal === "alert") {
+      where.devices = {
+        some: {
+          customerId: { not: null },
+          alarms: { some: { status: "OPEN" } },
+        },
+      };
+    }
+  }
+
+  const [customers, totalCount] = await Promise.all([
+    db.customer.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { name: "asc" },
+      include: {
+        ga: { select: { name: true } },
+        devices: {
+          include: {
+            readings: {
+              take: 1,
+              orderBy: { receivedAt: "desc" },
+              select: {
+                readingDate: true,
+                receivedAt: true,
+                correctedVolumeVb: true,
+                gasPressure: true,
+                gasTemperature: true,
+                currentFlowRate: true,
+                batteryLevel: true,
+              },
+            },
+            alarms: {
+              where: { status: "OPEN" },
+              select: { status: true, severity: true },
+            },
+          },
+        },
+      },
+    }),
+    db.customer.count({ where }),
+  ]);
+
+  const items = customers.map((customer) => {
+    const devices = (customer.devices ?? []).map((device) =>
+      mapDeviceToItem(device, {
+        id: customer.id,
+        name: customer.name,
+        category: customer.category,
+        address: customer.address,
+        gaId: customer.gaId,
+        gaName: customer.ga?.name || null,
+      }),
+    );
 
     return {
-      id: d.id,
-      deviceSerialNo: d.deviceSerialNo,
-      meterSerialNo: d.meterSerialNo,
-      meterSize: d.meterSize,
-      customerId: d.customerId,
-      customerName: d.customer?.name || null,
-      category: d.customer?.category || null,
-      address: d.customer?.address || null,
-      gaName: d.customer?.ga?.name || null,
-      gaId: d.customer?.gaId || null,
-      firmwareVersion: d.firmwareVersion,
-      hardwareVersion: d.hardwareVersion,
-      deviceModel: d.deviceModel,
-      configurationVersion: d.configurationVersion,
-      latitude: d.latitude,
-      longitude: d.longitude,
-      pressureUpperLimit: d.pressureUpperLimit,
-      pressureLowerLimit: d.pressureLowerLimit,
-      temperatureUpperLimit: d.temperatureUpperLimit,
-      temperatureLowerLimit: d.temperatureLowerLimit,
-      consumptionUpperLimit: d.consumptionUpperLimit,
-      consumptionLowerLimit: d.consumptionLowerLimit,
-      batteryLowerLimit: d.batteryLowerLimit,
-      firstSeenAt: d.firstSeenAt,
-      lastSeenAt: d.lastSeenAt,
-      status: computeDeviceStatus(d.lastSeenAt, d.alarms, d.customerId),
-      latestReading: latestReading
-        ? {
-            readingDate: latestReading.readingDate.toISOString(),
-            receivedAt: latestReading.receivedAt.toISOString(),
-            correctedVolumeVb: latestReading.correctedVolumeVb,
-            gasPressure: latestReading.gasPressure,
-            gasTemperature: latestReading.gasTemperature,
-            currentFlowRate: latestReading.currentFlowRate,
-            batteryLevel: latestReading.batteryLevel,
-          }
-        : null,
+      id: customer.id,
+      name: customer.name,
+      category: customer.category,
+      address: customer.address,
+      gaId: customer.gaId,
+      gaName: customer.ga?.name || null,
+      deviceCount: devices.length,
+      devices,
     };
   });
 

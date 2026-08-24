@@ -10,9 +10,6 @@ import {
   LayoutGrid,
   List,
   Search,
-  Activity,
-  Gauge,
-  Battery,
   X,
   PlusCircle,
   AlertTriangle,
@@ -81,6 +78,17 @@ interface ExistingCustomer {
   id: string;
   name: string;
   category: string;
+}
+
+interface CustomerGroup {
+  id: string;
+  name: string;
+  category: string | null;
+  address: string | null;
+  gaId: string | null;
+  gaName: string | null;
+  deviceCount: number;
+  devices: DeviceItem[];
 }
 
 type DeviceIdentityDraft = {
@@ -182,7 +190,7 @@ function buildDeviceIdentityPatch(draft: DeviceIdentityDraft): Record<string, st
 }
 
 export default function CustomersPage() {
-  const [devices, setDevices] = useState<DeviceItem[]>([]);
+  const [customers, setCustomers] = useState<CustomerGroup[]>([]);
   const [total, setTotal] = useState(0);
   const [view, setView] = useState<"list" | "grid">("grid");
 
@@ -231,6 +239,7 @@ export default function CustomersPage() {
   const [loadingEditDevices, setLoadingEditDevices] = useState(false);
 
   // Expandable threshold editing (list view) — single-expand (table is paginated)
+  const [expandedCustomerId, setExpandedCustomerId] = useState<string | null>(null);
   const [expandedDeviceId, setExpandedDeviceId] = useState<string | null>(null);
   const [rowThresholds, setRowThresholds] = useState<ThresholdFormValues>(emptyThresholdFormValues());
   const [thresholdError, setThresholdError] = useState("");
@@ -249,7 +258,7 @@ export default function CustomersPage() {
     setLoadingRefs((prev) => prev && false);
   }, []);
 
-  // Fetch Devices
+  // Fetch Customers
   const fetchDevices = useCallback(async () => {
     const params = new URLSearchParams({
       page: page.toString(),
@@ -261,10 +270,10 @@ export default function CustomersPage() {
     if (categoryFilter !== "all") params.append("category", categoryFilter);
     if (gaFilter !== "all") params.append("gaId", gaFilter);
 
-    const res = await fetch(`/api/devices?${params}`);
+    const res = await fetch(`/api/customers/grouped?${params}`);
     if (res.ok) {
       const data = await res.json();
-      setDevices(data.items || []);
+      setCustomers(data.items || []);
       setTotal(data.pagination.totalCount || 0);
     }
   }, [page, search, statusFilter, categoryFilter, gaFilter]);
@@ -293,19 +302,33 @@ export default function CustomersPage() {
 
   const totalPages = Math.ceil(total / limit) || 1;
 
-  const openCustomerEditor = async (device: DeviceItem) => {
-    if (!device.customerId) return;
-    setEditingCustomer(device);
-    setEditCustomerName(device.customerName ?? "");
-    setEditCategory(device.category ?? "RESIDENTIAL");
-    setEditAddress(device.address ?? "");
-    setEditGaId(device.gaId ?? "");
+  const getCustomerStatusSummary = (customer: CustomerGroup) => {
+    if (customer.devices.length === 0) return "NEW";
+    const ordered = ["ALERT", "OFFLINE", "NEW", "ONLINE"] as const;
+    return ordered.find((status) => customer.devices.some((device) => device.status === status)) || "ONLINE";
+  };
+
+  const openCustomerEditor = async (customerLike: CustomerGroup | DeviceItem) => {
+    const customerId = "devices" in customerLike ? customerLike.id : customerLike.customerId;
+    const customerName = "devices" in customerLike ? customerLike.name : customerLike.customerName ?? "";
+    const category = "devices" in customerLike ? customerLike.category ?? "RESIDENTIAL" : customerLike.category ?? "RESIDENTIAL";
+    const address = "devices" in customerLike ? customerLike.address ?? "" : customerLike.address ?? "";
+    const gaId = "devices" in customerLike ? customerLike.gaId ?? "" : customerLike.gaId ?? "";
+    const seedDevice = "devices" in customerLike ? customerLike.devices[0] : customerLike;
+
+    if (!customerId || !seedDevice) return;
+
+    setEditingCustomer(seedDevice);
+    setEditCustomerName(customerName);
+    setEditCategory(category);
+    setEditAddress(address);
+    setEditGaId(gaId);
     setEditError("");
     setExpandedEditDeviceId(null);
-    setEditDeviceDrafts([deviceToIdentityDraft(device)]);
+    setEditDeviceDrafts([deviceToIdentityDraft(seedDevice)]);
     setLoadingEditDevices(true);
     try {
-      const res = await fetch(`/api/customers/${device.customerId}`);
+      const res = await fetch(`/api/customers/${customerId}`);
       if (res.ok) {
         const customer = await res.json();
         const drafts = (customer.devices ?? []).map(
@@ -329,6 +352,26 @@ export default function CustomersPage() {
     } finally {
       setLoadingEditDevices(false);
     }
+  };
+
+  const openAddMeterForCustomer = (customer: CustomerGroup) => {
+    const sourceDevice = customer.devices[0];
+    if (!sourceDevice) return;
+
+    setSelectedDevice(sourceDevice);
+    setProvisionType("existing");
+    setSelectedExistingCustomerId(customer.id);
+    setCustomerName(customer.name);
+    setMeterIdInput(sourceDevice.deviceSerialNo);
+    setDeviceIdInput("");
+    setSelectedCategory(customer.category ?? "RESIDENTIAL");
+    setAddress(customer.address ?? "");
+    setSelectedGaId(customer.gaId ?? gasList[0]?.id ?? "");
+    setLatitudeInput("");
+    setLongitudeInput("");
+    setThresholdValues(emptyThresholdFormValues());
+    setFormError("");
+    setDrawerOpen(true);
   };
 
   const updateEditDeviceDraft = (
@@ -693,73 +736,105 @@ export default function CustomersPage() {
       {/* Grid View */}
       {view === "grid" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {devices.map((device) => (
-            <Card
-              key={device.id}
-              className={`bg-card border-border hover:border-[color:var(--clr-accent-mid)] transition-all shadow-sm flex flex-col justify-between ${device.status === "NEW" ? "border-dashed border-[color:var(--clr-new)]/50 hover:border-[color:var(--clr-new)]" : ""
-                }`}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-base font-bold text-card-foreground truncate max-w-[200px]">
-                      {device.customerName || <span className="text-muted-foreground italic">Unassigned Endpoint</span>}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5 font-mono select-all">
-                      Meter ID: {device.deviceSerialNo}
+          {customers.map((customer) => {
+            const leadingDevice = customer.devices[0];
+            const summaryStatus = getCustomerStatusSummary(customer);
+
+            return (
+              <Card
+                key={customer.id}
+                className="bg-card border-border hover:border-[color:var(--clr-accent-mid)] transition-all shadow-sm flex flex-col justify-between"
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="min-w-0">
+                      <CardTitle className="text-base font-bold text-card-foreground truncate max-w-[200px]">
+                        {customer.name}
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground mt-0.5 font-mono select-all">
+                        {customer.deviceCount} meter{customer.deviceCount === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <Badge
+                      className={
+                        summaryStatus === "ALERT"
+                          ? "bg-[color:var(--clr-alert)]/10 text-[color:var(--clr-alert)] border border-[color:var(--clr-alert)]/25 font-bold"
+                          : summaryStatus === "OFFLINE"
+                            ? "bg-[color:var(--clr-offline)]/10 text-[color:var(--clr-offline)] border border-[color:var(--clr-offline)]/25 font-bold"
+                            : summaryStatus === "NEW"
+                              ? "bg-[color:var(--clr-new)]/10 text-[color:var(--clr-new)] border border-[color:var(--clr-new)]/25 hover:bg-[color:var(--clr-new)] hover:text-[color:var(--sidebar-primary-foreground)] transition-all cursor-default font-bold select-none"
+                              : "bg-[color:var(--clr-online)]/10 text-[color:var(--clr-online)] border border-[color:var(--clr-online)]/25 font-bold"
+                      }
+                    >
+                      {summaryStatus}
+                    </Badge>
+                  </div>
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    <Badge variant="secondary" className="text-[10px] py-0 px-2 font-medium">
+                      {customer.category || "N/A"}
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px] py-0 px-2">
+                      {customer.gaName || "No GA"}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-0">
+                  <div className="space-y-2">
+                    {customer.devices.map((device) => (
+                      <div key={device.id} className="rounded-lg border border-border bg-muted/40 p-2.5">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="font-mono text-[11px] text-muted-foreground truncate">{device.deviceSerialNo}</span>
+                          {renderStatus(device)}
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="text-center">
+                            <span className="text-[9px] uppercase tracking-wider text-muted-foreground block">Flow</span>
+                            <span className="font-mono text-[11px] font-bold text-[color:var(--clr-accent-hi)]">
+                              {fmt(device.latestReading?.currentFlowRate)}
+                            </span>
+                          </div>
+                          <div className="text-center border-x border-border">
+                            <span className="text-[9px] uppercase tracking-wider text-muted-foreground block">Pressure</span>
+                            <span className="font-mono text-[11px] font-bold text-[color:var(--clr-commercial)]">
+                              {fmt(device.latestReading?.gasPressure)}
+                            </span>
+                          </div>
+                          <div className="text-center">
+                            <span className="text-[9px] uppercase tracking-wider text-muted-foreground block">Battery</span>
+                            <span className="font-mono text-[11px] font-bold text-[color:var(--clr-online)]">
+                              {device.latestReading?.batteryLevel != null ? `${Math.round(device.latestReading.batteryLevel)}%` : "—"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="text-xs text-muted-foreground space-y-1.5">
+                    <p className="truncate"><strong>Address:</strong> {customer.address || "—"}</p>
+                    <p>
+                      <strong>Last Updated:</strong>{" "}
+                      {leadingDevice?.latestReading?.receivedAt
+                        ? formatLocalTs(leadingDevice.latestReading.receivedAt)
+                        : (leadingDevice?.lastSeenAt ? formatLocalTs(leadingDevice.lastSeenAt) : "No readings")}
                     </p>
                   </div>
-                  {renderStatus(device)}
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <Badge variant="secondary" className="text-[10px] py-0 px-2 font-medium">
-                    {device.category || "N/A"}
-                  </Badge>
-                  <Badge variant="outline" className="text-[10px] py-0 px-2">
-                    {device.gaName || "No GA"}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-0">
-                {/* Metrics */}
-                <div className="grid grid-cols-3 gap-2 bg-muted p-2.5 rounded-lg border border-border">
-                  <div className="text-center">
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider block font-semibold">Flow</span>
-                    <span className="font-mono text-xs font-bold text-[color:var(--clr-accent-hi)] flex items-center justify-center gap-0.5 mt-0.5">
-                      <Activity className="w-3 h-3" />
-                      {fmt(device.latestReading?.currentFlowRate)}
-                    </span>
-                  </div>
-                  <div className="text-center border-x border-border">
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider block font-semibold">Pressure</span>
-                    <span className="font-mono text-xs font-bold text-[color:var(--clr-commercial)] flex items-center justify-center gap-0.5 mt-0.5">
-                      <Gauge className="w-3 h-3" />
-                      {fmt(device.latestReading?.gasPressure)}
-                    </span>
-                  </div>
-                  <div className="text-center">
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider block font-semibold">Battery</span>
-                    <span className="font-mono text-xs font-bold text-[color:var(--clr-online)] flex items-center justify-center gap-0.5 mt-0.5">
-                      <Battery className="w-3 h-3" />
-                      {device.latestReading?.batteryLevel != null ? `${Math.round(device.latestReading.batteryLevel)}%` : "—"}
-                    </span>
-                  </div>
-                </div>
 
-                <div className="text-xs text-muted-foreground space-y-1.5">
-                  <p className="truncate"><strong>Address:</strong> {device.address || "—"}</p>
-                  <p className="truncate"><strong>Device ID:</strong> <span className="font-mono text-muted-foreground">{device.meterSerialNo || "—"}</span></p>
-                  <p>
-                    <strong>Last Updated:</strong>{" "}
-                    {device.latestReading?.receivedAt
-                      ? formatLocalTs(device.latestReading.receivedAt)
-                      : (device.lastSeenAt ? formatLocalTs(device.lastSeenAt) : "No readings")}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          {devices.length === 0 && (
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
+                    <Button type="button" variant="outline" size="sm" onClick={() => openCustomerEditor(customer)} className="h-8 text-xs">
+                      <Pencil className="mr-1 h-3.5 w-3.5" />
+                      Edit
+                    </Button>
+                    <Button type="button" size="sm" onClick={() => openAddMeterForCustomer(customer)} className="h-8 text-xs bg-[color:var(--clr-accent-hi)] text-[color:var(--accent-foreground)] hover:bg-[color:var(--clr-accent-hi)]">
+                      <PlusCircle className="mr-1 h-3.5 w-3.5" />
+                      Add Meter
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+          {customers.length === 0 && (
             <div className="col-span-full text-center text-muted-foreground py-12">
               No registered endpoints matching the filter criteria.
             </div>
@@ -773,107 +848,211 @@ export default function CustomersPage() {
               <TableHeader className="bg-muted border-b border-border">
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="w-10 text-muted-foreground font-semibold" />
-                  <TableHead className="text-muted-foreground font-semibold">Customer Name</TableHead>
-                  <TableHead className="text-muted-foreground font-semibold">Meter ID</TableHead>
-                  <TableHead className="text-muted-foreground font-semibold">Device ID</TableHead>
+                  <TableHead className="text-muted-foreground font-semibold">Customer</TableHead>
+                  <TableHead className="text-muted-foreground font-semibold">Meters</TableHead>
                   <TableHead className="text-muted-foreground font-semibold">Category</TableHead>
-                  <TableHead className="text-muted-foreground font-semibold">Address</TableHead>
-                  <TableHead className="text-muted-foreground font-semibold">Flow (SCMH)</TableHead>
-                  <TableHead className="text-muted-foreground font-semibold">Pressure</TableHead>
-                  <TableHead className="text-muted-foreground font-semibold">Battery</TableHead>
+                  <TableHead className="text-muted-foreground font-semibold">GA / Address</TableHead>
                   <TableHead className="text-muted-foreground font-semibold">Status</TableHead>
                   <TableHead className="text-right text-muted-foreground font-semibold">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {devices.map((device) => {
-                  const isExpanded = expandedDeviceId === device.id;
+                {customers.map((customer) => {
+                  const isExpanded = expandedCustomerId === customer.id;
+                  const summaryStatus = getCustomerStatusSummary(customer);
+                  const alertCount = customer.devices.filter((device) => device.status === "ALERT").length;
+
                   return (
-                    <Fragment key={device.id}>
+                    <Fragment key={customer.id}>
                       <TableRow className="border-border hover:bg-muted/60">
                         <TableCell className="py-3 w-10">
-                          {device.customerId ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-muted-foreground"
-                              onClick={() => toggleThresholdExpand(device)}
-                              aria-label={isExpanded ? "Collapse thresholds" : "Expand thresholds"}
-                            >
-                              {isExpanded ? (
-                                <ChevronDown className="h-4 w-4" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4" />
-                              )}
-                            </Button>
-                          ) : (
-                            <span className="inline-block w-7" />
-                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground"
+                            onClick={() => setExpandedCustomerId(isExpanded ? null : customer.id)}
+                            aria-label={isExpanded ? "Collapse customer" : "Expand customer"}
+                          >
+                            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </Button>
                         </TableCell>
-                        <TableCell className="font-semibold text-foreground py-3 max-w-[150px] truncate">
-                          {device.customerName || <span className="text-muted-foreground italic">Unassigned</span>}
+                        <TableCell className="font-semibold text-foreground py-3 max-w-[220px]">
+                          <div className="space-y-1">
+                            <p className="truncate">{customer.name}</p>
+                            <div className="flex flex-wrap gap-1">
+                              <Badge variant="outline" className="text-[10px]">{customer.deviceCount} meter{customer.deviceCount === 1 ? "" : "s"}</Badge>
+                              {alertCount > 0 && <Badge className="bg-[color:var(--clr-alert)]/10 text-[color:var(--clr-alert)] border border-[color:var(--clr-alert)]/25 text-[10px]">{alertCount} alert{alertCount === 1 ? "" : "s"}</Badge>}
+                            </div>
+                          </div>
                         </TableCell>
-                        <TableCell className="font-mono text-sm text-muted-foreground select-all">{device.deviceSerialNo}</TableCell>
-                        <TableCell className="font-mono text-sm text-muted-foreground select-all">{device.meterSerialNo || "—"}</TableCell>
+                        <TableCell className="font-mono text-sm text-muted-foreground select-all">{customer.deviceCount}</TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="text-[10px]">{device.category || "—"}</Badge>
+                          <Badge variant="outline" className="text-[10px]">{customer.category || "—"}</Badge>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">{device.address || "—"}</TableCell>
-                        <TableCell className="font-mono text-sm font-semibold text-[color:var(--clr-accent-hi)]">
-                          {fmt(device.latestReading?.currentFlowRate)}
+                        <TableCell className="text-sm text-muted-foreground max-w-[220px]">
+                          <div className="space-y-1">
+                            <p className="truncate">{customer.gaName || "No GA"}</p>
+                            <p className="truncate">{customer.address || "—"}</p>
+                          </div>
                         </TableCell>
-                        <TableCell className="font-mono text-sm font-semibold text-[color:var(--clr-commercial)]">
-                          {device.latestReading?.gasPressure != null ? `${fmt(device.latestReading.gasPressure)} bar` : "—"}
-                        </TableCell>
-                        <TableCell className="font-mono text-sm font-semibold text-[color:var(--clr-online)]">
-                          {device.latestReading?.batteryLevel != null ? `${Math.round(device.latestReading.batteryLevel)}%` : "—"}
-                        </TableCell>
-                        <TableCell className="py-3">{renderStatus(device)}</TableCell>
-                        <TableCell className="py-3 text-right">
-                          {device.customerId && (
-                            <Button type="button" variant="ghost" size="sm" onClick={() => openCustomerEditor(device)} className="text-muted-foreground hover:text-foreground">
-                              <Pencil className="mr-1 h-3.5 w-3.5" />
-                              Edit
-                            </Button>
+                        <TableCell className="py-3">
+                          {summaryStatus === "ALERT" ? (
+                            <Badge className="bg-[color:var(--clr-alert)]/10 text-[color:var(--clr-alert)] border border-[color:var(--clr-alert)]/25 font-bold">
+                              <AlertTriangle className="w-3 h-3 mr-1 animate-bounce" />
+                              ALERT
+                            </Badge>
+                          ) : summaryStatus === "OFFLINE" ? (
+                            <Badge className="bg-[color:var(--clr-offline)]/10 text-[color:var(--clr-offline)] border border-[color:var(--clr-offline)]/25 font-bold">
+                              <X className="w-3 h-3 mr-1" />
+                              OFFLINE
+                            </Badge>
+                          ) : summaryStatus === "NEW" ? (
+                            <Badge className="bg-[color:var(--clr-new)]/10 text-[color:var(--clr-new)] border border-[color:var(--clr-new)]/25 hover:bg-[color:var(--clr-new)] hover:text-[color:var(--sidebar-primary-foreground)] transition-all cursor-default font-bold select-none animate-pulse">
+                              NEW
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-[color:var(--clr-online)]/10 text-[color:var(--clr-online)] border border-[color:var(--clr-online)]/25 font-bold">
+                              <CheckCircle className="w-3 h-3 mr-1 animate-pulse" />
+                              ONLINE
+                            </Badge>
                           )}
+                        </TableCell>
+                        <TableCell className="py-3 text-right">
+                          <Button type="button" variant="ghost" size="sm" onClick={() => openCustomerEditor(customer)} className="text-muted-foreground hover:text-foreground">
+                            <Pencil className="mr-1 h-3.5 w-3.5" />
+                            Edit
+                          </Button>
                         </TableCell>
                       </TableRow>
                       {isExpanded && (
                         <TableRow className="border-border bg-muted/30 hover:bg-muted/30">
-                          <TableCell colSpan={11} className="px-3 py-2.5">
-                            <div className="space-y-2">
+                          <TableCell colSpan={7} className="px-3 py-3">
+                            <div className="space-y-3">
                               <div className="flex items-center justify-between gap-3">
                                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                  Thresholds — {device.deviceSerialNo}
+                                  Devices for {customer.name}
                                 </p>
-                                <div className="flex items-center gap-2">
-                                  {thresholdSavedId === device.id && (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[color:var(--clr-online)]">
-                                      <Check className="h-3 w-3" />
-                                      Saved
-                                    </span>
-                                  )}
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    disabled={savingThresholds}
-                                    onClick={() => saveRowThresholds(device.id)}
-                                    className="h-7 px-3 text-xs bg-[color:var(--clr-accent-hi)] text-[color:var(--accent-foreground)] hover:bg-[color:var(--clr-accent-hi)]"
-                                  >
-                                    {savingThresholds ? "Saving…" : "Save Thresholds"}
-                                  </Button>
-                                </div>
+                                <Button type="button" size="sm" onClick={() => openAddMeterForCustomer(customer)} className="h-7 px-3 text-xs bg-[color:var(--clr-accent-hi)] text-[color:var(--accent-foreground)] hover:bg-[color:var(--clr-accent-hi)]">
+                                  <PlusCircle className="mr-1 h-3.5 w-3.5" />
+                                  Add Meter
+                                </Button>
                               </div>
-                              <ThresholdCardSet
-                                values={rowThresholds}
-                                onChange={(field, value) => {
-                                  setRowThresholds((prev) => ({ ...prev, [field]: value }));
-                                  setThresholdError("");
-                                  setThresholdSavedId(null);
-                                }}
-                                error={thresholdError || null}
-                              />
+                              <div className="rounded-lg border border-border bg-background overflow-hidden">
+                                <Table>
+                                  <TableHeader className="bg-muted border-b border-border">
+                                    <TableRow className="border-border hover:bg-transparent">
+                                      <TableHead className="w-10 text-muted-foreground font-semibold" />
+                                      <TableHead className="text-muted-foreground font-semibold">Customer Name</TableHead>
+                                      <TableHead className="text-muted-foreground font-semibold">Meter ID</TableHead>
+                                      <TableHead className="text-muted-foreground font-semibold">Device ID</TableHead>
+                                      <TableHead className="text-muted-foreground font-semibold">Category</TableHead>
+                                      <TableHead className="text-muted-foreground font-semibold">Address</TableHead>
+                                      <TableHead className="text-muted-foreground font-semibold">Flow (SCMH)</TableHead>
+                                      <TableHead className="text-muted-foreground font-semibold">Pressure</TableHead>
+                                      <TableHead className="text-muted-foreground font-semibold">Battery</TableHead>
+                                      <TableHead className="text-muted-foreground font-semibold">Status</TableHead>
+                                      <TableHead className="text-right text-muted-foreground font-semibold">Actions</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {customer.devices.map((device) => {
+                                      const isDeviceExpanded = expandedDeviceId === device.id;
+
+                                      return (
+                                        <Fragment key={device.id}>
+                                          <TableRow className="border-border hover:bg-muted/60">
+                                            <TableCell className="py-3 w-10">
+                                              {device.customerId ? (
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="h-7 w-7 text-muted-foreground"
+                                                  onClick={() => toggleThresholdExpand(device)}
+                                                  aria-label={isDeviceExpanded ? "Collapse thresholds" : "Expand thresholds"}
+                                                >
+                                                  {isDeviceExpanded ? (
+                                                    <ChevronDown className="h-4 w-4" />
+                                                  ) : (
+                                                    <ChevronRight className="h-4 w-4" />
+                                                  )}
+                                                </Button>
+                                              ) : (
+                                                <span className="inline-block w-7" />
+                                              )}
+                                            </TableCell>
+                                            <TableCell className="font-semibold text-foreground py-3 max-w-[150px] truncate">
+                                              {device.customerName || customer.name}
+                                            </TableCell>
+                                            <TableCell className="font-mono text-sm text-muted-foreground select-all">{device.deviceSerialNo}</TableCell>
+                                            <TableCell className="font-mono text-sm text-muted-foreground select-all">{device.meterSerialNo || "—"}</TableCell>
+                                            <TableCell>
+                                              <Badge variant="outline" className="text-[10px]">{device.category || "—"}</Badge>
+                                            </TableCell>
+                                            <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">{device.address || "—"}</TableCell>
+                                            <TableCell className="font-mono text-sm font-semibold text-[color:var(--clr-accent-hi)]">
+                                              {fmt(device.latestReading?.currentFlowRate)}
+                                            </TableCell>
+                                            <TableCell className="font-mono text-sm font-semibold text-[color:var(--clr-commercial)]">
+                                              {device.latestReading?.gasPressure != null ? `${fmt(device.latestReading.gasPressure)} bar` : "—"}
+                                            </TableCell>
+                                            <TableCell className="font-mono text-sm font-semibold text-[color:var(--clr-online)]">
+                                              {device.latestReading?.batteryLevel != null ? `${Math.round(device.latestReading.batteryLevel)}%` : "—"}
+                                            </TableCell>
+                                            <TableCell className="py-3">{renderStatus(device)}</TableCell>
+                                            <TableCell className="py-3 text-right">
+                                              <Button type="button" variant="ghost" size="sm" onClick={() => openCustomerEditor(customer)} className="text-muted-foreground hover:text-foreground">
+                                                <Pencil className="mr-1 h-3.5 w-3.5" />
+                                                Edit
+                                              </Button>
+                                            </TableCell>
+                                          </TableRow>
+                                          {isDeviceExpanded && (
+                                            <TableRow className="border-border bg-muted/30 hover:bg-muted/30">
+                                              <TableCell colSpan={11} className="px-3 py-2.5">
+                                                <div className="space-y-2">
+                                                  <div className="flex items-center justify-between gap-3">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                                      Thresholds — {device.deviceSerialNo}
+                                                    </p>
+                                                    <div className="flex items-center gap-2">
+                                                      {thresholdSavedId === device.id && (
+                                                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[color:var(--clr-online)]">
+                                                          <Check className="h-3 w-3" />
+                                                          Saved
+                                                        </span>
+                                                      )}
+                                                      <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        disabled={savingThresholds}
+                                                        onClick={() => saveRowThresholds(device.id)}
+                                                        className="h-7 px-3 text-xs bg-[color:var(--clr-accent-hi)] text-[color:var(--accent-foreground)] hover:bg-[color:var(--clr-accent-hi)]"
+                                                      >
+                                                        {savingThresholds ? "Saving…" : "Save Thresholds"}
+                                                      </Button>
+                                                    </div>
+                                                  </div>
+                                                  <ThresholdCardSet
+                                                    values={rowThresholds}
+                                                    onChange={(field, value) => {
+                                                      setRowThresholds((prev) => ({ ...prev, [field]: value }));
+                                                      setThresholdError("");
+                                                      setThresholdSavedId(null);
+                                                    }}
+                                                    error={thresholdError || null}
+                                                  />
+                                                </div>
+                                              </TableCell>
+                                            </TableRow>
+                                          )}
+                                        </Fragment>
+                                      );
+                                    })}
+                                  </TableBody>
+                                </Table>
+                              </div>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -881,9 +1060,9 @@ export default function CustomersPage() {
                     </Fragment>
                   );
                 })}
-                {devices.length === 0 && (
+                {customers.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground text-sm">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">
                       No registered endpoints found.
                     </TableCell>
                   </TableRow>
