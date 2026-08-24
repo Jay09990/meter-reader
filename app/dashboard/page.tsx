@@ -189,9 +189,6 @@ export default function OverviewPage() {
         return res.json();
       })
       .then((d) => {
-        setData((prev) =>
-          prev ? { ...prev, consumption: d.consumption } : { consumption: d.consumption }
-        );
         setLoadingConsumption(false);
       })
       .catch(() => {
