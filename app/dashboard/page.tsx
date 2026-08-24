@@ -156,18 +156,19 @@ export default function OverviewPage() {
   const [consumptionPeriod, setConsumptionPeriod] = useState<ConsumptionMode>("daily");
   const [kpiRange, setKpiRange] = useState<KpiRange>("today");
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadingConsumption, setLoadingConsumption] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchOverview = useCallback(() => {
     setLoading(true);
     setError(null);
-    fetch(`/api/overview?period=${consumptionPeriod}&range=${kpiRange}`)
+    fetch(`/api/overview?range=${kpiRange}`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load overview data");
         return res.json();
       })
       .then((d) => {
-        setData(d);
+        setData((prev) => (prev ? { ...prev, ...d } : d));
         setLoading(false);
       })
       .catch((err) => {
@@ -178,12 +179,33 @@ export default function OverviewPage() {
       .then((res) => (res.ok ? res.json() : null))
       .then((status) => setMaxMeterCapacity(status?.maxCapacity ?? null))
       .catch(() => {});
-  }, [consumptionPeriod, kpiRange]);
+  }, [kpiRange]);
+
+  const fetchConsumptionSeries = useCallback(() => {
+    setLoadingConsumption(true);
+    fetch(`/api/overview/consumption?period=${consumptionPeriod}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load consumption data");
+        return res.json();
+      })
+      .then((d) => {
+        setData((prev) =>
+          prev ? { ...prev, consumption: d.consumption } : { consumption: d.consumption }
+        );
+        setLoadingConsumption(false);
+      })
+      .catch(() => {
+        setLoadingConsumption(false);
+      });
+  }, [consumptionPeriod]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchOverview();
   }, [fetchOverview]);
+
+  useEffect(() => {
+    fetchConsumptionSeries();
+  }, [fetchConsumptionSeries]);
 
   useAutoRefresh(fetchOverview);
 
@@ -193,10 +215,16 @@ export default function OverviewPage() {
     label: humanCategoryLabel(item.category),
     color: categoryColors[item.category] ?? "var(--clr-accent-mid)",
   }));
+  const hasCategoryData =
+    categorySeries.length > 0 &&
+    categorySeries.some((item) => (item.totalVolume ?? 0) > 0);
   const consumptionSeries = (data?.consumption ?? []).map((item) => ({
     ...item,
     value: Number(item.value ?? 0),
   }));
+  const hasConsumptionData =
+    consumptionSeries.length > 0 &&
+    consumptionSeries.some((item) => item.value > 0);
   const peakConsumptionValue = Math.max(...consumptionSeries.map((item) => item.value), 0);
   const consumptionTicks = pickTicks(consumptionSeries.map((item) => item.label), tickCountForMode(consumptionPeriod));
   const gaSeries = (data?.consumptionByGa ?? []).slice(0, 8);
@@ -354,6 +382,15 @@ export default function OverviewPage() {
                 <RefreshCw className="h-4 w-4 animate-spin mr-2" style={{ color: "var(--clr-accent-mid)" }} />
                 Loading consumption…
               </div>
+            ) : !hasConsumptionData ? (
+              <div className="flex h-full flex-col items-center justify-center text-sm text-muted-foreground">
+                <p className="text-center text-muted-foreground">
+                  No consumption data is available for the selected range.
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Adjust the time period or range above to see the chart.
+                </p>
+              </div>
             ) : (
               <ChartContainer config={{ value: { label: "Consumption", color: "var(--chart-1)" } }} className="h-full w-full">
                 <BarChart data={consumptionSeries}>
@@ -380,34 +417,50 @@ export default function OverviewPage() {
             <CardTitle className="text-lg font-semibold text-foreground">Consumption by Category</CardTitle>
           </CardHeader>
           <CardContent className="h-80">
-            <ChartContainer
-              config={Object.fromEntries(
-                categorySeries.map((category) => [
-                  category.category,
-                  { label: category.label, color: category.color },
-                ])
-              )}
-              className="h-full w-full"
-            >
-              <PieChart>
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Pie
-                  data={categorySeries}
-                  dataKey="totalVolume"
-                  nameKey="label"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius="70%"
-                  paddingAngle={2}
-                  label={({ name, value }) => `${name}: ${fmt(Number(value), 0)}`}
-                  labelLine={{ stroke: "var(--muted-foreground)", strokeWidth: 1 }}
-                >
-                  {categorySeries.map((entry) => (
-                    <Cell key={entry.category} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ChartContainer>
+            {loading ? (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                <RefreshCw className="h-4 w-4 animate-spin mr-2" style={{ color: "var(--clr-accent-mid)" }} />
+                Loading consumption…
+              </div>
+            ) : !hasCategoryData ? (
+              <div className="flex h-full flex-col items-center justify-center text-sm text-muted-foreground">
+                <p className="text-center text-muted-foreground">
+                  No consumption data is available for the selected range.
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Adjust the time period or range above to see the breakdown by category.
+                </p>
+              </div>
+            ) : (
+              <ChartContainer
+                config={Object.fromEntries(
+                  categorySeries.map((category) => [
+                    category.category,
+                    { label: category.label, color: category.color },
+                  ])
+                )}
+                className="h-full w-full"
+              >
+                <PieChart>
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Pie
+                    data={categorySeries}
+                    dataKey="totalVolume"
+                    nameKey="label"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius="70%"
+                    paddingAngle={2}
+                    label={({ name, value }) => `${name}: ${fmt(Number(value), 0)}`}
+                    labelLine={{ stroke: "var(--muted-foreground)", strokeWidth: 1 }}
+                  >
+                    {categorySeries.map((entry) => (
+                      <Cell key={entry.category} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+            )}
           </CardContent>
         </Card>
       </div>
