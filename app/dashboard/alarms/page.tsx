@@ -58,6 +58,7 @@ export default function AlarmsPage() {
     totalPages: 1,
   });
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [alarmView, setAlarmView] = useState<"unseen" | "acknowledged">("unseen");
   const [statusFilter, setStatusFilter] = useState<string>("OPEN");
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -71,6 +72,7 @@ export default function AlarmsPage() {
       const params = new URLSearchParams({
         page: pageNum.toString(),
         limit: "10",
+        acknowledged: alarmView === "acknowledged" ? "true" : "false",
       });
 
       if (typeFilter !== "all") params.append("type", typeFilter);
@@ -93,7 +95,7 @@ export default function AlarmsPage() {
           setLoading(false);
         });
     },
-    [typeFilter, statusFilter, severityFilter, searchQuery]
+    [alarmView, typeFilter, statusFilter, severityFilter, searchQuery]
   );
 
   useEffect(() => {
@@ -147,6 +149,35 @@ export default function AlarmsPage() {
             Refresh Alarms
           </Button>
         </div>
+      </div>
+
+      <div className="flex w-fit rounded-lg border border-border bg-card p-1" role="tablist" aria-label="Alarm categories">
+        <Button
+          type="button"
+          role="tab"
+          aria-selected={alarmView === "unseen"}
+          variant={alarmView === "unseen" ? "default" : "ghost"}
+          size="sm"
+          onClick={() => {
+            setAlarmView("unseen");
+            setStatusFilter("OPEN");
+          }}
+        >
+          Unseen alarms
+        </Button>
+        <Button
+          type="button"
+          role="tab"
+          aria-selected={alarmView === "acknowledged"}
+          variant={alarmView === "acknowledged" ? "default" : "ghost"}
+          size="sm"
+          onClick={() => {
+            setAlarmView("acknowledged");
+            setStatusFilter("all");
+          }}
+        >
+          Acknowledged alarms
+        </Button>
       </div>
 
       {/* Filter Controls */}

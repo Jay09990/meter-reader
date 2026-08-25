@@ -140,6 +140,7 @@ model Alarm {
   forDate        DateTime
   status         AlarmStatus   @default(OPEN)
   acknowledged   Boolean       @default(false)
+  acknowledgedAt DateTime?
   createdAt      DateTime      @default(now())
 
   @@unique([deviceId, type, forDate])

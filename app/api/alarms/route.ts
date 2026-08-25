@@ -24,8 +24,15 @@ export async function GET(req: NextRequest) {
       : undefined;
 
     const search = searchParams.get("search") || undefined;
+    const acknowledgedParam = searchParams.get("acknowledged");
+    const acknowledged =
+      acknowledgedParam === "true"
+        ? true
+        : acknowledgedParam === "false"
+          ? false
+          : undefined;
 
-    const result = await getPaginatedAlarms({ page, limit, status, type, severity, search });
+    const result = await getPaginatedAlarms({ page, limit, status, type, severity, search, acknowledged });
     return NextResponse.json(result, { status: 200 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to fetch alarms";

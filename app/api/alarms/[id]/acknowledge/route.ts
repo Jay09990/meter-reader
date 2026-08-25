@@ -7,7 +7,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     console.log("Incoming POST /api/alarms/[id]/acknowledge", { id, url: req.url, headers: Object.fromEntries(req.headers) });
     const alarm = await db.alarm.update({
       where: { id },
-      data: { acknowledged: true },
+      data: { acknowledged: true, acknowledgedAt: new Date() },
     });
     return NextResponse.json(alarm);
   } catch (err: unknown) {
