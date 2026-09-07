@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { parseIngestPayload } from "./parser";
-import { checkGasOutOfRangeAlarm } from "./alarm-check";
+import { checkGasOutOfRangeAlarm, checkMeterFailureAlarm } from "./alarm-check";
 import { Prisma } from "@prisma/client";
 import { getMaxMeterCapacity, recordRejectedConnection } from "@/features/system-capacity/service";
 import { checkDeviceThresholds } from "@/features/alarms/threshold-check";
@@ -105,6 +105,9 @@ export async function processIngestPayload(rawBody: unknown) {
     batteryLevel: parsed.batteryLevel ?? null,
     correctedVolumeVb: parsed.correctedVolumeVb ?? null,
   });
+  // Check for meter failure: fires when uncorrected consumption diverges from
+  // corrected consumption by >= 0.1 in today's delta (not raw totalizer).
+  await checkMeterFailureAlarm(device.id, parsed.readingDate, parsed.correctedVolumeVb, parsed.uncorrectedVolumeVm);
 
   return {
     success: true,

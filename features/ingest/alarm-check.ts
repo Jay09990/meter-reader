@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { AlarmType } from "@prisma/client";
 import { notifyAlarmCreated } from "@/features/alarms/notify";
+import { toIsoDate } from "@/lib/financial-calendar";
 
 export async function checkGasOutOfRangeAlarm(
   deviceId: string,
@@ -105,3 +106,116 @@ export async function checkGasOutOfRangeAlarm(
     }
   }
 }
+
+/**
+ * Fires a CRITICAL METER_FAILURE alarm when a meter's uncorrected volume
+ * consumption diverges from its corrected volume consumption by >= 0.1 Sm³
+ * in a single day.
+ *
+ * Formula (today's delta basis, not raw totalizers):
+ *   correctedDelta   = currentVb − yesterdayVb
+ *   uncorrectedDelta = currentVm − yesterdayVm
+ *   if (uncorrectedDelta − correctedDelta) >= 0.1  →  METER_FAILURE
+ *
+ * Both deltas must be non-negative (skip on meter-reset / rollover readings).
+ * If yesterday's boundary reading is missing for either volume, the check is
+ * skipped — not enough data to compute a reliable delta.
+ */
+export async function checkMeterFailureAlarm(
+  deviceId: string,
+  readingDate: Date,
+  currentVb: number | undefined | null,
+  currentVm: number | undefined | null,
+): Promise<void> {
+  // Both volumes required to compare
+  if (currentVb == null || currentVm == null) return;
+
+  // Resolve yesterday's boundary date (same pattern as threshold-check.ts)
+  const yesterday = new Date(readingDate.getTime() - 86_400_000);
+  const yesterdayIso = toIsoDate(yesterday);
+
+  // Fetch the latest reading on or before yesterday for each volume in one query
+  const prevReading = await db.reading.findFirst({
+    where: {
+      deviceId,
+      readingDate: { lte: yesterday },
+      correctedVolumeVb: { not: null },
+      uncorrectedVolumeVm: { not: null },
+    },
+    orderBy: [{ readingDate: "desc" }, { receivedAt: "desc" }],
+    select: { correctedVolumeVb: true, uncorrectedVolumeVm: true },
+  });
+
+  if (!prevReading) return; // no baseline yet
+
+  const prevVb = prevReading.correctedVolumeVb as number;
+  const prevVm = prevReading.uncorrectedVolumeVm as number;
+
+  const correctedDelta   = currentVb - prevVb;
+  const uncorrectedDelta = currentVm - prevVm;
+
+  // Skip on negative deltas (meter reset / replacement)
+  if (correctedDelta < 0 || uncorrectedDelta < 0) return;
+
+  const divergence = uncorrectedDelta - correctedDelta;
+
+  if (divergence < 0.1) return; // within acceptable tolerance
+
+  const cause =
+    `Meter failure detected for ${yesterdayIso} → ${readingDate.toISOString().split("T")[0]}: ` +
+    `uncorrected consumption (${uncorrectedDelta.toFixed(3)} m³) exceeds corrected consumption ` +
+    `(${correctedDelta.toFixed(3)} Sm³) by ${divergence.toFixed(3)} — threshold is 0.1.`;
+
+  const device = await db.device.findUnique({
+    where: { id: deviceId },
+    select: {
+      deviceSerialNo: true,
+      meterSerialNo: true,
+      customer: { select: { name: true, ga: { select: { name: true } } } },
+    },
+  });
+
+  const existing = await db.alarm.findUnique({
+    where: { deviceId_type_forDate: { deviceId, type: AlarmType.METER_FAILURE, forDate: readingDate } },
+  });
+
+  if (existing) {
+    // Update the divergence value on a re-push for the same date
+    await db.alarm.update({
+      where: { id: existing.id },
+      data: { gasValue: divergence, averageValue: 0.1, cause, status: "OPEN" },
+    });
+    return;
+  }
+
+  await db.alarm.create({
+    data: {
+      deviceId,
+      type: AlarmType.METER_FAILURE,
+      severity: "CRITICAL",
+      forDate: readingDate,
+      gasValue: divergence,       // the actual divergence value
+      averageValue: 0.1,          // the threshold
+      cause,
+      status: "OPEN",
+    },
+  });
+
+  if (device) {
+    await notifyAlarmCreated({
+      deviceSerialNo: device.deviceSerialNo,
+      type: AlarmType.METER_FAILURE,
+      severity: "CRITICAL",
+      cause,
+      forDate: readingDate,
+      meterSerialNo: device.meterSerialNo,
+      customerName: device.customer?.name,
+      gaName: device.customer?.ga?.name,
+      measuredValue: Number(divergence.toFixed(3)),
+      unit: "m³",
+      thresholdValue: 0.1,
+      thresholdDirection: "above",
+    });
+  }
+}
+

@@ -116,6 +116,7 @@ enum AlarmType {
   CONSUMPTION_OUT_OF_RANGE
   BATTERY_LOW
   NO_CONSUMPTION
+  METER_FAILURE 
 }
 
 enum AlarmSeverity {

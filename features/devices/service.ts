@@ -599,3 +599,28 @@ export async function getDeviceConsumptionSeries(
 
   return buildConsumptionSeries(mode, makeDeviceBoundaryResolver(device.id));
 }
+
+/**
+ * Same as getDeviceConsumptionSeries but uses uncorrectedVolumeVm as the
+ * totalizer — produces delta-based consumption buckets for the raw (uncorrected)
+ * meter volume, following the same boundary-reading pattern as the corrected series.
+ */
+export async function getDeviceConsumptionSeriesUncorrected(
+  deviceIdOrSerial: string,
+  mode: import("@/lib/consumption-series").ConsumptionMode,
+) {
+  const device = await db.device.findFirst({
+    where: {
+      OR: [{ id: deviceIdOrSerial }, { deviceSerialNo: deviceIdOrSerial }],
+    },
+    select: { id: true },
+  });
+
+  if (!device) return [];
+
+  const { buildConsumptionSeries } = await import("@/lib/consumption-series");
+  const { makeDeviceBoundaryResolverUncorrected } = await import("@/lib/boundary-readings");
+
+  return buildConsumptionSeries(mode, makeDeviceBoundaryResolverUncorrected(device.id));
+}
+

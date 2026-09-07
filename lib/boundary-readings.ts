@@ -1,11 +1,14 @@
 /**
  * lib/boundary-readings.ts
  *
- * Efficient DB helpers for resolving "latest correctedVolumeVb on or before
- * a given date" without per-device loops.
+ * Efficient DB helpers for resolving the latest boundary reading for a given
+ * date — for both correctedVolumeVb and uncorrectedVolumeVm.
  *
- * Fleet-wide: one $queryRaw with DISTINCT ON per boundary date (PostgreSQL).
+ * Fleet-wide (corrected only): one $queryRaw with DISTINCT ON per boundary date.
  * Single-device: a plain findFirst per boundary (fine at ≤14 queries / device).
+ *
+ * Uncorrected variants mirror the corrected helpers exactly, substituting
+ * uncorrectedVolumeVm for correctedVolumeVb.
  */
 
 import { db } from "./db";
@@ -147,6 +150,51 @@ export function makeDeviceBoundaryResolver(
   return async (isoDate: string) => {
     if (!cache.has(isoDate)) {
       cache.set(isoDate, await getDeviceBoundaryReading(deviceId, isoDate));
+    }
+    return cache.get(isoDate)!;
+  };
+}
+
+// ─── Single-device resolver (uncorrected volume) ──────────────────────────────
+
+/**
+ * For a single device, return its uncorrectedVolumeVm from the latest reading
+ * with readingDate <= isoDate. Returns null if no qualifying reading exists.
+ *
+ * Mirrors getDeviceBoundaryReading but uses uncorrectedVolumeVm instead of
+ * correctedVolumeVb.
+ */
+export async function getDeviceBoundaryReadingUncorrected(
+  deviceId: string,
+  isoDate: string,
+): Promise<number | null> {
+  const reading = await db.reading.findFirst({
+    where: {
+      deviceId,
+      readingDate: { lte: new Date(isoDate) },
+      uncorrectedVolumeVm: { not: null },
+    },
+    orderBy: [
+      { readingDate: "desc" },
+      { receivedAt: "desc" },
+    ],
+    select: { uncorrectedVolumeVm: true },
+  });
+  return reading?.uncorrectedVolumeVm ?? null;
+}
+
+/**
+ * Build a BoundaryResolver for a single device's uncorrected volume
+ * (with caching — same pattern as makeDeviceBoundaryResolver).
+ */
+export function makeDeviceBoundaryResolverUncorrected(
+  deviceId: string,
+): (isoDate: string) => Promise<number | null> {
+  const cache = new Map<string, number | null>();
+
+  return async (isoDate: string) => {
+    if (!cache.has(isoDate)) {
+      cache.set(isoDate, await getDeviceBoundaryReadingUncorrected(deviceId, isoDate));
     }
     return cache.get(isoDate)!;
   };
