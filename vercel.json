@@ -3,10 +3,6 @@
     {
       "path": "/api/cron/missing-data-alarms",
       "schedule": "0 1 * * *"
-    },
-    {
-      "path": "/api/cron/delete-acknowledged-alarms",
-      "schedule": "0 * * * *"
     }
   ]
 }
