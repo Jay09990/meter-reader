@@ -203,6 +203,19 @@ export default function CustomersPage() {
   const [gasList, setGasList] = useState<GeographicalArea[]>([]);
   const [loadingRefs, setLoadingRefs] = useState(true);
 
+  // Add Customer Modal States
+  const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
+  const [newCustName, setNewCustName] = useState("");
+  const [newCustCategory, setNewCustCategory] = useState("RESIDENTIAL");
+  const [newCustGaId, setNewCustGaId] = useState("");
+  const [newCustAddress, setNewCustAddress] = useState("");
+  const [newCustError, setNewCustError] = useState("");
+  const [savingNewCust, setSavingNewCust] = useState(false);
+
+  // Unassigned Devices for Meter Assignment
+  const [unassignedDevices, setUnassignedDevices] = useState<DeviceItem[]>([]);
+  const [fetchingUnassigned, setFetchingUnassigned] = useState(false);
+
   // Drawer States
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState<DeviceItem | null>(null);
@@ -354,15 +367,78 @@ export default function CustomersPage() {
     }
   };
 
-  const openAddMeterForCustomer = (customer: CustomerGroup) => {
-    const sourceDevice = customer.devices[0];
-    if (!sourceDevice) return;
+  const openAddCustomerModal = () => {
+    setNewCustName("");
+    setNewCustCategory("RESIDENTIAL");
+    setNewCustGaId(gasList[0]?.id || "");
+    setNewCustAddress("");
+    setNewCustError("");
+    setAddCustomerModalOpen(true);
+  };
 
-    setSelectedDevice(sourceDevice);
+  const handleAddCustomerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCustName.trim()) {
+      setNewCustError("Customer name is required.");
+      return;
+    }
+    if (!newCustGaId) {
+      setNewCustError("Geographical area (City) is required.");
+      return;
+    }
+
+    setSavingNewCust(true);
+    setNewCustError("");
+
+    try {
+      const res = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newCustName.trim(),
+          category: newCustCategory,
+          gaId: newCustGaId,
+          address: newCustAddress.trim() || null,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create customer");
+
+      setAddCustomerModalOpen(false);
+      fetchDevices();
+      fetchExistingCustomers();
+    } catch (err: unknown) {
+      setNewCustError(err instanceof Error ? err.message : "Failed to create customer");
+    } finally {
+      setSavingNewCust(false);
+    }
+  };
+
+  const fetchUnassignedDevices = async () => {
+    setFetchingUnassigned(true);
+    try {
+      const res = await fetch("/api/devices?status=new&limit=100");
+      if (res.ok) {
+        const data = await res.json();
+        setUnassignedDevices(data.items || []);
+        return data.items || [];
+      }
+    } catch {
+      // Fallback
+    } finally {
+      setFetchingUnassigned(false);
+    }
+    return [];
+  };
+
+  const openAddMeterForCustomer = async (customer: CustomerGroup) => {
+    const existingDevice = customer.devices[0] || null;
+    setSelectedDevice(existingDevice);
     setProvisionType("existing");
     setSelectedExistingCustomerId(customer.id);
     setCustomerName(customer.name);
-    setMeterIdInput(sourceDevice.deviceSerialNo);
+    setMeterIdInput(existingDevice?.deviceSerialNo || "");
     setDeviceIdInput("");
     setSelectedCategory(customer.category ?? "RESIDENTIAL");
     setAddress(customer.address ?? "");
@@ -372,6 +448,15 @@ export default function CustomersPage() {
     setThresholdValues(emptyThresholdFormValues());
     setFormError("");
     setDrawerOpen(true);
+
+    const unassigned = await fetchUnassignedDevices();
+    if (!existingDevice && unassigned.length > 0) {
+      setSelectedDevice(unassigned[0]);
+      setMeterIdInput(unassigned[0].deviceSerialNo);
+      if (unassigned[0].latitude) setLatitudeInput(String(unassigned[0].latitude));
+      if (unassigned[0].longitude) setLongitudeInput(String(unassigned[0].longitude));
+      setThresholdValues(thresholdFormFromDevice(unassigned[0]));
+    }
   };
 
   const updateEditDeviceDraft = (
@@ -506,7 +591,11 @@ export default function CustomersPage() {
   // Submit Provisioning Form
   const handleProvisionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDevice) return;
+    const targetDeviceId = selectedDevice?.id || meterIdInput.trim();
+    if (!targetDeviceId) {
+      setFormError("Please select an available meter or enter a meter serial number.");
+      return;
+    }
 
     if (provisionType === "new" && !customerName.trim()) {
       setFormError("Customer name is required.");
@@ -544,7 +633,8 @@ export default function CustomersPage() {
   };
 
   const confirmProvisioning = async () => {
-    if (!selectedDevice) return;
+    const targetDeviceId = selectedDevice?.id || meterIdInput.trim();
+    if (!targetDeviceId) return;
 
     setSubmitting(true);
     setFormError("");
@@ -573,7 +663,7 @@ export default function CustomersPage() {
         bodyPayload.gaId = selectedGaId;
       }
 
-      const res = await fetch(`/api/devices/${selectedDevice.id}/assign`, {
+      const res = await fetch(`/api/devices/${targetDeviceId}/assign`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(bodyPayload),
@@ -656,25 +746,34 @@ export default function CustomersPage() {
             Registered endpoints - Industrial, Commercial, Residential, and DRS.
           </p>
         </div>
-        <div className="flex space-x-2 bg-secondary p-1.5 rounded-lg border border-border">
+        <div className="flex items-center space-x-3">
           <Button
-            variant={view === "grid" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setView("grid")}
-            className="h-8 px-3 text-xs"
+            onClick={openAddCustomerModal}
+            className="h-9 px-4 text-xs font-semibold bg-[color:var(--clr-accent-hi)] text-[color:var(--accent-foreground)] hover:bg-[color:var(--clr-accent-hi)]/90 shadow-sm"
           >
-            <LayoutGrid className="w-3.5 h-3.5 mr-1.5" />
-            Grid View
+            <PlusCircle className="w-4 h-4 mr-1.5" />
+            Add Customer
           </Button>
-          <Button
-            variant={view === "list" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setView("list")}
-            className="h-8 px-3 text-xs"
-          >
-            <List className="w-3.5 h-3.5 mr-1.5" />
-            List View
-          </Button>
+          <div className="flex space-x-1 bg-secondary p-1 rounded-lg border border-border">
+            <Button
+              variant={view === "grid" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setView("grid")}
+              className="h-8 px-3 text-xs"
+            >
+              <LayoutGrid className="w-3.5 h-3.5 mr-1.5" />
+              Grid View
+            </Button>
+            <Button
+              variant={view === "list" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setView("list")}
+              className="h-8 px-3 text-xs"
+            >
+              <List className="w-3.5 h-3.5 mr-1.5" />
+              List View
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -1269,23 +1368,137 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* Slide-out Sidebar Drawer Form (Sheet Alternative) */}
-      {drawerOpen && selectedDevice && (
+      {/* Add New Customer Modal */}
+      {addCustomerModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <Card className="w-full max-w-md bg-background border border-border shadow-2xl animate-in zoom-in-95">
+            <CardHeader className="flex flex-row items-center justify-between border-b border-border pb-4">
+              <div>
+                <CardTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <PlusCircle className="w-5 h-5 text-[color:var(--clr-accent-hi)]" />
+                  Add New Customer
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Create a customer profile to manage meters, locations, and stations.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setAddCustomerModalOpen(false)}
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <form onSubmit={handleAddCustomerSubmit} className="space-y-4">
+                {newCustError && (
+                  <div className="p-3 rounded-lg bg-[color:var(--clr-alert)]/10 border border-[color:var(--clr-alert)]/20 text-[color:var(--clr-alert)] text-xs font-semibold">
+                    {newCustError}
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Customer Name <span className="text-[color:var(--clr-alert)]">*</span>
+                  </label>
+                  <Input
+                    placeholder="e.g. Acme Industrial Ltd"
+                    value={newCustName}
+                    onChange={(e) => setNewCustName(e.target.value)}
+                    required
+                    className="bg-muted border-border text-foreground text-sm"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Category <span className="text-[color:var(--clr-alert)]">*</span>
+                    </label>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-border bg-muted px-3 text-sm text-foreground focus:outline-none focus:border-[color:var(--clr-accent-hi)]"
+                      value={newCustCategory}
+                      onChange={(e) => setNewCustCategory(e.target.value)}
+                    >
+                      <option value="INDUSTRIAL">Industrial</option>
+                      <option value="COMMERCIAL">Commercial</option>
+                      <option value="RESIDENTIAL">Residential</option>
+                      <option value="DRS">DRS</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Geographical Area (City) <span className="text-[color:var(--clr-alert)]">*</span>
+                    </label>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-border bg-muted px-3 text-sm text-foreground focus:outline-none focus:border-[color:var(--clr-accent-hi)]"
+                      value={newCustGaId}
+                      onChange={(e) => setNewCustGaId(e.target.value)}
+                      required
+                    >
+                      <option value="" disabled>Select a city…</option>
+                      {gasList.map((ga) => (
+                        <option key={ga.id} value={ga.id}>{ga.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Address
+                  </label>
+                  <Input
+                    placeholder="Enter full address..."
+                    value={newCustAddress}
+                    onChange={(e) => setNewCustAddress(e.target.value)}
+                    className="bg-muted border-border text-foreground text-sm"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-3 border-t border-border">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setAddCustomerModalOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={savingNewCust}
+                    className="bg-[color:var(--clr-accent-hi)] hover:bg-[color:var(--clr-accent-hi)] text-[color:var(--accent-foreground)] font-semibold"
+                  >
+                    {savingNewCust ? "Saving…" : "Create Customer"}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Slide-out Sidebar Drawer Form (Add Meter / Provisioning) */}
+      {drawerOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm transition-all duration-300">
           {/* Backdrop click to close */}
           <div className="absolute inset-0" onClick={() => setDrawerOpen(false)} />
 
-          <div className="relative w-full max-w-md h-full bg-background border-l border-border p-6 shadow-2xl flex flex-col justify-between overflow-y-auto transform transition-all duration-300 animate-in slide-in-from-right">
+          <div className="relative w-full max-w-lg h-full bg-background border-l border-border p-6 shadow-2xl flex flex-col justify-between overflow-y-auto transform transition-all duration-300 animate-in slide-in-from-right">
             <div>
               {/* Drawer Header */}
               <div className="flex justify-between items-center border-b border-border pb-4 mb-6">
                 <div>
                   <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                     <PlusCircle className="w-5 h-5 text-[color:var(--clr-accent-hi)]" />
-                    Provision Endpoint
+                    {provisionType === "existing" ? `Add Meter to ${customerName || "Customer"}` : "Provision Endpoint"}
                   </h2>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Complete assignment for newly registered gas meter.
+                    Assign a gas meter hardware endpoint and set operational limits.
                   </p>
                 </div>
                 <Button
@@ -1307,21 +1520,58 @@ export default function CustomersPage() {
 
               {/* Drawer Form */}
               <form id="provision-form" onSubmit={handleProvisionSubmit} className="space-y-4">
-                {/* Meter ID (Prefilled and Uneditable) */}
+                {/* Available Unassigned Meter Selector (If Existing Customer) */}
+                {provisionType === "existing" && (
+                  <div className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-3">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Select Meter Hardware</label>
+                    {fetchingUnassigned ? (
+                      <p className="text-xs text-muted-foreground">Loading available unassigned meters…</p>
+                    ) : unassignedDevices.length > 0 ? (
+                      <select
+                        className="w-full flex h-9 rounded-md border border-border bg-background px-3 py-1 text-sm shadow-sm transition-colors text-foreground focus:outline-none focus:border-[color:var(--clr-accent-hi)]"
+                        value={selectedDevice?.id || ""}
+                        onChange={(e) => {
+                          const dev = unassignedDevices.find((d) => d.id === e.target.value);
+                          if (dev) {
+                            setSelectedDevice(dev);
+                            setMeterIdInput(dev.deviceSerialNo);
+                            if (dev.latitude) setLatitudeInput(String(dev.latitude));
+                            if (dev.longitude) setLongitudeInput(String(dev.longitude));
+                            setThresholdValues(thresholdFormFromDevice(dev));
+                          }
+                        }}
+                      >
+                        <option value="">-- Choose from available meters ({unassignedDevices.length}) --</option>
+                        {unassignedDevices.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.deviceSerialNo} {d.meterSerialNo ? `(${d.meterSerialNo})` : ""} — {d.status}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">
+                        {selectedDevice ? `Using meter ${selectedDevice.deviceSerialNo}` : "No unassigned meters detected on network. Enter Device ID below:"}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Meter ID (Prefilled or Selected) */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Meter ID (Prefilled)</label>
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Meter ID / Serial</label>
                   <Input
-                    value={meterIdInput}
-                    readOnly
-                    className="bg-muted border-border text-muted-foreground cursor-not-allowed font-mono text-sm"
+                    value={meterIdInput || selectedDevice?.deviceSerialNo || ""}
+                    onChange={(e) => setMeterIdInput(e.target.value)}
+                    placeholder="e.g. DM-1803 or EVC-000123"
+                    className="bg-muted border-border text-foreground font-mono text-sm"
                   />
                 </div>
 
                 {/* Device ID (Editable - maps to meterSerialNo) */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Device ID / Serial (Optional)</label>
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Meter Serial No (Optional)</label>
                   <Input
-                    placeholder="Enter Device ID or leave blank..."
+                    placeholder="Enter Meter Serial No or leave blank..."
                     value={deviceIdInput}
                     onChange={(e) => setDeviceIdInput(e.target.value)}
                     className="bg-muted border-border text-foreground placeholder:text-muted-foreground focus:border-[color:var(--clr-accent-hi)] focus:ring-0 font-mono text-sm"
@@ -1340,33 +1590,39 @@ export default function CustomersPage() {
                 </div>
                 <p className="-mt-2 text-[11px] text-muted-foreground">Required so this meter appears on the Map page.</p>
 
-                {/* Provision Type Toggle */}
-                <div className="flex gap-2 p-1 bg-muted rounded-lg border border-border">
-                  <Button
-                    type="button"
-                    variant={provisionType === "new" ? "default" : "ghost"}
-                    className={`flex-1 h-8 text-xs ${provisionType === "new" ? "bg-[color:var(--clr-accent-hi)] text-[color:var(--accent-foreground)] hover:bg-[color:var(--clr-accent-hi)]" : "text-muted-foreground hover:text-foreground"}`}
-                    onClick={() => setProvisionType("new")}
-                  >
-                    New Customer
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={provisionType === "existing" ? "default" : "ghost"}
-                    className={`flex-1 h-8 text-xs ${provisionType === "existing" ? "bg-[color:var(--clr-accent-hi)] text-[color:var(--accent-foreground)] hover:bg-[color:var(--clr-accent-hi)]" : "text-muted-foreground hover:text-foreground"}`}
-                    onClick={() => setProvisionType("existing")}
-                  >
-                    Existing Customer
-                  </Button>
-                </div>
+                {/* Provision Type Toggle (Only if not directly triggered from Add Meter on a specific customer) */}
+                {!selectedExistingCustomerId && (
+                  <div className="flex gap-2 p-1 bg-muted rounded-lg border border-border">
+                    <Button
+                      type="button"
+                      variant={provisionType === "new" ? "default" : "ghost"}
+                      className={`flex-1 h-8 text-xs ${provisionType === "new" ? "bg-[color:var(--clr-accent-hi)] text-[color:var(--accent-foreground)] hover:bg-[color:var(--clr-accent-hi)]" : "text-muted-foreground hover:text-foreground"}`}
+                      onClick={() => setProvisionType("new")}
+                    >
+                      New Customer
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={provisionType === "existing" ? "default" : "ghost"}
+                      className={`flex-1 h-8 text-xs ${provisionType === "existing" ? "bg-[color:var(--clr-accent-hi)] text-[color:var(--accent-foreground)] hover:bg-[color:var(--clr-accent-hi)]" : "text-muted-foreground hover:text-foreground"}`}
+                      onClick={() => setProvisionType("existing")}
+                    >
+                      Existing Customer
+                    </Button>
+                  </div>
+                )}
 
                 {provisionType === "existing" ? (
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Select Existing Customer</label>
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Target Customer</label>
                     <select
                       className="w-full flex h-9 rounded-md border border-border bg-muted px-3 py-1 text-sm shadow-sm transition-colors text-foreground focus:outline-none focus:border-[color:var(--clr-accent-hi)]"
                       value={selectedExistingCustomerId}
-                      onChange={(e) => setSelectedExistingCustomerId(e.target.value)}
+                      onChange={(e) => {
+                        setSelectedExistingCustomerId(e.target.value);
+                        const found = existingCustomers.find(c => c.id === e.target.value);
+                        if (found) setCustomerName(found.name);
+                      }}
                       required
                     >
                       <option value="" disabled>Select a customer…</option>
@@ -1406,6 +1662,7 @@ export default function CustomersPage() {
                         <option value="RESIDENTIAL">Residential</option>
                         <option value="COMMERCIAL">Commercial</option>
                         <option value="INDUSTRIAL">Industrial</option>
+                        <option value="DRS">DRS</option>
                       </select>
                     </div>
 
@@ -1444,6 +1701,7 @@ export default function CustomersPage() {
                   </>
                 )}
 
+                {/* Redesigned 2x2 Grid Operational Alarm Thresholds */}
                 <ThresholdCardSet
                   values={thresholdValues}
                   onChange={(field, value) =>

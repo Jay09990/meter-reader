@@ -53,81 +53,131 @@ function CompactField({
   );
 }
 
-function MetricGroup({
+function ThresholdCard({
   title,
+  unit,
   children,
 }: {
   title: string;
+  unit: string;
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-muted/30 px-2 py-1.5">
-      <p className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
-        {title}
-      </p>
-      <div className="flex min-w-0 flex-wrap items-center gap-1.5">{children}</div>
+    <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2">
+      <div className="flex justify-between items-center border-b border-border/50 pb-1.5">
+        <span className="text-xs font-bold uppercase tracking-wider text-foreground">{title}</span>
+        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">{unit}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 pt-0.5">{children}</div>
     </div>
   );
 }
 
-/** Compact single-row threshold editor shared by provisioning drawer and expandable table rows. */
+function ThresholdInput({
+  label,
+  value,
+  onChange,
+  step = "0.01",
+  min,
+  max,
+  placeholder = "—",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  step?: string;
+  min?: string;
+  max?: string;
+  placeholder?: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="block text-[11px] font-medium text-muted-foreground">{label}</label>
+      <Input
+        type="number"
+        step={step}
+        min={min}
+        max={max}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="h-8 w-full bg-background border-border text-xs text-foreground font-mono focus:border-[color:var(--clr-accent-hi)] focus:ring-0"
+      />
+    </div>
+  );
+}
+
+/** Spacious operational threshold limit editor shared across drawers and customer detail forms. */
 export function ThresholdCardSet({ values, onChange, error }: ThresholdCardSetProps) {
   return (
-    <div className="space-y-1.5">
-      <div className="flex flex-wrap gap-2">
-        <MetricGroup title="Pressure">
-          <CompactField
-            label="Hi"
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Operational Alarm Thresholds
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Pressure Card */}
+        <ThresholdCard title="Pressure" unit="bar">
+          <ThresholdInput
+            label="Upper (Hi)"
             value={values.pressureUpper}
             onChange={(v) => onChange("pressureUpper", v)}
           />
-          <CompactField
-            label="Lo"
+          <ThresholdInput
+            label="Lower (Lo)"
             value={values.pressureLower}
             onChange={(v) => onChange("pressureLower", v)}
           />
-          <span className="text-[10px] text-muted-foreground">BAR</span>
-        </MetricGroup>
-        <MetricGroup title="Temp">
-          <CompactField
-            label="Hi"
+        </ThresholdCard>
+
+        {/* Temperature Card */}
+        <ThresholdCard title="Temperature" unit="°C">
+          <ThresholdInput
+            label="Upper (Hi)"
             value={values.temperatureUpper}
             onChange={(v) => onChange("temperatureUpper", v)}
           />
-          <CompactField
-            label="Lo"
+          <ThresholdInput
+            label="Lower (Lo)"
             value={values.temperatureLower}
             onChange={(v) => onChange("temperatureLower", v)}
           />
-          <span className="text-[10px] text-muted-foreground">°C</span>
-        </MetricGroup>
-        <MetricGroup title="Consump.">
-          <CompactField
-            label="Hi"
+        </ThresholdCard>
+
+        {/* Consumption Card */}
+        <ThresholdCard title="Consumption" unit="SCMH">
+          <ThresholdInput
+            label="Upper (Hi)"
             value={values.consumptionUpper}
             onChange={(v) => onChange("consumptionUpper", v)}
           />
-          <CompactField
-            label="Lo"
+          <ThresholdInput
+            label="Lower (Lo)"
             value={values.consumptionLower}
             onChange={(v) => onChange("consumptionLower", v)}
           />
-          <span className="text-[10px] text-muted-foreground">SCM³</span>
-        </MetricGroup>
-        <MetricGroup title="Battery">
-          <CompactField
-            label="Lo"
-            value={values.batteryLower}
-            onChange={(v) => onChange("batteryLower", v)}
-            step="1"
-            min="0"
-            max="100"
-          />
-          <span className="text-[10px] text-muted-foreground">%</span>
-        </MetricGroup>
+        </ThresholdCard>
+
+        {/* Battery Card */}
+        <ThresholdCard title="Battery" unit="%">
+          <div className="col-span-2">
+            <ThresholdInput
+              label="Min Battery Level (Lo)"
+              value={values.batteryLower}
+              onChange={(v) => onChange("batteryLower", v)}
+              step="1"
+              min="0"
+              max="100"
+              placeholder="e.g. 20"
+            />
+          </div>
+        </ThresholdCard>
       </div>
+
       {error && (
-        <p className="text-xs" style={{ color: "var(--clr-alert)" }}>
+        <p className="text-xs font-semibold p-2 rounded bg-[color:var(--clr-alert)]/10 border border-[color:var(--clr-alert)]/20 text-[color:var(--clr-alert)]">
           {error}
         </p>
       )}
