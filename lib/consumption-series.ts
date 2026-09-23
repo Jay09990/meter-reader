@@ -151,10 +151,10 @@ function buildYearlySpecs(today: Date): BucketSpec[] {
 
 export function buildBucketSpecs(mode: ConsumptionMode, today: Date = new Date()): BucketSpec[] {
   switch (mode) {
-    case "daily":     return buildDailySpecs(today);
-    case "monthly":   return buildMonthlySpecs(today);
+    case "daily": return buildDailySpecs(today);
+    case "monthly": return buildMonthlySpecs(today);
     case "quarterly": return buildQuarterlySpecs(today);
-    case "yearly":    return buildYearlySpecs(today);
+    case "yearly": return buildYearlySpecs(today);
   }
 }
 
@@ -254,9 +254,9 @@ export function pickTicks(labels: string[], count: number): string[] {
 /** Returns the appropriate tick count for a given mode. */
 export function tickCountForMode(mode: ConsumptionMode): number {
   switch (mode) {
-    case "daily":     return 4;
-    case "monthly":   return 6;
+    case "daily": return 4;
+    case "monthly": return 6;
     case "quarterly": return 5; // show all 5
-    case "yearly":    return 5; // show all 5
+    case "yearly": return 5; // show all 5
   }
 }

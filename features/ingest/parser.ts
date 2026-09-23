@@ -103,7 +103,15 @@ export function parseIngestPayload(body: unknown): ParsedReading {
     gasDensity: typeof payload.gasProperties?.density === "number" ? payload.gasProperties.density : undefined,
     batteryLevel: typeof payload.batteryLevel === "number" ? payload.batteryLevel : undefined,
     currentFlowRate: typeof payload.currentFlowRate === "number" ? payload.currentFlowRate : undefined,
-    hourlyConsumption: Array.isArray(payload.hourlyConsumption) ? payload.hourlyConsumption : undefined,
+    hourlyConsumption:
+      Array.isArray(payload.hourlyConsumption) ? payload.hourlyConsumption :
+      Array.isArray((payload as any).hourlyData) ? (payload as any).hourlyData :
+      Array.isArray((payload as any).hourly_consumption) ? (payload as any).hourly_consumption :
+      Array.isArray((payload as any).hourly) ? (payload as any).hourly :
+      Array.isArray((payload as any).hourlyVolumes) ? (payload as any).hourlyVolumes :
+      Array.isArray((payload.volume as any)?.hourly) ? (payload.volume as any).hourly :
+      (payload.hourlyConsumption && typeof payload.hourlyConsumption === "object") ? payload.hourlyConsumption :
+      undefined,
     rawPayload: payload as Record<string, unknown>,
   };
 }

@@ -173,6 +173,7 @@ export default function MeterDetailPage() {
   const [deviceData, setDeviceData] = useState<{
     device: DeviceData;
     latestReading: LatestReading | null;
+    todayVolumeDelta: number | null;
   } | null>(null);
   const [hourly, setHourly] = useState<HourlyData | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
@@ -249,12 +250,12 @@ export default function MeterDetailPage() {
   useAutoRefresh(loadHistory);
   useAutoRefresh(loadConsumption);
 
-  // Prepare hourly chart data (fill 0–23 gaps with 0)
   const hourlyChartData = Array.from({ length: 24 }, (_, h) => {
-    const match = hourly?.hourlyConsumption?.find((e) => e.hour === h);
+    const match = hourly?.hourlyConsumption?.find((e) => Number(e.hour) === h);
     return { hour: `${h}:00`, value: match?.value ?? 0 };
   });
   const peakHourlyValue = Math.max(...hourlyChartData.map((item) => item.value), 0);
+  const hasHourlyData = hourly ? (hourly.hourlyConsumption.length > 0 || hourlyChartData.some((item) => item.value > 0)) : false;
 
   const consumptionChartData = consumption.map((bucket) => ({ ...bucket, value: bucket.value ?? 0 }));
   const consumptionTicks = pickTicks(consumptionChartData.map((bucket) => bucket.label), tickCountForMode(consumptionPeriod));
@@ -350,7 +351,7 @@ export default function MeterDetailPage() {
     );
   }
 
-  const { device, latestReading: r } = deviceData;
+  const { device, latestReading: r, todayVolumeDelta } = deviceData;
 
   return (
     <div className="space-y-6 w-full">
@@ -405,7 +406,7 @@ export default function MeterDetailPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {/* Volume */}
         <KpiCard title="Volume" icon={Activity} iconStyle={{color:'var(--clr-accent-hi)'}}>
-          <BigValue value={consumptionLoading ? "..." : fmt(todaysConsumption)} unit="SCM" />
+          <BigValue value={fmt(todayVolumeDelta)} unit="SCM" />
           <p className="text-xs text-muted-foreground">Today&apos;s value minus yesterday&apos;s value</p>
           <DataRow
             label="Corrected (Vb)"
@@ -475,7 +476,7 @@ export default function MeterDetailPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {hourly && hourly.hourlyConsumption.length > 0 ? (
+          {hasHourlyData ? (
             <ChartContainer config={{ value: { label: "Consumption", color: "var(--chart-1)" } }} className="h-[200px] w-full">
               <BarChart
                 data={hourlyChartData}

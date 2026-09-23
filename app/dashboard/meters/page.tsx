@@ -34,7 +34,7 @@ interface DeviceItem {
   customerName: string | null;
   gaName: string | null;
   lastSeenAt: string | null;
-  status: "REPORTING" | "STALE";
+  status: "ONLINE" | "OFFLINE" | "ALERT" | "NEW";
   latestReading: {
     readingDate: string;
     receivedAt: string;
@@ -141,8 +141,9 @@ export default function MetersPage() {
             className="h-9 px-3 py-1 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none"
           >
             <option value="all">All Statuses</option>
-            <option value="reporting">Reporting / Live</option>
-            <option value="stale">Stale / Offline</option>
+            <option value="online">Live / Online</option>
+            <option value="alert">Alert</option>
+            <option value="offline">Stale / Offline</option>
           </select>
         </div>
       </Card>
@@ -202,12 +203,26 @@ export default function MetersPage() {
                         : "No data")}
                   </TableCell>
                   <TableCell>
-                    {device.status === "REPORTING" ? (
+                    {device.status === "ONLINE" ? (
                       <Badge
                         style={{background:'var(--clr-online)18', color:'var(--clr-online)', border:'1px solid var(--clr-online)44'}}
                       >
                         <span className="w-1.5 h-1.5 rounded-full mr-1.5 animate-pulse" style={{background:'var(--clr-online)'}} />
-                        REPORTING
+                        LIVE
+                      </Badge>
+                    ) : device.status === "ALERT" ? (
+                      <Badge
+                        style={{background:'var(--clr-alert)18', color:'var(--clr-alert)', border:'1px solid var(--clr-alert)44'}}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full mr-1.5" style={{background:'var(--clr-alert)'}} />
+                        ALERT
+                      </Badge>
+                    ) : device.status === "NEW" ? (
+                      <Badge
+                        style={{background:'var(--clr-accent-lo)18', color:'var(--clr-accent-lo)', border:'1px solid var(--clr-accent-lo)44'}}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full mr-1.5" style={{background:'var(--clr-accent-lo)'}} />
+                        NEW
                       </Badge>
                     ) : (
                       <Badge

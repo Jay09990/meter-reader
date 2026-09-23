@@ -374,6 +374,40 @@ export async function getDeviceLatest(deviceIdOrSerial: string) {
 
   const latestReading = device.readings[0] || null;
 
+  // ── Today's volume delta: today's latest Vb − yesterday's latest Vb ──────
+  const now = new Date();
+  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const yesterdayStart = new Date(todayStart.getTime() - 86_400_000);
+
+  const [todayReading, yesterdayReading] = await Promise.all([
+    // Latest reading whose readingDate is today
+    db.reading.findFirst({
+      where: {
+        deviceId: device.id,
+        readingDate: { gte: todayStart },
+        correctedVolumeVb: { not: null },
+      },
+      orderBy: { receivedAt: "desc" },
+      select: { correctedVolumeVb: true },
+    }),
+    // Latest reading whose readingDate is yesterday
+    db.reading.findFirst({
+      where: {
+        deviceId: device.id,
+        readingDate: { gte: yesterdayStart, lt: todayStart },
+        correctedVolumeVb: { not: null },
+      },
+      orderBy: { receivedAt: "desc" },
+      select: { correctedVolumeVb: true },
+    }),
+  ]);
+
+  let todayVolumeDelta: number | null = null;
+  if (todayReading?.correctedVolumeVb != null && yesterdayReading?.correctedVolumeVb != null) {
+    const delta = todayReading.correctedVolumeVb - yesterdayReading.correctedVolumeVb;
+    todayVolumeDelta = delta >= 0 ? delta : null; // treat negative as suspect
+  }
+
   return {
     device: {
       id: device.id,
@@ -418,6 +452,8 @@ export async function getDeviceLatest(deviceIdOrSerial: string) {
           receivedAt: latestReading.receivedAt,
         }
       : null,
+    /** today's correctedVolumeVb - yesterday's correctedVolumeVb (null if either day has no reading or delta is negative) */
+    todayVolumeDelta,
   };
 }
 
@@ -484,14 +520,13 @@ export async function getDeviceHourly(deviceIdOrSerial: string, dateStr?: string
 
   if (!device) return null;
 
-  let reading;
+  type ReadingResult = { readingDate: Date; hourlyConsumption: Prisma.JsonValue } | null;
+  let reading: ReadingResult = null;
+
   if (dateStr) {
     const targetDate = new Date(dateStr);
     const normalized = new Date(Date.UTC(targetDate.getUTCFullYear(), targetDate.getUTCMonth(), targetDate.getUTCDate()));
 
-    // CHANGED: (deviceId, readingDate) is no longer unique, so this can
-    // no longer be a findUnique on that compound key — findFirst ordered
-    // by receivedAt desc gets the latest push for that specific date.
     reading = await db.reading.findFirst({
       where: {
         deviceId: device.id,
@@ -504,9 +539,6 @@ export async function getDeviceHourly(deviceIdOrSerial: string, dateStr?: string
       },
     });
   } else {
-    // CHANGED: tie-break by receivedAt so that if the most recent date
-    // has several pushes, we still get the latest one, not just "some"
-    // row for that date.
     reading = await db.reading.findFirst({
       where: { deviceId: device.id },
       orderBy: [{ readingDate: "desc" }, { receivedAt: "desc" }],
@@ -515,13 +547,61 @@ export async function getDeviceHourly(deviceIdOrSerial: string, dateStr?: string
         hourlyConsumption: true,
       },
     });
+
+    const isHourlyEmpty = (r: ReadingResult) => {
+      if (!r || !r.hourlyConsumption) return true;
+      if (Array.isArray(r.hourlyConsumption) && r.hourlyConsumption.length === 0) return true;
+      if (typeof r.hourlyConsumption === "object" && Object.keys(r.hourlyConsumption as object).length === 0) return true;
+      return false;
+    };
+
+    if (isHourlyEmpty(reading)) {
+      const readingWithHourly = await db.reading.findFirst({
+        where: {
+          deviceId: device.id,
+          hourlyConsumption: { not: Prisma.JsonNull },
+        },
+        orderBy: [{ readingDate: "desc" }, { receivedAt: "desc" }],
+        select: {
+          readingDate: true,
+          hourlyConsumption: true,
+        },
+      });
+      if (readingWithHourly && !isHourlyEmpty(readingWithHourly)) {
+        reading = readingWithHourly;
+      }
+    }
   }
 
   if (!reading) return null;
 
+  let raw = reading.hourlyConsumption as any;
+  const items: Array<{ hour: number; value: number }> = [];
+
+  if (Array.isArray(raw)) {
+    raw.forEach((item, index) => {
+      if (typeof item === "number") {
+        items.push({ hour: index, value: item });
+      } else if (typeof item === "object" && item !== null) {
+        const hour = Number(item.hour ?? item.h ?? index);
+        const value = Number(item.value ?? item.v ?? item.consumption ?? item.val ?? 0);
+        items.push({ hour, value });
+      }
+    });
+  } else if (typeof raw === "object" && raw !== null) {
+    Object.entries(raw).forEach(([key, val]) => {
+      const hourMatch = key.match(/\d+/);
+      const hour = hourMatch ? Number(hourMatch[0]) : Number(key);
+      const value = typeof val === "number" ? val : Number((val as any)?.value ?? (val as any)?.v ?? 0);
+      if (!isNaN(hour)) {
+        items.push({ hour, value });
+      }
+    });
+  }
+
   return {
     date: reading.readingDate.toISOString().split("T")[0],
-    hourlyConsumption: reading.hourlyConsumption || [],
+    hourlyConsumption: items,
   };
 }
 
