@@ -7,6 +7,7 @@ import {
   parseCoordinate,
   validateThresholdPairs,
 } from "@/lib/device-field-parse";
+import { logApi } from "@/lib/api-log";
 
 /**
  * PATCH /api/devices/[id] — post-provisioning update of identity/location/model
@@ -30,6 +31,7 @@ export async function PATCH(
     }
 
     const body = await req.json();
+    logApi("PATCH /api/devices/[id]", { id, body });
 
     if ("deviceSerialNo" in body) {
       return NextResponse.json(
@@ -123,6 +125,7 @@ export async function PATCH(
       });
     }
 
+    logApi("PATCH /api/devices/[id] → 200", { id: device.id });
     return NextResponse.json(device);
   } catch (err: unknown) {
     const message =

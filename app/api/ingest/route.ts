@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CapacityExceededError, processIngestPayload } from "@/features/ingest";
+import { logApi } from "@/lib/api-log";
 
 export async function POST(req: NextRequest) {
   try {
@@ -8,6 +9,7 @@ export async function POST(req: NextRequest) {
     if (expectedSecret) {
       const providedSecret = req.headers.get("x-ingestion-secret");
       if (providedSecret !== expectedSecret) {
+        logApi("POST /api/ingest → 401 invalid x-ingestion-secret");
         return NextResponse.json(
           { error: "Unauthorized: Invalid or missing x-ingestion-secret header" },
           { status: 401 }
@@ -18,8 +20,7 @@ export async function POST(req: NextRequest) {
     let body: unknown;
     try {
       body = await req.json();
-      console.log("Incoming POST /api/ingest", { url: req.url, headers: Object.fromEntries(req.headers) });
-      console.log("Ingest payload:", body);
+      logApi("POST /api/ingest", { body });
     } catch {
       return NextResponse.json(
         { error: "Bad Request: Request body must be valid JSON" },
@@ -28,6 +29,7 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await processIngestPayload(body);
+    logApi("POST /api/ingest → 200", { result });
     return NextResponse.json(result, { status: 200 });
   } catch (err: unknown) {
     if (err instanceof CapacityExceededError) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateMissingDataAlarms } from "@/features/alarms/missing-data";
+import { logApi } from "@/lib/api-log";
 
 /**
  * GET /api/cron/missing-data-alarms
@@ -19,8 +20,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  logApi("GET /api/cron/missing-data-alarms");
   try {
     const result = await generateMissingDataAlarms();
+    logApi("GET /api/cron/missing-data-alarms → 200", { result });
     return NextResponse.json({ ok: true, ...result }, { status: 200 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Alarm job failed";
@@ -47,6 +50,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  logApi("POST /api/cron/missing-data-alarms");
   let forDate: Date | undefined;
   try {
     const body = await req.json().catch(() => ({})) as { forDate?: string };
@@ -66,6 +70,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await generateMissingDataAlarms(forDate);
+    logApi("POST /api/cron/missing-data-alarms → 200", { forDate: forDate?.toISOString() ?? "default(yesterday)", result });
     return NextResponse.json({ ok: true, ...result }, { status: 200 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Alarm job failed";

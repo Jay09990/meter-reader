@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPaginatedAlarms } from "@/features/alarms";
 import { AlarmStatus, AlarmType, AlarmSeverity } from "@prisma/client";
+import { logApi } from "@/lib/api-log";
 
 export async function GET(req: NextRequest) {
   try {
@@ -32,7 +33,9 @@ export async function GET(req: NextRequest) {
           ? false
           : undefined;
 
+    logApi("GET /api/alarms", { page, limit, status, type, severity, search, acknowledged });
     const result = await getPaginatedAlarms({ page, limit, status, type, severity, search, acknowledged });
+    logApi("GET /api/alarms → 200", { totalCount: result.pagination.totalCount, returned: result.items.length });
     return NextResponse.json(result, { status: 200 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to fetch alarms";

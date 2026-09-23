@@ -4,11 +4,14 @@ import {
   isValidEmail,
   updateSystemSettings,
 } from "@/features/system-capacity/service";
+import { logApi } from "@/lib/api-log";
 
 // Reads and updates system-wide settings (capacity + alarm notification email).
 export async function GET() {
   try {
-    return NextResponse.json(await getSystemSettings());
+    const settings = await getSystemSettings();
+    logApi("GET /api/system/settings → 200", { settings });
+    return NextResponse.json(settings);
   } catch (err: unknown) {
     const message =
       err instanceof Error ? err.message : "Failed to load system settings";
@@ -27,6 +30,7 @@ export async function PATCH(req: NextRequest) {
       maxMeterCapacity?: unknown;
       alarmNotificationEmail?: unknown;
     };
+    logApi("PATCH /api/system/settings", { body: payload });
 
     const hasCapacity = "maxMeterCapacity" in payload;
     const hasEmail = "alarmNotificationEmail" in payload;
@@ -74,7 +78,9 @@ export async function PATCH(req: NextRequest) {
       update.alarmNotificationEmail = email;
     }
 
-    return NextResponse.json(await updateSystemSettings(update));
+    const settings = await updateSystemSettings(update);
+    logApi("PATCH /api/system/settings → 200", { update });
+    return NextResponse.json(settings);
   } catch (err: unknown) {
     const message =
       err instanceof Error ? err.message : "Failed to update system settings";

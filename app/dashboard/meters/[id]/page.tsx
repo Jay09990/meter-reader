@@ -81,11 +81,6 @@ interface LatestReading {
   receivedAt: string;
 }
 
-interface DailyVolume {
-  correctedVolumeVb: number | null;
-  uncorrectedVolumeVm: number | null;
-}
-
 interface HourlyData {
   date: string;
   hourlyConsumption: { hour: number; value: number }[];
@@ -178,7 +173,6 @@ export default function MeterDetailPage() {
   const [deviceData, setDeviceData] = useState<{
     device: DeviceData;
     latestReading: LatestReading | null;
-    dailyVolume: DailyVolume | null;
   } | null>(null);
   const [hourly, setHourly] = useState<HourlyData | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
@@ -272,21 +266,32 @@ export default function MeterDetailPage() {
   const isStale = staleDays !== null && staleDays > 0;
 
   const chartData = useMemo(
-  () =>
-    history.map((h) => {
-      const d = new Date(h.timestamp);
-      // Same calendar day gets a time suffix so repeat pushes are
-      // distinguishable on the x-axis; a lone daily push just shows the
-      // date, same as before.
-      const sameDayCount = history.filter((x) => x.date === h.date).length;
-      const label =
-        sameDayCount > 1
-          ? `${h.date} ${d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`
-          : h.date;
-      return { ...h, label };
-    }),
-  [history]
-);
+    () =>
+      history.map((h) => {
+        const localStr = (h.timestamp || h.date || "").replace(/Z$/, "").replace(/\+00:00$/, "");
+        const d = new Date(localStr);
+        const hasTime = (h.timestamp || "").includes("T");
+        let fullTimestamp = h.date;
+        if (hasTime && !isNaN(d.getTime())) {
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, "0");
+          const day = String(d.getDate()).padStart(2, "0");
+          const hours = d.getHours();
+          const minutes = String(d.getMinutes()).padStart(2, "0");
+          const ampm = hours >= 12 ? "PM" : "AM";
+          const formattedHours = String(hours % 12 || 12).padStart(2, "0");
+          fullTimestamp = `${year}-${month}-${day} ${formattedHours}:${minutes} ${ampm}`;
+        }
+
+        const sameDayCount = history.filter((x) => x.date === h.date).length;
+        const timeStr = !isNaN(d.getTime()) && hasTime
+          ? d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+          : "";
+        const label = sameDayCount > 1 && timeStr ? `${h.date} ${timeStr}` : h.date;
+        return { ...h, label, fullTimestamp };
+      }),
+    [history]
+  );
 
   if (loading) {
     return (
@@ -345,7 +350,7 @@ export default function MeterDetailPage() {
     );
   }
 
-  const { device, latestReading: r, dailyVolume } = deviceData;
+  const { device, latestReading: r } = deviceData;
 
   return (
     <div className="space-y-6 w-full">
@@ -400,15 +405,15 @@ export default function MeterDetailPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {/* Volume */}
         <KpiCard title="Volume" icon={Activity} iconStyle={{color:'var(--clr-accent-hi)'}}>
-          <BigValue value={consumptionLoading ? "..." : fmt(todaysConsumption)} unit="SCM³" />
+          <BigValue value={consumptionLoading ? "..." : fmt(todaysConsumption)} unit="SCM" />
           <p className="text-xs text-muted-foreground">Today&apos;s value minus yesterday&apos;s value</p>
           <DataRow
             label="Corrected (Vb)"
-            value={`${fmt(dailyVolume?.correctedVolumeVb)} SCM³`}
+            value={`${fmt(r?.correctedVolumeVb)} SCM`}
           />
           <DataRow
             label="Uncorrected (Vm)"
-            value={`${fmt(dailyVolume?.uncorrectedVolumeVm)} m³`}
+            value={`${fmt(r?.uncorrectedVolumeVm)} m³`}
           />
         </KpiCard>
 
@@ -599,7 +604,7 @@ export default function MeterDetailPage() {
                       axisLine={false}
                       width={50}
                     />
-                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartTooltip content={<ChartTooltipContent labelFormatter={(_, payload) => payload?.[0]?.payload?.fullTimestamp || _} />} />
                     <Area
                       type="monotone"
                       dataKey="correctedVolumeVb"
@@ -623,7 +628,7 @@ export default function MeterDetailPage() {
             <CardContent>
               <ChartContainer config={{ gasPressure: { label: "Pressure", color: "var(--clr-commercial)" } }} className="h-[140px] w-full">
                   <AreaChart
-                    data={history}
+                    data={chartData}
                     margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
                   >
                     <defs>
@@ -634,7 +639,7 @@ export default function MeterDetailPage() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} opacity={0.7} />
                     <XAxis
-                      dataKey="date"
+                      dataKey="label"
                       tick={{ fontSize: 10, fill: chartTheme.tick }}
                       tickLine={false}
                       axisLine={false}
@@ -646,7 +651,7 @@ export default function MeterDetailPage() {
                       axisLine={false}
                       width={40}
                     />
-                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartTooltip content={<ChartTooltipContent labelFormatter={(_, payload) => payload?.[0]?.payload?.fullTimestamp || _} />} />
                     <Area
                       type="monotone"
                       dataKey="gasPressure"
@@ -670,7 +675,7 @@ export default function MeterDetailPage() {
             <CardContent>
               <ChartContainer config={{ gasTemperature: { label: "Temperature", color: "var(--clr-stale)" } }} className="h-[140px] w-full">
                   <AreaChart
-                    data={history}
+                    data={chartData}
                     margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
                   >
                     <defs>
@@ -681,7 +686,7 @@ export default function MeterDetailPage() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} opacity={0.7} />
                     <XAxis
-                      dataKey="date"
+                      dataKey="label"
                       tick={{ fontSize: 10, fill: chartTheme.tick }}
                       tickLine={false}
                       axisLine={false}
@@ -693,7 +698,7 @@ export default function MeterDetailPage() {
                       axisLine={false}
                       width={40}
                     />
-                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartTooltip content={<ChartTooltipContent labelFormatter={(_, payload) => payload?.[0]?.payload?.fullTimestamp || _} />} />
                     <Area
                       type="monotone"
                       dataKey="gasTemperature"

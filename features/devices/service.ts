@@ -2,55 +2,6 @@ import { db } from "@/lib/db";
 import { AlarmSeverity, AlarmStatus, Prisma } from "@prisma/client";
 import { computeDeviceStatus } from "@/lib/device-status";
 
-interface DailyVolumeDelta {
-  correctedVolumeVb: number | null;
-  uncorrectedVolumeVm: number | null;
-}
-
-function calculateVolumeDelta(
-  currentValue: number | null,
-  previousValue: number | null,
-): number | null {
-  return currentValue == null || previousValue == null ? null : currentValue - previousValue;
-}
-
-async function getDailyVolumeDelta(
-  deviceId: string,
-  latestReading: {
-    readingDate: Date;
-    correctedVolumeVb: number | null;
-    uncorrectedVolumeVm: number | null;
-  },
-): Promise<DailyVolumeDelta> {
-  const currentDayStart = new Date(latestReading.readingDate);
-  currentDayStart.setUTCHours(0, 0, 0, 0);
-  const previousDayStart = new Date(currentDayStart);
-  previousDayStart.setUTCDate(previousDayStart.getUTCDate() - 1);
-
-  const previousReading = await db.reading.findFirst({
-    where: {
-      deviceId,
-      readingDate: { gte: previousDayStart, lt: currentDayStart },
-    },
-    orderBy: { receivedAt: "desc" },
-    select: {
-      correctedVolumeVb: true,
-      uncorrectedVolumeVm: true,
-    },
-  });
-
-  return {
-    correctedVolumeVb: calculateVolumeDelta(
-      latestReading.correctedVolumeVb,
-      previousReading?.correctedVolumeVb ?? null,
-    ),
-    uncorrectedVolumeVm: calculateVolumeDelta(
-      latestReading.uncorrectedVolumeVm,
-      previousReading?.uncorrectedVolumeVm ?? null,
-    ),
-  };
-}
-
 export interface GetDevicesOptions {
   page?: number;
   limit?: number;
@@ -422,9 +373,6 @@ export async function getDeviceLatest(deviceIdOrSerial: string) {
   }
 
   const latestReading = device.readings[0] || null;
-  const dailyVolume = latestReading
-    ? await getDailyVolumeDelta(device.id, latestReading)
-    : null;
 
   return {
     device: {
@@ -470,7 +418,6 @@ export async function getDeviceLatest(deviceIdOrSerial: string) {
           receivedAt: latestReading.receivedAt,
         }
       : null,
-    dailyVolume,
   };
 }
 

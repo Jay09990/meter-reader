@@ -6,6 +6,7 @@ import {
   FREQUENCY_OPTIONS,
   DataFrequency,
 } from "@/features/reports";
+import { logApi } from "@/lib/api-log";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -13,6 +14,7 @@ export async function GET(req: NextRequest) {
   const startDate = searchParams.get("startDate") || "";
   const endDate = searchParams.get("endDate") || "";
   const frequency = (searchParams.get("frequency") || "1h") as DataFrequency;
+  logApi("GET /api/reports/customer", { customerId, startDate, endDate, frequency });
 
   // Validate frequency
   const isValidFreq = FREQUENCY_OPTIONS.some(f => f.value === frequency);
@@ -22,6 +24,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const report = await getCustomerReport({ customerId, startDate, endDate, frequency });
+    logApi("GET /api/reports/customer → 200", { customerId, frequency });
     return NextResponse.json(report);
   } catch (err: unknown) {
     if (err instanceof ReportValidationError) {

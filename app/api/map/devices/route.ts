@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getMapMarkerColor } from "@/lib/device-status";
+import { logApi } from "@/lib/api-log";
 
 export async function GET() {
   try {
@@ -71,6 +72,7 @@ export async function GET() {
       };
     });
 
+    logApi("GET /api/map/devices → 200", { markers: mapped.length });
     return NextResponse.json(mapped);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to load map data";

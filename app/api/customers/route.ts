@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { CustomerCategory, Prisma } from "@prisma/client";
+import { logApi } from "@/lib/api-log";
 
 /** Parse the category from the request body. */
 function normalizeCustomerCategory(category: unknown): CustomerCategory {
@@ -10,11 +11,7 @@ function normalizeCustomerCategory(category: unknown): CustomerCategory {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    console.log("Incoming POST /api/customers", {
-      url: req.url,
-      headers: Object.fromEntries(req.headers),
-    });
-    console.log("Customer create payload:", body);
+    logApi("POST /api/customers", { body });
     if (!body.name || !body.gaId || !body.category) {
       return NextResponse.json(
         { error: "Name, gaId, and category are required" },
@@ -30,6 +27,7 @@ export async function POST(req: NextRequest) {
         gaId: body.gaId,
       },
     });
+    logApi("POST /api/customers → 201", { id: customer.id, name: customer.name });
     return NextResponse.json(customer, { status: 201 });
   } catch (err: unknown) {
     const message =
@@ -46,6 +44,8 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search") || "";
     const gaId = searchParams.get("gaId") || "";
     const category = searchParams.get("category") || "";
+
+    logApi("GET /api/customers", { page, limit, search, gaId, category });
 
     const where: Prisma.CustomerWhereInput = {};
     if (search) {
@@ -82,6 +82,7 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
+    logApi("GET /api/customers → 200", { total, returned: data.length });
     return NextResponse.json({ data, total, page, limit });
   } catch (err: unknown) {
     const message =

@@ -6,6 +6,7 @@ import {
   parseCoordinate,
   validateThresholdPairs,
 } from "@/lib/device-field-parse";
+import { logApi } from "@/lib/api-log";
 
 export async function PATCH(
   req: NextRequest,
@@ -28,6 +29,7 @@ export async function PATCH(
     }
 
     const body = await req.json();
+    logApi("PATCH /api/devices/[id]/assign", { id, body });
     let latitude: number | null | undefined;
     let longitude: number | null | undefined;
     try {
@@ -153,6 +155,7 @@ export async function PATCH(
       });
     }
 
+    logApi("PATCH /api/devices/[id]/assign → 200", { id: device.id, customerId: device.customerId });
     return NextResponse.json(device);
   } catch (err: unknown) {
     const message =

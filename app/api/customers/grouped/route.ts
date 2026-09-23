@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPaginatedCustomersWithDevices } from "@/features/devices";
+import { logApi } from "@/lib/api-log";
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,6 +12,8 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get("category") || "";
     const gaId = searchParams.get("gaId") || "";
 
+    logApi("GET /api/customers/grouped", { page, limit, search, status, category, gaId });
+
     const result = await getPaginatedCustomersWithDevices({
       page,
       limit,
@@ -20,6 +23,7 @@ export async function GET(req: NextRequest) {
       gaId,
     });
 
+    logApi("GET /api/customers/grouped → 200", { totalCount: result.pagination.totalCount, returned: result.items.length });
     return NextResponse.json(result, { status: 200 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to fetch customers";

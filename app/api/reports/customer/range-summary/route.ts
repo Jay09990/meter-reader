@@ -5,6 +5,7 @@ import {
   ReportValidationError,
   RangeSelectorType,
 } from "@/features/reports";
+import { logApi } from "@/lib/api-log";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -16,6 +17,7 @@ export async function GET(req: NextRequest) {
 
   const fyStartYear = fyStartYearStr ? parseInt(fyStartYearStr, 10) : undefined;
   const quarter = quarterStr ? (parseInt(quarterStr, 10) as 1 | 2 | 3 | 4) : undefined;
+  logApi("GET /api/reports/customer/range-summary", { customerId, rangeType, month, fyStartYear, quarter });
 
   try {
     const report = await getCustomerRangeReport({
@@ -25,6 +27,7 @@ export async function GET(req: NextRequest) {
       fyStartYear,
       quarter,
     });
+    logApi("GET /api/reports/customer/range-summary → 200", { customerId, rangeType });
     return NextResponse.json(report);
   } catch (err: unknown) {
     if (err instanceof ReportValidationError) {

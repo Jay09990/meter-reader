@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CustomerCategory } from "@prisma/client";
 import { db } from "@/lib/db";
+import { logApi } from "@/lib/api-log";
 
 /** Parse the category from the request body. */
 function normalizeCustomerCategory(category: unknown): CustomerCategory {
@@ -11,6 +12,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const body = await req.json();
+    logApi("PATCH /api/customers/[id]", { id, body });
     const customer = await db.customer.update({
       where: { id },
       data: {
@@ -20,6 +22,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         gaId: body.gaId,
       },
     });
+    logApi("PATCH /api/customers/[id] → 200", { id: customer.id });
     return NextResponse.json(customer);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to update Customer";
@@ -30,6 +33,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    logApi("GET /api/customers/[id]", { id });
     const customer = await db.customer.findUnique({
       where: { id },
       include: {
@@ -52,6 +56,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
+    logApi("GET /api/customers/[id] → 200", { id: customer.id });
     return NextResponse.json(customer);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to fetch Customer";

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { AlarmStatus, AlarmSeverity, AlarmType } from "@prisma/client";
+import { logApi } from "@/lib/api-log";
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,6 +15,8 @@ export async function GET(req: NextRequest) {
     if (severityParam) where.severity = severityParam as AlarmSeverity;
     if (typeParam) where.type = typeParam as AlarmType;
 
+    logApi("GET /api/alarms/export", { status: statusParam, severity: severityParam, type: typeParam });
+
     const alarms = await db.alarm.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -21,6 +24,8 @@ export async function GET(req: NextRequest) {
         device: { select: { deviceSerialNo: true, meterSerialNo: true } },
       },
     });
+
+    logApi("GET /api/alarms/export → 200", { rows: alarms.length });
 
     const csvRows = [
       ["ID", "Device Serial", "Meter Serial", "Type", "Severity", "Status", "Acknowledged", "Cause", "Date", "Created At"],
