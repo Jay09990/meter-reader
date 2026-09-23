@@ -54,10 +54,11 @@ const COLOR_HEX = {
   gray: "var(--clr-offline)",
 } as const;
 
-const TILE_URL = {
-  dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",   // was "dark_matter"
-  light: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", // unchanged, already correct
-};
+// OSM only publishes light tiles; the dark theme is derived per-theme in
+// leaflet-overrides.css by inverting the tile pane, so one URL serves both.
+const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const TILE_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
 function formatRelativeTime(value: string | null) {
   if (!value) return "No sync yet";
@@ -191,7 +192,6 @@ export default function MapComponent() {
   }, [selectedDevice, consumptionPeriod]);
 
   const center: [number, number] = [20.5937, 78.9629];
-  const tileUrl = theme === "dark" ? TILE_URL.dark : TILE_URL.light;
 
   const clusterIcon = useMemo(() => {
     return (cluster: L.MarkerCluster) => {
@@ -230,7 +230,7 @@ export default function MapComponent() {
       <MapContainer center={center} zoom={6} className="h-full w-full" scrollWheelZoom>
         <MapViewport />
         <ZoomWatcher onZoom={setZoom} />
-        <TileLayer url={tileUrl} detectRetina attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>' />
+        <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} />
         <MarkerClusterGroup iconCreateFunction={clusterIcon} maxClusterRadius={80} disableClusteringAtZoom={15} zoomToBoundsOnClick>
           {devices.map((device) => (
             <Marker
@@ -368,7 +368,7 @@ export default function MapComponent() {
                 </div>
                 <div className="h-36 overflow-hidden rounded-lg border border-border">
                   <MapContainer center={[selectedDevice.lat, selectedDevice.lng]} zoom={12} zoomControl={false} dragging={false} scrollWheelZoom={false} className="h-full w-full">
-                    <TileLayer url={tileUrl} detectRetina attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>' />
+                    <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} />
                     <Marker position={[selectedDevice.lat, selectedDevice.lng]} icon={getMarkerIcon(selectedDevice.markerColor, theme, 14)} />
                   </MapContainer>
                 </div>

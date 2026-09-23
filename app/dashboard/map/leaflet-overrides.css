@@ -4,8 +4,10 @@
   background: var(--card);
 }
 
-:root:not(.dark) .leaflet-tile-pane img.leaflet-tile {
-  filter: sepia(0.12) saturate(0.82) hue-rotate(345deg);
+/* OSM serves light tiles only — invert + hue-rotate back gives a dark basemap
+   (water stays blue, parks stay green) without a second keyed provider. */
+.dark .leaflet-tile-pane img.leaflet-tile {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.35);
 }
 
 .leaflet-tile-pane img.leaflet-tile {
