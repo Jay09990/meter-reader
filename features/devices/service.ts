@@ -621,6 +621,37 @@ export async function getDeviceHourly(deviceIdOrSerial: string, dateStr?: string
     });
   }
 
+  // Fallback: if telemetry payload has no hourlyConsumption array, derive from readings on this day
+  if (items.length === 0 && reading) {
+    const dayStart = new Date(Date.UTC(reading.readingDate.getUTCFullYear(), reading.readingDate.getUTCMonth(), reading.readingDate.getUTCDate()));
+    const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+
+    const dayReadings = await db.reading.findMany({
+      where: {
+        deviceId: device.id,
+        receivedAt: { gte: dayStart, lt: dayEnd },
+        correctedVolumeVb: { not: null },
+      },
+      orderBy: { receivedAt: "asc" },
+      select: { receivedAt: true, correctedVolumeVb: true },
+    });
+
+    if (dayReadings.length > 1) {
+      // Group by hour
+      const hourMap = new Map<number, number>();
+      for (let i = 1; i < dayReadings.length; i++) {
+        const prev = dayReadings[i - 1];
+        const curr = dayReadings[i];
+        const hour = new Date(curr.receivedAt).getHours();
+        const delta = Math.max(0, (curr.correctedVolumeVb ?? 0) - (prev.correctedVolumeVb ?? 0));
+        hourMap.set(hour, (hourMap.get(hour) ?? 0) + delta);
+      }
+      hourMap.forEach((val, h) => {
+        items.push({ hour: h, value: val });
+      });
+    }
+  }
+
   return {
     date: reading.readingDate.toISOString().split("T")[0],
     hourlyConsumption: items,

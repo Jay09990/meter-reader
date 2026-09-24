@@ -256,12 +256,12 @@ export default function MeterDetailPage() {
     return { hour: `${h}:00`, value: match?.value ?? 0 };
   });
   const peakHourlyValue = Math.max(...hourlyChartData.map((item) => item.value), 0);
-  const hasHourlyData = hourly ? (hourly.hourlyConsumption.length > 0 || hourlyChartData.some((item) => item.value > 0)) : false;
+  const hasHourlyData = Boolean(hourly);
 
   const consumptionChartData = consumption.map((bucket) => ({ ...bucket, value: bucket.value ?? 0 }));
   const consumptionTicks = pickTicks(consumptionChartData.map((bucket) => bucket.label), tickCountForMode(consumptionPeriod));
   const peakConsumptionValue = Math.max(...consumptionChartData.map((bucket) => bucket.value), 0);
-  const hasConsumptionValues = consumption.some((bucket) => bucket.value !== null && bucket.value !== 0);
+  const hasConsumptionValues = consumption.length > 0;
   const todaysConsumption = consumption.at(-1)?.value ?? null;
 
   const staleDays = daysSince(deviceData?.device.lastSeenAt ?? null);
@@ -528,7 +528,7 @@ export default function MeterDetailPage() {
       <Card className="bg-card border-border">
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle className="text-sm font-semibold text-foreground">Consumption</CardTitle>
+            <CardTitle className="text-sm font-semibold text-foreground">Consumption (Corrected)</CardTitle>
             <PeriodSelector value={consumptionPeriod} onChange={setConsumptionPeriod} />
           </div>
         </CardHeader>
