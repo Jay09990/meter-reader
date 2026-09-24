@@ -37,6 +37,7 @@ export interface ReportReading {
   deviceSerialNo: string;
   meterSerialNo: string | null;
   customerName: string | null;
+  customerCategory: string | null;
   readingDate: string;
   receivedAt: string;
   correctedVolumeVb: number | null;
@@ -45,6 +46,7 @@ export interface ReportReading {
   gasTemperature: number | null;
   batteryLevel: number | null;
   consumption: number | null;
+  uncorrectedConsumption: number | null;
 }
 
 // One entry per physical meter (device) belonging to the customer.
@@ -102,35 +104,48 @@ function resampleByFrequency<T extends { receivedAt: string }>(
  * previous element in this same array.
  */
 async function computeConsumption(
-  rawReadings: Omit<ReportReading, "consumption">[],
+  rawReadings: Omit<ReportReading, "consumption" | "uncorrectedConsumption">[],
 ): Promise<ReportReading[]> {
   if (rawReadings.length === 0) return [];
 
   const first = rawReadings[0];
-  let firstPrevVolume: number | null = null;
+  let firstPrevVolumeVb: number | null = null;
+  let firstPrevVolumeVm: number | null = null;
 
-  if (first.correctedVolumeVb != null) {
+  if (first.correctedVolumeVb != null || first.uncorrectedVolumeVm != null) {
     const prevReading = await db.reading.findFirst({
       where: {
         deviceId: first.deviceId,
         receivedAt: { lt: new Date(first.receivedAt) },
       },
       orderBy: { receivedAt: "desc" },
-      select: { correctedVolumeVb: true },
+      select: { correctedVolumeVb: true, uncorrectedVolumeVm: true },
     });
-    firstPrevVolume = prevReading?.correctedVolumeVb ?? null;
+    firstPrevVolumeVb = prevReading?.correctedVolumeVb ?? null;
+    firstPrevVolumeVm = prevReading?.uncorrectedVolumeVm ?? null;
   }
 
   return rawReadings.map((r, i) => {
-    const prevVolume =
-      i === 0 ? firstPrevVolume : rawReadings[i - 1].correctedVolumeVb;
+    const prevVb = i === 0 ? firstPrevVolumeVb : rawReadings[i - 1].correctedVolumeVb;
+    const prevVm = i === 0 ? firstPrevVolumeVm : rawReadings[i - 1].uncorrectedVolumeVm;
 
-    if (r.correctedVolumeVb == null || prevVolume == null) {
-      return { ...r, consumption: null };
+    let consumption: number | null = null;
+    if (r.correctedVolumeVb != null && prevVb != null) {
+      const deltaVb = r.correctedVolumeVb - prevVb;
+      consumption = deltaVb < 0 ? null : Number(deltaVb.toFixed(3));
     }
 
-    const delta = r.correctedVolumeVb - prevVolume;
-    return { ...r, consumption: delta < 0 ? null : Number(delta.toFixed(3)) }; // negative = meter reset
+    let uncorrectedConsumption: number | null = null;
+    if (r.uncorrectedVolumeVm != null && prevVm != null) {
+      const deltaVm = r.uncorrectedVolumeVm - prevVm;
+      uncorrectedConsumption = deltaVm < 0 ? null : Number(deltaVm.toFixed(3));
+    }
+
+    return {
+      ...r,
+      consumption,
+      uncorrectedConsumption,
+    };
   });
 }
 
@@ -205,14 +220,14 @@ export async function getCustomerReport({
           id: true,
           deviceSerialNo: true,
           meterSerialNo: true,
-          customer: { select: { name: true } },
+          customer: { select: { name: true, category: true } },
         },
       },
     },
     orderBy: [{ device: { deviceSerialNo: "asc" } }, { receivedAt: "asc" }],
   });
 
-  type RawReading = Omit<ReportReading, "consumption">;
+  type RawReading = Omit<ReportReading, "consumption" | "uncorrectedConsumption">;
 
   // Group raw readings per meter
   const meterMap = new Map<string,
@@ -241,6 +256,7 @@ export async function getCustomerReport({
       deviceSerialNo: r.device.deviceSerialNo,
       meterSerialNo: r.device.meterSerialNo,
       customerName: r.device.customer?.name || null,
+      customerCategory: r.device.customer?.category || null,
       readingDate: r.readingDate.toISOString(),
       receivedAt: r.receivedAt.toISOString(),
       correctedVolumeVb: r.correctedVolumeVb,

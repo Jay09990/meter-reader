@@ -1,19 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, Globe, Mail } from "lucide-react";
+import { Globe, Mail, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
-// Manages deployment-wide settings: meter capacity, alarm email, and GAs.
+// Manages deployment-wide settings: alarm email, report schedule time, and GAs.
+// Meter Capacity is managed at /dashboard/cfg-7v4x9k2q/capacity (hidden from sidebar).
 export default function SettingsPage() {
-  const [capacity, setCapacity] = useState("");
   const [alarmEmail, setAlarmEmail] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [reportTime, setReportTime] = useState("07:00");
   const [savingEmail, setSavingEmail] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [savingTime, setSavingTime] = useState(false);
   const [emailMessage, setEmailMessage] = useState<string | null>(null);
+  const [timeMessage, setTimeMessage] = useState<string | null>(null);
 
   // GA creation state
   const [gas, setGas] = useState<import("@prisma/client").GeographicalArea[]>([]);
@@ -28,12 +29,12 @@ export default function SettingsPage() {
       fetch("/api/system/settings")
         .then((res) => res.json())
         .then((data) => {
-          setCapacity(data.maxMeterCapacity?.toString() ?? "");
           setAlarmEmail(data.alarmNotificationEmail ?? "");
+          setReportTime(data.reportScheduleTime ?? "07:00");
           setLoadingInitial(false);
         })
         .catch(() => {
-          setMessage("Unable to load system settings.");
+          setEmailMessage("Unable to load system settings.");
           setLoadingInitial(false);
         });
     };
@@ -46,22 +47,6 @@ export default function SettingsPage() {
     fetchSettings();
     fetchGas();
   }, []);
-
-  const saveSettings = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setSaving(true);
-    setMessage(null);
-    const response = await fetch("/api/system/settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        maxMeterCapacity: capacity === "" ? null : Number(capacity),
-      }),
-    });
-    const data = await response.json();
-    setSaving(false);
-    setMessage(response.ok ? "Settings saved." : data.error ?? "Unable to save settings.");
-  };
 
   const saveAlarmEmail = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -85,6 +70,25 @@ export default function SettingsPage() {
       );
     } else {
       setEmailMessage(data.error ?? "Unable to save email.");
+    }
+  };
+
+  const saveReportTime = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSavingTime(true);
+    setTimeMessage(null);
+    const response = await fetch("/api/system/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reportScheduleTime: reportTime }),
+    });
+    const data = await response.json();
+    setSavingTime(false);
+    if (response.ok) {
+      setReportTime(data.reportScheduleTime ?? "07:00");
+      setTimeMessage("Report schedule time saved.");
+    } else {
+      setTimeMessage(data.error ?? "Unable to save report time.");
     }
   };
 
@@ -119,59 +123,7 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <Card className="bg-card border-border">
-        {loadingInitial ? (
-          <div className="space-y-3 px-6 py-4">
-            <div className="flex items-center gap-3">
-              <div className="h-5 w-5 animate-pulse rounded-full bg-muted" />
-              <div className="h-4 w-28 animate-pulse rounded bg-muted" />
-            </div>
-            <div className="space-y-3">
-              <div className="h-4 w-24 animate-pulse rounded bg-muted" />
-              <div className="h-9 w-full animate-pulse rounded-md bg-muted" />
-              <div className="h-3 w-32 animate-pulse rounded bg-muted" />
-            </div>
-          </div>
-        ) : (
-          <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <CardTitle>Meter Capacity</CardTitle>
-            <Settings className="h-5 w-5 text-muted-foreground" />
-          </CardHeader>
-        )}
-        {!loadingInitial && (
-          <CardContent>
-            <form onSubmit={saveSettings} className="space-y-4">
-              <div className="space-y-2">
-                <label htmlFor="max-capacity" className="text-sm font-medium text-foreground">
-                  Maximum connected meters
-                </label>
-                <Input
-                  id="max-capacity"
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={capacity}
-                  onChange={(event) => setCapacity(event.target.value)}
-                  placeholder="Unlimited"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Leave blank for unlimited capacity. Existing meters continue reporting after the
-                  limit is reached.
-                </p>
-              </div>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving…" : "Save"}
-              </Button>
-              {message && (
-                <p className="text-sm text-muted-foreground" role="status">
-                  {message}
-                </p>
-              )}
-            </form>
-          </CardContent>
-        )}
-      </Card>
-
+      {/* Alarm Notification Email */}
       <Card className="bg-card border-border">
         {loadingInitial ? (
           <div className="space-y-3 px-6 py-4">
@@ -218,6 +170,61 @@ export default function SettingsPage() {
               {emailMessage && (
                 <p className="text-sm text-muted-foreground" role="status">
                   {emailMessage}
+                </p>
+              )}
+            </form>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Daily Report Schedule */}
+      <Card className="bg-card border-border">
+        {loadingInitial ? (
+          <div className="space-y-3 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="h-5 w-5 animate-pulse rounded-full bg-muted" />
+              <div className="h-4 w-44 animate-pulse rounded bg-muted" />
+            </div>
+            <div className="space-y-3">
+              <div className="h-4 w-20 animate-pulse rounded bg-muted" />
+              <div className="h-9 w-full animate-pulse rounded-md bg-muted" />
+              <div className="h-3 w-40 animate-pulse rounded bg-muted" />
+            </div>
+          </div>
+        ) : (
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle>Daily Report Schedule</CardTitle>
+            <Clock className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+        )}
+        {!loadingInitial && (
+          <CardContent>
+            <form onSubmit={saveReportTime} className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="report-time" className="text-sm font-medium text-foreground">
+                  Send daily report at (UTC)
+                </label>
+                <Input
+                  id="report-time"
+                  type="time"
+                  value={reportTime}
+                  onChange={(event) => setReportTime(event.target.value)}
+                  className="max-w-[160px]"
+                />
+                <p className="text-xs text-muted-foreground">
+                  The daily consumption report will be emailed to the alarm notification address
+                  at this time every day (UTC). Defaults to{" "}
+                  <code className="text-[11px]">07:00 UTC</code>. Requires{" "}
+                  <code className="text-[11px]">RESEND_API_KEY</code> and an alarm email to be
+                  set.
+                </p>
+              </div>
+              <Button type="submit" disabled={savingTime}>
+                {savingTime ? "Saving…" : "Save schedule"}
+              </Button>
+              {timeMessage && (
+                <p className="text-sm text-muted-foreground" role="status">
+                  {timeMessage}
                 </p>
               )}
             </form>

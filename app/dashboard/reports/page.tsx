@@ -107,7 +107,7 @@ export default function ReportsPage() {
   // Mode 1: Date Range Form State
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [frequency, setFrequency] = useState<DataFrequency>("1h");
+  const [frequency] = useState<DataFrequency>("1d");
 
   // Mode 2: Range Selection Form State
   const [rangeType, setRangeType] = useState<RangeSelectorType>("monthly");
@@ -128,16 +128,27 @@ export default function ReportsPage() {
 
   // Fetch Customers on Mount
   useEffect(() => {
+    let isMounted = true;
     fetch("/api/customers?limit=1000")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
-        setCustomers(data.data || []);
-        setLoadingCustomers(false);
+        if (isMounted) {
+          setCustomers(data.data || []);
+          setLoadingCustomers(false);
+        }
       })
       .catch((err) => {
         console.error("Failed to fetch customers:", err);
-        setLoadingCustomers(false);
+        if (isMounted) {
+          setLoadingCustomers(false);
+        }
       });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Form Validation
@@ -296,15 +307,15 @@ export default function ReportsPage() {
         <ReportModeSelector value={reportMode} onChange={setReportMode} />
       </div>
 
-      <Card className="bg-card border-border">
+      <Card className="bg-card border-border !overflow-visible">
         <CardHeader className="border-b border-border pb-4">
           <CardTitle className="text-lg text-foreground">Report Criteria</CardTitle>
         </CardHeader>
-        <CardContent className="pt-6">
+        <CardContent className="pt-6 !overflow-visible">
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
               {/* Customer Selection (Multi-select) */}
-              <div className="space-y-2 md:col-span-2 relative">
+              <div className="space-y-2 md:col-span-2 relative z-30">
                 <label className="text-sm font-medium text-muted-foreground">Customer(s)</label>
                 <button
                   type="button"
@@ -327,10 +338,10 @@ export default function ReportsPage() {
                 {dropdownOpen && !loadingCustomers && (
                   <>
                     <div
-                      className="fixed inset-0 z-10"
+                      className="fixed inset-0 z-40"
                       onClick={() => setDropdownOpen(false)}
                     />
-                    <div className="absolute left-0 right-0 mt-1 max-h-60 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md z-20 p-2 space-y-1">
+                    <div className="absolute left-0 right-0 mt-1 max-h-60 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-xl z-50 p-2 space-y-1">
                       {/* Select All option */}
                       <label className="flex items-center space-x-2 p-1.5 hover:bg-accent rounded-md cursor-pointer text-sm">
                         <input
@@ -403,9 +414,9 @@ export default function ReportsPage() {
                     />
                   </div>
                 </>
-              ) : (
+                ) : (
                 <>
-                  {/* Range Type */}
+                  {/* Range Type — occupies same slot as Start Date */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-muted-foreground">Range Type</label>
                     <select
@@ -424,7 +435,7 @@ export default function ReportsPage() {
                     </select>
                   </div>
 
-                  {/* Dynamic inputs based on selection */}
+                  {/* Dynamic input — occupies same slot as End Date */}
                   {rangeType === "monthly" && (
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-muted-foreground">Select Month</label>
@@ -454,7 +465,6 @@ export default function ReportsPage() {
                           ))}
                         </select>
                       </div>
-
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-muted-foreground">Quarter</label>
                         <select
@@ -498,17 +508,9 @@ export default function ReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-muted-foreground">Data Frequency</label>
-                  <select
-                    className="w-full flex h-10 rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none"
-                    value={frequency}
-                    onChange={(e) => setFrequency(e.target.value as DataFrequency)}
-                  >
-                    {FREQUENCY_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="h-10 px-3 py-2 flex items-center rounded-md border border-border bg-secondary text-sm text-foreground font-medium">
+                    1 day
+                  </div>
                 </div>
               </div>
             )}
@@ -611,6 +613,9 @@ export default function ReportsPage() {
                           Customer
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                          Customer Type
+                        </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
                           Date
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
@@ -620,13 +625,16 @@ export default function ReportsPage() {
                           Meter Serial
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                          Consumption (Sm³)
+                          Consumption (Corr)  (SCM)
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                          Corrected Vol (Sm³)
+                          Consumption (Uncorr) (m³)
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                          Uncorrected Vol (Sm³)
+                          Corrected Vol ttl (m³)
+                        </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                          Uncorrected Vol ttl (SCM)
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
                           Pressure (barg)
@@ -645,6 +653,9 @@ export default function ReportsPage() {
                           <TableCell className="text-sm font-medium text-foreground whitespace-nowrap">
                             {row.customerName || "—"}
                           </TableCell>
+                          <TableCell className="text-xs font-semibold text-muted-foreground whitespace-nowrap">
+                            {row.customerCategory || "—"}
+                          </TableCell>
                           <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
                             {formatLocalTs(row.receivedAt)}
                           </TableCell>
@@ -659,6 +670,12 @@ export default function ReportsPage() {
                             style={{ color: "var(--clr-accent-hi)" }}
                           >
                             {fmt(row.consumption, 3)}
+                          </TableCell>
+                          <TableCell
+                            className="text-right font-mono text-xs font-semibold"
+                            style={{ color: "var(--clr-commercial)" }}
+                          >
+                            {fmt(row.uncorrectedConsumption, 3)}
                           </TableCell>
                           <TableCell className="text-right font-mono text-xs font-medium text-foreground">
                             {fmt(row.correctedVolumeVb)}
@@ -715,16 +732,16 @@ export default function ReportsPage() {
                         Start Date
                       </TableHead>
                       <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                        Start Value (Sm³)
+                        Start Value (SCM)
                       </TableHead>
                       <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
                         End Date
                       </TableHead>
                       <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                        End Value (Sm³)
+                        End Value (SCM)
                       </TableHead>
                       <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                        Consumption (Sm³)
+                        Consumption (SCM)
                       </TableHead>
                     </TableRow>
                   </TableHeader>

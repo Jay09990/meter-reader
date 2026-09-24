@@ -71,15 +71,17 @@ function autoSizeColumns(worksheet: XLSX.WorkSheet, rows: Record<string, unknown
   });
 }
 
-function toExcelRow(row: ReportReading & { consumption?: number | null }) {
+function toExcelRow(row: ReportReading) {
   return {
     "Customer": row.customerName || "N/A",
+    "Customer Type": row.customerCategory || "N/A",
     "Reading Date": new Date(row.readingDate).toLocaleString(),
     "Device Serial No": row.deviceSerialNo,
     "Meter Serial No": row.meterSerialNo || "N/A",
-    "Consumption (Sm³)": row.consumption,
-    "Corrected Volume (Sm³)": row.correctedVolumeVb,
-    "Uncorrected Volume (Sm³)": row.uncorrectedVolumeVm,
+    "Consumption (Corr) (SCM)": row.consumption,
+    "Consumption (Uncorr) (m³)": row.uncorrectedConsumption,
+    "Corrected Vol ttl (SCM)": row.correctedVolumeVb,
+    "Uncorrected Vol ttl (m³)": row.uncorrectedVolumeVm,
     "Gas Pressure (barg)": row.gasPressure,
     "Gas Temperature (°C)": row.gasTemperature,
     "Battery Level (%)": row.batteryLevel != null ? Math.round(row.batteryLevel) : null,
@@ -149,10 +151,10 @@ export function buildRangeSummaryWorkbook(report: CustomerRangeReport): XLSX.Wor
     "Device Serial No": meter.deviceSerialNo,
     "Meter Serial No": meter.meterSerialNo || "N/A",
     "Start Date": meter.startDate,
-    "Start Value (Sm³)": meter.startValue,
+    "Start Value (SCM)": meter.startValue,
     "End Date": meter.endDate,
-    "End Value (Sm³)": meter.endValue,
-    "Consumption (Sm³)": meter.consumption,
+    "End Value (SCM)": meter.endValue,
+    "Consumption (SCM)": meter.consumption,
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(rows);

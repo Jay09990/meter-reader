@@ -233,11 +233,11 @@ export default function AdminPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Consumption Upper (Sm³)</label>
+                    <label className="text-sm font-medium">Consumption Upper (SCM)</label>
                     <Input type="number" step="any" value={consumptionUpperLimit} onChange={e => setConsumptionUpperLimit(e.target.value)} placeholder="Upper" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Consumption Lower (Sm³)</label>
+                    <label className="text-sm font-medium">Consumption Lower (SCM)</label>
                     <Input type="number" step="any" value={consumptionLowerLimit} onChange={e => setConsumptionLowerLimit(e.target.value)} placeholder="Lower" />
                   </div>
                 </div>

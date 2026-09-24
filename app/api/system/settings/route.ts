@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getSystemSettings,
   isValidEmail,
+  isValidTime,
   updateSystemSettings,
 } from "@/features/system-capacity/service";
 import { logApi } from "@/lib/api-log";
 
-// Reads and updates system-wide settings (capacity + alarm notification email).
+// Reads and updates system-wide settings (capacity, alarm email, report schedule time).
 export async function GET() {
   try {
     const settings = await getSystemSettings();
@@ -29,14 +30,16 @@ export async function PATCH(req: NextRequest) {
     const payload = body as {
       maxMeterCapacity?: unknown;
       alarmNotificationEmail?: unknown;
+      reportScheduleTime?: unknown;
     };
     logApi("PATCH /api/system/settings", { body: payload });
 
     const hasCapacity = "maxMeterCapacity" in payload;
     const hasEmail = "alarmNotificationEmail" in payload;
-    if (!hasCapacity && !hasEmail) {
+    const hasReportTime = "reportScheduleTime" in payload;
+    if (!hasCapacity && !hasEmail && !hasReportTime) {
       return NextResponse.json(
-        { error: "Provide maxMeterCapacity and/or alarmNotificationEmail" },
+        { error: "Provide maxMeterCapacity, alarmNotificationEmail and/or reportScheduleTime" },
         { status: 400 },
       );
     }
@@ -44,6 +47,7 @@ export async function PATCH(req: NextRequest) {
     const update: {
       maxMeterCapacity?: number | null;
       alarmNotificationEmail?: string | null;
+      reportScheduleTime?: string | null;
     } = {};
 
     if (hasCapacity) {
@@ -76,6 +80,24 @@ export async function PATCH(req: NextRequest) {
         );
       }
       update.alarmNotificationEmail = email;
+    }
+
+    if (hasReportTime) {
+      const raw = payload.reportScheduleTime;
+      if (raw !== null && typeof raw !== "string") {
+        return NextResponse.json(
+          { error: "reportScheduleTime must be a HH:MM string or null" },
+          { status: 400 },
+        );
+      }
+      const time = typeof raw === "string" ? raw.trim() : null;
+      if (time && !isValidTime(time)) {
+        return NextResponse.json(
+          { error: "reportScheduleTime must be in HH:MM 24-hour format (e.g. 07:00)" },
+          { status: 400 },
+        );
+      }
+      update.reportScheduleTime = time;
     }
 
     const settings = await updateSystemSettings(update);

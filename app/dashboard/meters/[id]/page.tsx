@@ -174,6 +174,7 @@ export default function MeterDetailPage() {
     device: DeviceData;
     latestReading: LatestReading | null;
     todayVolumeDelta: number | null;
+    todayUncorrectedVolumeDelta: number | null;
   } | null>(null);
   const [hourly, setHourly] = useState<HourlyData | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
@@ -351,7 +352,7 @@ export default function MeterDetailPage() {
     );
   }
 
-  const { device, latestReading: r, todayVolumeDelta } = deviceData;
+  const { device, latestReading: r, todayVolumeDelta, todayUncorrectedVolumeDelta } = deviceData;
 
   return (
     <div className="space-y-6 w-full">
@@ -406,8 +407,17 @@ export default function MeterDetailPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {/* Volume */}
         <KpiCard title="Volume" icon={Activity} iconStyle={{color:'var(--clr-accent-hi)'}}>
-          <BigValue value={fmt(todayVolumeDelta)} unit="SCM" />
-          <p className="text-xs text-muted-foreground">Today&apos;s value minus yesterday&apos;s value</p>
+          <div className="grid grid-cols-2 gap-2 mb-1">
+            <div>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold block">Today Corrected</span>
+              <BigValue value={fmt(todayVolumeDelta)} unit="SCM" />
+            </div>
+            <div>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold block">Today Uncorrected</span>
+              <BigValue value={fmt(todayUncorrectedVolumeDelta)} unit="SCM" />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">Today&apos;s earliest value minus yesterday&apos;s earliest value</p>
           <DataRow
             label="Corrected (Vb)"
             value={`${fmt(r?.correctedVolumeVb)} SCM`}
@@ -471,7 +481,7 @@ export default function MeterDetailPage() {
               )}
             </CardTitle>
             <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
-              Sm³ / hour
+              SCM / hour
             </span>
           </div>
         </CardHeader>
@@ -577,7 +587,7 @@ export default function MeterDetailPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="bg-card border-border">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold text-foreground">Corrected Volume (Sm³)</CardTitle>
+              <CardTitle className="text-sm font-semibold text-foreground">Corrected Volume (SCM)</CardTitle>
             </CardHeader>
             <CardContent>
               <ChartContainer config={{ correctedVolumeVb: { label: "Corrected Vol", color: "var(--clr-accent-hi)" } }} className="h-[140px] w-full">

@@ -161,6 +161,7 @@ model SystemSettings {
   id                     String   @id @default("singleton")
   maxMeterCapacity       Int?
   alarmNotificationEmail String?
+  reportScheduleTime     String?  @default("07:00") // HH:MM in 24h UTC, e.g. "07:00"
   updatedAt              DateTime @updatedAt
 }
 

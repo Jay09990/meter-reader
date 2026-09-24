@@ -374,38 +374,58 @@ export async function getDeviceLatest(deviceIdOrSerial: string) {
 
   const latestReading = device.readings[0] || null;
 
-  // ── Today's volume delta: today's latest Vb − yesterday's latest Vb ──────
+  // ── Today's volume delta: today's earliest Vb/Vm − yesterday's earliest Vb/Vm ──────
   const now = new Date();
   const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const yesterdayStart = new Date(todayStart.getTime() - 86_400_000);
 
-  const [todayReading, yesterdayReading] = await Promise.all([
-    // Latest reading whose readingDate is today
+  const [todayEarliest, yesterdayEarliest] = await Promise.all([
+    // Earliest reading for today
     db.reading.findFirst({
       where: {
         deviceId: device.id,
         readingDate: { gte: todayStart },
-        correctedVolumeVb: { not: null },
+        OR: [{ correctedVolumeVb: { not: null } }, { uncorrectedVolumeVm: { not: null } }],
       },
-      orderBy: { receivedAt: "desc" },
-      select: { correctedVolumeVb: true },
+      orderBy: [{ readingDate: "asc" }, { receivedAt: "asc" }],
+      select: { correctedVolumeVb: true, uncorrectedVolumeVm: true },
     }),
-    // Latest reading whose readingDate is yesterday
+    // Earliest reading for yesterday
     db.reading.findFirst({
       where: {
         deviceId: device.id,
         readingDate: { gte: yesterdayStart, lt: todayStart },
-        correctedVolumeVb: { not: null },
+        OR: [{ correctedVolumeVb: { not: null } }, { uncorrectedVolumeVm: { not: null } }],
       },
-      orderBy: { receivedAt: "desc" },
-      select: { correctedVolumeVb: true },
+      orderBy: [{ readingDate: "asc" }, { receivedAt: "asc" }],
+      select: { correctedVolumeVb: true, uncorrectedVolumeVm: true },
     }),
   ]);
 
+  // If no reading strictly on yesterday, look for the closest reading before today
+  let priorReading = yesterdayEarliest;
+  if (!priorReading) {
+    priorReading = await db.reading.findFirst({
+      where: {
+        deviceId: device.id,
+        readingDate: { lt: todayStart },
+        OR: [{ correctedVolumeVb: { not: null } }, { uncorrectedVolumeVm: { not: null } }],
+      },
+      orderBy: [{ readingDate: "desc" }, { receivedAt: "desc" }],
+      select: { correctedVolumeVb: true, uncorrectedVolumeVm: true },
+    });
+  }
+
   let todayVolumeDelta: number | null = null;
-  if (todayReading?.correctedVolumeVb != null && yesterdayReading?.correctedVolumeVb != null) {
-    const delta = todayReading.correctedVolumeVb - yesterdayReading.correctedVolumeVb;
-    todayVolumeDelta = delta >= 0 ? delta : null; // treat negative as suspect
+  if (todayEarliest?.correctedVolumeVb != null && priorReading?.correctedVolumeVb != null) {
+    const delta = todayEarliest.correctedVolumeVb - priorReading.correctedVolumeVb;
+    todayVolumeDelta = delta >= 0 ? delta : null;
+  }
+
+  let todayUncorrectedVolumeDelta: number | null = null;
+  if (todayEarliest?.uncorrectedVolumeVm != null && priorReading?.uncorrectedVolumeVm != null) {
+    const deltaVm = todayEarliest.uncorrectedVolumeVm - priorReading.uncorrectedVolumeVm;
+    todayUncorrectedVolumeDelta = deltaVm >= 0 ? deltaVm : null;
   }
 
   return {
@@ -452,8 +472,10 @@ export async function getDeviceLatest(deviceIdOrSerial: string) {
           receivedAt: latestReading.receivedAt,
         }
       : null,
-    /** today's correctedVolumeVb - yesterday's correctedVolumeVb (null if either day has no reading or delta is negative) */
+    /** today's earliest correctedVolumeVb - yesterday's earliest correctedVolumeVb */
     todayVolumeDelta,
+    /** today's earliest uncorrectedVolumeVm - yesterday's earliest uncorrectedVolumeVm */
+    todayUncorrectedVolumeDelta,
   };
 }
 

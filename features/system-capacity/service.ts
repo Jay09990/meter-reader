@@ -14,12 +14,19 @@ export interface CapacityStatus {
 export interface SystemSettingsValues {
   maxMeterCapacity: number | null;
   alarmNotificationEmail: string | null;
+  /** HH:MM 24-hour UTC string, e.g. "07:00". Defaults to "07:00" if not set. */
+  reportScheduleTime: string;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/; // HH:MM 24h
 
 export function isValidEmail(value: string): boolean {
   return EMAIL_RE.test(value);
+}
+
+export function isValidTime(value: string): boolean {
+  return TIME_RE.test(value);
 }
 
 async function ensureSystemSettingsRow() {
@@ -36,23 +43,29 @@ export async function getSystemSettings(): Promise<SystemSettingsValues> {
   return {
     maxMeterCapacity: settings?.maxMeterCapacity ?? null,
     alarmNotificationEmail: settings?.alarmNotificationEmail ?? null,
+    reportScheduleTime: settings?.reportScheduleTime ?? "07:00",
   };
 }
 
 export async function updateSystemSettings(input: {
   maxMeterCapacity?: number | null;
   alarmNotificationEmail?: string | null;
+  reportScheduleTime?: string | null;
 }): Promise<SystemSettingsValues> {
   await ensureSystemSettingsRow();
   const data: {
     maxMeterCapacity?: number | null;
     alarmNotificationEmail?: string | null;
+    reportScheduleTime?: string | null;
   } = {};
   if ("maxMeterCapacity" in input) data.maxMeterCapacity = input.maxMeterCapacity ?? null;
   if ("alarmNotificationEmail" in input) {
     data.alarmNotificationEmail = input.alarmNotificationEmail?.trim()
       ? input.alarmNotificationEmail.trim()
       : null;
+  }
+  if ("reportScheduleTime" in input) {
+    data.reportScheduleTime = input.reportScheduleTime?.trim() || "07:00";
   }
   const settings = await db.systemSettings.update({
     where: { id: "singleton" },
@@ -61,6 +74,7 @@ export async function updateSystemSettings(input: {
   return {
     maxMeterCapacity: settings.maxMeterCapacity,
     alarmNotificationEmail: settings.alarmNotificationEmail,
+    reportScheduleTime: settings.reportScheduleTime ?? "07:00",
   };
 }
 

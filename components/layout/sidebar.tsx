@@ -12,6 +12,7 @@ import {
   Map,
   X,
   Users,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ const navigationGroups = [
     items: [
       { name: "Alarms", href: "/dashboard/alarms", icon: AlertTriangle },
       { name: "Reports", href: "/dashboard/reports", icon: FileText },
+      { name: "Settings", href: "/dashboard/settings", icon: Settings },
     ],
   },
 ];
