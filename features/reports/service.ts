@@ -74,15 +74,40 @@ export interface GetCustomerReportParams {
   frequency?: DataFrequency;
 }
 
-function resampleByFrequency<T extends { receivedAt: string }>(
+function resampleByFrequency<T extends { receivedAt: string; readingDate: string }>(
   readings: T[],
+  frequency: DataFrequency,
   frequencyMs: number,
 ): T[] {
+  if (frequency === "1d") {
+    // Keep one reading per distinct calendar day (chronologically earliest reading of the day)
+    const dayMap = new Map<string, T>();
+    for (const r of readings) {
+      const dayKey = r.readingDate.split("T")[0] || r.receivedAt.split("T")[0];
+      if (!dayMap.has(dayKey)) {
+        dayMap.set(dayKey, r);
+      }
+    }
+    return Array.from(dayMap.values());
+  }
+
+  if (frequency === "1mo") {
+    const monthMap = new Map<string, T>();
+    for (const r of readings) {
+      const monthKey = (r.readingDate || r.receivedAt).slice(0, 7);
+      if (!monthMap.has(monthKey)) {
+        monthMap.set(monthKey, r);
+      }
+    }
+    return Array.from(monthMap.values());
+  }
+
+  // For time-based intervals (1m, 5m, 15m, 30m, 1h, 6h, 12h, 15d)
   const kept: T[] = [];
   let lastKeptTime = -Infinity;
   for (const r of readings) {
     const t = new Date(r.receivedAt).getTime();
-    if (t - lastKeptTime >= frequencyMs) {
+    if (t - lastKeptTime >= frequencyMs - 30_000) {
       kept.push(r);
       lastKeptTime = t;
     }
@@ -91,17 +116,9 @@ function resampleByFrequency<T extends { receivedAt: string }>(
 }
 
 /**
- * For each RAW reading (before any frequency resampling), consumption =
- * this reading's correctedVolumeVb − the immediately preceding raw
- * reading's correctedVolumeVb for the same device — the true previous
- * timestamp's value, regardless of whether that reading survives the
- * later frequency filter.
- *
- * This MUST run on the full, unfiltered chronological reading list before
- * resampleByFrequency is applied. Only the very first raw reading in the
- * fetched window needs a DB lookup (its true predecessor is outside the
- * fetched date range) — every other row's predecessor is simply the
- * previous element in this same array.
+ * Computes consumption for report table rows:
+ * - Second row's data minus its upper row's data (current row - previous row)
+ * - For the first row, looks up the preceding reading prior to the start date if available
  */
 async function computeConsumption(
   rawReadings: Omit<ReportReading, "consumption" | "uncorrectedConsumption">[],
@@ -153,7 +170,7 @@ export async function getCustomerReport({
   customerId,
   startDate,
   endDate,
-  frequency = "1h",
+  frequency = "1d",
 }: GetCustomerReportParams): Promise<CustomerReport> {
   if (!customerId) {
     throw new ReportValidationError("Customer ID is required");
@@ -206,7 +223,7 @@ export async function getCustomerReport({
 
   const freqOption =
     FREQUENCY_OPTIONS.find((f) => f.value === frequency) ??
-    FREQUENCY_OPTIONS.find((f) => f.value === "1h")!;
+    FREQUENCY_OPTIONS.find((f) => f.value === "1d")!;
   const frequencyMs = freqOption.ms;
 
   const readings = await db.reading.findMany({
@@ -267,25 +284,23 @@ export async function getCustomerReport({
     });
   }
 
-  // Compute consumption against the FULL raw chronological history first,
-  // THEN resample for display — this is the fix. Each displayed row keeps
-  // the consumption value it earned against its true previous push, not
-  // against whatever row happened to survive the frequency filter next to it.
   const processedMeters: MeterReportGroup[] = [];
   const allProcessedReadings: ReportReading[] = [];
 
   for (const group of meterMap.values()) {
-    const withCons = await computeConsumption(group.readings);
-    const resampled = resampleByFrequency(withCons, frequencyMs);
+    // 1. Resample first by the selected frequency (e.g. 1 distinct row per calendar day)
+    const resampledRaw = resampleByFrequency(group.readings, frequency, frequencyMs);
+    // 2. Compute consumption deltas between consecutive table rows (row[i] - row[i-1])
+    const withCons = await computeConsumption(resampledRaw);
 
     processedMeters.push({
       deviceId: group.deviceId,
       deviceSerialNo: group.deviceSerialNo,
       meterSerialNo: group.meterSerialNo,
-      readings: resampled,
+      readings: withCons,
     });
 
-    allProcessedReadings.push(...resampled);
+    allProcessedReadings.push(...withCons);
   }
 
   // Re-sort flattened array matching ordering convention (by deviceSerialNo then readingDate)

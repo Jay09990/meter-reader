@@ -33,7 +33,6 @@ import type {
   RangeSelectorType,
   DataFrequency,
 } from "@/features/reports";
-import { FREQUENCY_OPTIONS } from "@/features/reports";
 import { formatLocalTs, cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
