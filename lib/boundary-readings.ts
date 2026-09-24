@@ -123,10 +123,14 @@ export async function getDeviceBoundaryReading(
   deviceId: string,
   isoDate: string,
 ): Promise<number | null> {
-  const reading = await db.reading.findFirst({
+  const dateObj = new Date(isoDate);
+  // Include the full calendar day (up to 23:59:59.999Z) for the given boundary date
+  const endOfDay = new Date(Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate(), 23, 59, 59, 999));
+
+  let reading = await db.reading.findFirst({
     where: {
       deviceId,
-      readingDate: { lte: new Date(isoDate) },
+      readingDate: { lte: endOfDay },
       correctedVolumeVb: { not: null },
     },
     orderBy: [
@@ -135,6 +139,22 @@ export async function getDeviceBoundaryReading(
     ],
     select: { correctedVolumeVb: true },
   });
+
+  // If no reading on or before isoDate, fallback to the earliest reading for this device
+  if (!reading) {
+    reading = await db.reading.findFirst({
+      where: {
+        deviceId,
+        correctedVolumeVb: { not: null },
+      },
+      orderBy: [
+        { readingDate: "asc" },
+        { receivedAt: "asc" },
+      ],
+      select: { correctedVolumeVb: true },
+    });
+  }
+
   return reading?.correctedVolumeVb ?? null;
 }
 
@@ -168,10 +188,13 @@ export async function getDeviceBoundaryReadingUncorrected(
   deviceId: string,
   isoDate: string,
 ): Promise<number | null> {
-  const reading = await db.reading.findFirst({
+  const dateObj = new Date(isoDate);
+  const endOfDay = new Date(Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate(), 23, 59, 59, 999));
+
+  let reading = await db.reading.findFirst({
     where: {
       deviceId,
-      readingDate: { lte: new Date(isoDate) },
+      readingDate: { lte: endOfDay },
       uncorrectedVolumeVm: { not: null },
     },
     orderBy: [
@@ -180,6 +203,21 @@ export async function getDeviceBoundaryReadingUncorrected(
     ],
     select: { uncorrectedVolumeVm: true },
   });
+
+  if (!reading) {
+    reading = await db.reading.findFirst({
+      where: {
+        deviceId,
+        uncorrectedVolumeVm: { not: null },
+      },
+      orderBy: [
+        { readingDate: "asc" },
+        { receivedAt: "asc" },
+      ],
+      select: { uncorrectedVolumeVm: true },
+    });
+  }
+
   return reading?.uncorrectedVolumeVm ?? null;
 }
 

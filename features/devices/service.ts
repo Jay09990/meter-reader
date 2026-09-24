@@ -464,9 +464,9 @@ export async function getDeviceLatest(deviceIdOrSerial: string) {
           temperatureMax: latestReading.temperatureMax,
           temperatureMin: latestReading.temperatureMin,
           compressibilityZ: latestReading.compressibilityZ,
-          compressibilityFpv: latestReading.compressibilityFpv,
-          correctionFactorC: latestReading.correctionFactorC,
-          gasDensity: latestReading.gasDensity,
+          correctionFactorC: (latestReading.correctedVolumeVb != null && latestReading.uncorrectedVolumeVm != null && latestReading.uncorrectedVolumeVm > 0)
+            ? latestReading.correctedVolumeVb / latestReading.uncorrectedVolumeVm
+            : latestReading.correctionFactorC,
           hourlyConsumption: latestReading.hourlyConsumption,
           batteryLevel: latestReading.batteryLevel,
           receivedAt: latestReading.receivedAt,
