@@ -152,37 +152,46 @@ function autoSizeColumns(worksheet: ExcelJS.Worksheet, aoa: (string | number)[][
 }
 
 /**
- * Builds a single "REPORT" worksheet in the standard AMR format: one row per
- * meter reading, with SR.NO sequential across the whole report.
+ * Builds an Excel workbook with one worksheet per customer. Each sheet
+ * contains only that customer's meter readings in the standard AMR format,
+ * with SR.NO restarting at 1 per sheet.
  */
-export function buildCustomerReportWorkbook(meters: MeterReportGroup[]): ExcelJS.Workbook {
+export function buildCustomerReportWorkbook(
+  customers: Array<{
+    customerName: string;
+    meters: MeterReportGroup[];
+  }>,
+): ExcelJS.Workbook {
   const workbook = new ExcelJS.Workbook();
+  const usedSheetNames = new Set<string>();
 
-  const readings = meters
-    .filter((meter) => meter.readings.length > 0)
-    .flatMap((meter) => meter.readings);
+  for (const { customerName, meters } of customers) {
+    const sheetName = sanitizeSheetName(customerName, "Customer", usedSheetNames);
 
-  if (readings.length === 0) {
-    return workbook;
-  }
+    const relevantReadings = meters
+      .filter((meter) => meter.readings.length > 0)
+      .flatMap((meter) => meter.readings);
 
-  const dataRows = readings.map((r, i) => toExcelRowAoa(r, i + 1));
-  const aoa = [AMR_REPORT_HEADERS, AMR_REPORT_UNITS, ...dataRows];
+    if (relevantReadings.length === 0) continue;
 
-  const worksheet = workbook.addWorksheet("REPORT");
-  autoSizeColumns(worksheet, aoa);
+    const dataRows = relevantReadings.map((r, i) => toExcelRowAoa(r, i + 1));
+    const aoa = [AMR_REPORT_HEADERS, AMR_REPORT_UNITS, ...dataRows];
 
-  aoa.forEach((rowValues, rowIndex) => {
-    const row = worksheet.addRow(rowValues);
-    const isHeaderRow = rowIndex === 0;
-    const isUnitRow = rowIndex === 1;
+    const worksheet = workbook.addWorksheet(sheetName);
+    autoSizeColumns(worksheet, aoa);
 
-    row.eachCell((cell, colIndex) => {
-      cell.alignment = { horizontal: AMR_REPORT_ALIGN[colIndex - 1], vertical: "middle" };
-      if (isHeaderRow) cell.font = { bold: true };
-      if (isUnitRow) cell.font = { italic: true, color: { argb: "FF666666" } };
+    aoa.forEach((rowValues, rowIndex) => {
+      const row = worksheet.addRow(rowValues);
+      const isHeaderRow = rowIndex === 0;
+      const isUnitRow = rowIndex === 1;
+
+      row.eachCell((cell, colIndex) => {
+        cell.alignment = { horizontal: AMR_REPORT_ALIGN[colIndex - 1], vertical: "middle" };
+        if (isHeaderRow) cell.font = { bold: true };
+        if (isUnitRow) cell.font = { italic: true, color: { argb: "FF666666" } };
+      });
     });
-  });
+  }
 
   return workbook;
 }
@@ -201,18 +210,26 @@ export function buildCustomerReportFilename(
  * NOTE: now async (ExcelJS writes asynchronously) — call sites need `await`.
  */
 export async function downloadCustomerReportExcel(
-  meters: MeterReportGroup[],
-  customerName: string,
+  customers: Array<{
+    customerName: string;
+    meters: MeterReportGroup[];
+  }>,
   startDate: string,
   endDate: string,
 ): Promise<void> {
-  const workbook = buildCustomerReportWorkbook(meters);
+  const workbook = buildCustomerReportWorkbook(customers);
 
   if (workbook.worksheets.length === 0) {
     throw new Error("No meter data available to export.");
   }
 
-  const filename = buildCustomerReportFilename(customerName, startDate, endDate);
+  // Use the first customer's name and date range for the filename
+  const firstCustomer = customers[0];
+  const filename = buildCustomerReportFilename(
+    firstCustomer.customerName,
+    startDate,
+    endDate,
+  );
   const buffer = await workbook.xlsx.writeBuffer();
 
   const blob = new Blob([buffer], {

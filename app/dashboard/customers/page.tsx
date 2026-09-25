@@ -192,7 +192,7 @@ function buildDeviceIdentityPatch(draft: DeviceIdentityDraft): Record<string, st
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<CustomerGroup[]>([]);
   const [total, setTotal] = useState(0);
-  const [view, setView] = useState<"list" | "grid">("grid");
+  const [view, setView] = useState<"list" | "grid">("list");
 
   // Filter States
   const [page, setPage] = useState(1);
@@ -756,15 +756,6 @@ export default function CustomersPage() {
           </Button>
           <div className="flex space-x-1 bg-secondary p-1 rounded-lg border border-border">
             <Button
-              variant={view === "grid" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setView("grid")}
-              className="h-8 px-3 text-xs"
-            >
-              <LayoutGrid className="w-3.5 h-3.5 mr-1.5" />
-              Grid View
-            </Button>
-            <Button
               variant={view === "list" ? "default" : "ghost"}
               size="sm"
               onClick={() => setView("list")}
@@ -772,6 +763,15 @@ export default function CustomersPage() {
             >
               <List className="w-3.5 h-3.5 mr-1.5" />
               List View
+            </Button>
+            <Button
+              variant={view === "grid" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setView("grid")}
+              className="h-8 px-3 text-xs"
+            >
+              <LayoutGrid className="w-3.5 h-3.5 mr-1.5" />
+              Grid View
             </Button>
           </div>
         </div>
@@ -834,7 +834,7 @@ export default function CustomersPage() {
 
       {/* Grid View */}
       {view === "grid" ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {customers.map((customer) => {
             const leadingDevice = customer.devices[0];
             const summaryStatus = getCustomerStatusSummary(customer);

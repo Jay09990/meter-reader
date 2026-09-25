@@ -27,6 +27,7 @@ import {
 } from "@/lib/report-excel";
 import type {
   CustomerReport,
+  MeterReportGroup,
   ReportMode,
   RangeSelectorType,
   DataFrequency,
@@ -277,9 +278,24 @@ export default function ReportsPage() {
       if (!reportData) return;
       const meters = reportData.meters ?? [];
       if (meters.length === 0) return;
-      downloadCustomerReportExcel(
+
+      // Group meters by customer name for per-customer worksheets
+      const customerMap = new Map<string, MeterReportGroup[]>();
+      for (const meter of meters) {
+        // Find the customer name from the first reading of this meter
+        const customerName = meter.readings[0]?.customerName || "Unknown";
+        const existing = customerMap.get(customerName) ?? [];
+        existing.push(meter);
+        customerMap.set(customerName, existing);
+      }
+
+      const customers = Array.from(customerMap.entries()).map(([customerName, meters]) => ({
+        customerName,
         meters,
-        reportData.customerName,
+      }));
+
+      downloadCustomerReportExcel(
+        customers,
         reportData.startDate,
         reportData.endDate,
       );

@@ -80,11 +80,22 @@ export async function sendDailyReport(forDateStr: string): Promise<{
     }
   }
 
-  // Build Excel workbook
-  // Build Excel workbook
+  // Build Excel workbook — one worksheet per customer
   let workbook: ExcelJS.Workbook;
   if (allMeters.length > 0) {
-    workbook = buildCustomerReportWorkbook(allMeters);
+    // Group meters by customer name
+    const customerMap = new Map<string, MeterReportGroup[]>();
+    for (const meter of allMeters) {
+      const customerName = meter.readings[0]?.customerName || "Unknown";
+      const existing = customerMap.get(customerName) ?? [];
+      existing.push(meter);
+      customerMap.set(customerName, existing);
+    }
+    const customers = Array.from(customerMap.entries()).map(([customerName, meters]) => ({
+      customerName,
+      meters,
+    }));
+    workbook = buildCustomerReportWorkbook(customers);
   } else {
     workbook = new ExcelJS.Workbook();
     const sheetName = sanitizeSheetName("Summary", "Summary", new Set());
