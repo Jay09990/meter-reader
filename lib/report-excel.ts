@@ -192,7 +192,8 @@ function summarizeCustomerRow(readings: ReportReading[], srNo: number): (string 
   }
 
   const alarms = alarmSet.size > 0 ? [...alarmSet].join("; ") : "NORMAL";
-  const avg = (sum: number, count: number) => (count > 0 ? Number((sum / count).toFixed(2)) : null);
+  const avg = (sum: number, count: number) =>
+    count > 0 ? Number((sum / count).toFixed(2)) : "-";
 
   return [
     srNo,
