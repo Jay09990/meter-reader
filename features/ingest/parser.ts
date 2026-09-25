@@ -97,9 +97,17 @@ export function parseIngestPayload(body: unknown): ParsedReading {
     gasTemperature: typeof payload.temperature?.value === "number" ? payload.temperature.value : undefined,
     temperatureMax: typeof payload.temperature?.max === "number" ? payload.temperature.max : undefined,
     temperatureMin: typeof payload.temperature?.min === "number" ? payload.temperature.min : undefined,
-    compressibilityZ: typeof payload.gasProperties?.compressibilityZ === "number" ? payload.gasProperties.compressibilityZ : undefined,
+    compressibilityZ: (typeof payload.gasProperties?.compressibilityZ === "number" && payload.gasProperties.compressibilityZ > 0)
+      ? payload.gasProperties.compressibilityZ
+      : (typeof payload.volume?.correctedVb === "number" && typeof payload.volume?.uncorrectedVm === "number" && payload.volume.uncorrectedVm > 0)
+        ? payload.volume.correctedVb / payload.volume.uncorrectedVm
+        : undefined,
     compressibilityFpv: typeof payload.gasProperties?.compressibilityFpv === "number" ? payload.gasProperties.compressibilityFpv : undefined,
-    correctionFactorC: typeof payload.gasProperties?.correctionFactorC === "number" ? payload.gasProperties.correctionFactorC : undefined,
+    correctionFactorC: (typeof payload.gasProperties?.correctionFactorC === "number" && payload.gasProperties.correctionFactorC > 0)
+      ? payload.gasProperties.correctionFactorC
+      : (typeof payload.volume?.correctedVb === "number" && typeof payload.volume?.uncorrectedVm === "number" && payload.volume.uncorrectedVm > 0)
+        ? payload.volume.correctedVb / payload.volume.uncorrectedVm
+        : undefined,
     gasDensity: typeof payload.gasProperties?.density === "number" ? payload.gasProperties.density : undefined,
     batteryLevel: typeof payload.batteryLevel === "number" ? payload.batteryLevel : undefined,
     currentFlowRate: typeof payload.currentFlowRate === "number" ? payload.currentFlowRate : undefined,

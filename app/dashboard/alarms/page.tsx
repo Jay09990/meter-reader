@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Clock,
   Activity,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -136,7 +137,8 @@ export default function AlarmsPage() {
             size="sm"
             className="border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
           >
-            Export CSV
+            <Download className="w-4 h-4 mr-2" />
+            Export Report (Excel)
           </Button>
           <Button
             onClick={() => fetchAlarms(pagination.page)}

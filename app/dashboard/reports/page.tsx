@@ -23,17 +23,15 @@ import {
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   downloadCustomerReportExcel,
-  downloadRangeSummaryExcel,
   groupReadingsByMeter,
 } from "@/lib/report-excel";
 import type {
   CustomerReport,
-  CustomerRangeReport,
   ReportMode,
   RangeSelectorType,
   DataFrequency,
 } from "@/features/reports";
-import { formatLocalTs, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Customer {
@@ -117,8 +115,6 @@ export default function ReportsPage() {
   // Report State
   const [loadingReport, setLoadingReport] = useState(false);
   const [reportData, setReportData] = useState<CustomerReport | null>(null);
-  const [rangeReportData, setRangeReportData] = useState<CustomerRangeReport | null>(null);
-  const [activeReportMode, setActiveReportMode] = useState<ReportMode | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -196,9 +192,7 @@ export default function ReportsPage() {
     setError(null);
     setHasSearched(true);
     setReportData(null);
-    setRangeReportData(null);
     setCurrentPage(1);
-    setActiveReportMode(reportMode);
 
     try {
       const selectedIdParam =
@@ -206,51 +200,66 @@ export default function ReportsPage() {
           ? "all"
           : selectedCustomerIds.join(",");
 
-      if (reportMode === "dateRange") {
-        const params = new URLSearchParams({
-          customerId: selectedIdParam,
-          startDate: startDate,
-          endDate: endDate,
-          frequency: frequency,
-        });
+      let queryStartDate = startDate;
+      let queryEndDate = endDate;
 
-        const res = await fetch(`/api/reports/customer?${params.toString()}`);
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || "Failed to fetch report data.");
-        }
-
-        const readings = data.readings ?? [];
-        setReportData({
-          ...data,
-          readings,
-          meters: data.meters ?? groupReadingsByMeter(readings),
-        });
-      } else {
-        const params = new URLSearchParams({
-          customerId: selectedIdParam,
-          rangeType,
-        });
-
+      if (reportMode === "rangeSelection") {
+        const todayIso = new Date().toISOString().split("T")[0];
         if (rangeType === "monthly") {
-          params.append("month", month);
+          const [yStr, mStr] = month.split("-");
+          const y = parseInt(yStr, 10);
+          const m = parseInt(mStr, 10);
+          queryStartDate = `${month}-01`;
+          const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+          const end = `${month}-${String(lastDay).padStart(2, "0")}`;
+          queryEndDate = end > todayIso ? todayIso : end;
         } else if (rangeType === "quarterly") {
-          params.append("fyStartYear", String(fyStartYear));
-          params.append("quarter", String(quarter));
+          const y = Number(fyStartYear);
+          if (quarter === 1) {
+            queryStartDate = `${y}-04-01`;
+            const end = `${y}-06-30`;
+            queryEndDate = end > todayIso ? todayIso : end;
+          } else if (quarter === 2) {
+            queryStartDate = `${y}-07-01`;
+            const end = `${y}-09-30`;
+            queryEndDate = end > todayIso ? todayIso : end;
+          } else if (quarter === 3) {
+            queryStartDate = `${y}-10-01`;
+            const end = `${y}-12-31`;
+            queryEndDate = end > todayIso ? todayIso : end;
+          } else {
+            queryStartDate = `${y + 1}-01-01`;
+            const end = `${y + 1}-03-31`;
+            queryEndDate = end > todayIso ? todayIso : end;
+          }
         } else if (rangeType === "yearly") {
-          params.append("fyStartYear", String(fyStartYear));
+          const y = Number(fyStartYear);
+          queryStartDate = `${y}-04-01`;
+          const end = `${y + 1}-03-31`;
+          queryEndDate = end > todayIso ? todayIso : end;
         }
-
-        const res = await fetch(`/api/reports/customer/range-summary?${params.toString()}`);
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || "Failed to fetch range summary report.");
-        }
-
-        setRangeReportData(data);
       }
+
+      const params = new URLSearchParams({
+        customerId: selectedIdParam,
+        startDate: queryStartDate,
+        endDate: queryEndDate,
+        frequency: frequency,
+      });
+
+      const res = await fetch(`/api/reports/customer?${params.toString()}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to fetch report data.");
+      }
+
+      const readings = data.readings ?? [];
+      setReportData({
+        ...data,
+        readings,
+        meters: data.meters ?? groupReadingsByMeter(readings),
+      });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "An unexpected error occurred.";
       setError(message);
@@ -265,20 +274,15 @@ export default function ReportsPage() {
     setExporting(true);
 
     try {
-      if (activeReportMode === "dateRange") {
-        if (!reportData) return;
-        const meters = reportData.meters ?? [];
-        if (meters.length === 0) return;
-        downloadCustomerReportExcel(
-          meters,
-          reportData.customerName,
-          reportData.startDate,
-          reportData.endDate,
-        );
-      } else {
-        if (!rangeReportData) return;
-        downloadRangeSummaryExcel(rangeReportData);
-      }
+      if (!reportData) return;
+      const meters = reportData.meters ?? [];
+      if (meters.length === 0) return;
+      downloadCustomerReportExcel(
+        meters,
+        reportData.customerName,
+        reportData.startDate,
+        reportData.endDate,
+      );
     } catch (err) {
       console.error("Failed to export Excel:", err);
       const message = err instanceof Error ? err.message : "An error occurred while generating the Excel file.";
@@ -558,17 +562,11 @@ export default function ReportsPage() {
           <CardHeader className="flex flex-row items-center justify-between border-b border-border bg-secondary pb-4">
             <div>
               <CardTitle className="text-lg text-foreground">Report Data</CardTitle>
-              {activeReportMode === "dateRange" && allReadings.length > 0 && (
+              {allReadings.length > 0 && (
                 <p className="text-xs text-muted-foreground mt-1">
                   Showing {pageStartIndex + 1}–
                   {Math.min(pageStartIndex + ROWS_PER_PAGE, allReadings.length)} of{" "}
                   {allReadings.length} readings
-                </p>
-              )}
-              {activeReportMode === "rangeSelection" && rangeReportData && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Range Summary for {rangeReportData.rangeLabel} ({rangeReportData.startDate} to{" "}
-                  {rangeReportData.endDate})
                 </p>
               )}
             </div>
@@ -578,9 +576,7 @@ export default function ReportsPage() {
               disabled={
                 loadingReport ||
                 exporting ||
-                (activeReportMode === "dateRange" &&
-                  (!reportData || (reportData.meters?.length ?? 0) === 0)) ||
-                (activeReportMode === "rangeSelection" && !rangeReportData)
+                (!reportData || (reportData.meters?.length ?? 0) === 0)
               }
               variant="outline"
               className="border-border bg-card hover:bg-accent text-foreground"
@@ -602,85 +598,85 @@ export default function ReportsPage() {
                 />
                 <p>Generating report...</p>
               </div>
-            ) : activeReportMode === "dateRange" && reportData && reportData.readings?.length > 0 ? (
+            ) : reportData && reportData.readings?.length > 0 ? (
               <>
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader className="bg-secondary border-b border-border">
                       <TableRow className="border-border hover:bg-transparent">
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
-                          Customer
+                          SR.NO
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
-                          Customer Type
+                          NAME OF INDUSTRY
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
-                          Date
+                          CUSTOMER TYPE
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
-                          Device Serial
+                          SOURCE/SEGMENT
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
-                          Meter Serial
+                          STREAM NO
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                          Consumption (Corr)  (SCM)
+                          PRESSURE (Bar)
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                          Consumption (Uncorr) (m³)
+                          TEMPERATURE (°C)
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                          Corrected Vol ttl (m³)
+                          CORRECTION FACTOR
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                          Uncorrected Vol ttl (SCM)
+                          CURRENT FLOWRATE (CORRECTED) (SCMH)
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                          Pressure (barg)
+                          CORRECTED VOLUME TOTALIZER (SCM)
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                          Temp (°C)
+                          UNCORRECTED VOLUME TOTALIZER (m³)
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                          Battery (%)
+                          PREVIOUS DAY UNCORRECTED (m³)
+                        </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                          PREVIOUS DAY CORRECTED (SCMD)
+                        </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                          PREVIOUS DAY UNCORRECTED TOTALIZER (m³)
+                        </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                          PREVIOUS DAY CORRECTED TOTAIZER (SCM)
+                        </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                          EVC BATTERY/BALANCE DAYS (%)
+                        </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                          ALARMS
+                        </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                          DATE
                         </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paginatedReadings.map((row) => (
+                      {paginatedReadings.map((row, idx) => (
                         <TableRow key={row.id} className="border-border hover:bg-secondary/60">
+                          <TableCell className="font-mono text-xs text-muted-foreground">
+                            {pageStartIndex + idx + 1}
+                          </TableCell>
                           <TableCell className="text-sm font-medium text-foreground whitespace-nowrap">
                             {row.customerName || "—"}
                           </TableCell>
                           <TableCell className="text-xs font-semibold text-muted-foreground whitespace-nowrap">
                             {row.customerCategory || "—"}
                           </TableCell>
-                          <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
-                            {formatLocalTs(row.receivedAt)}
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            IBAFO
                           </TableCell>
-                          <TableCell className="font-mono text-xs text-foreground">
-                            {row.deviceSerialNo}
-                          </TableCell>
-                          <TableCell className="font-mono text-xs text-muted-foreground">
-                            {row.meterSerialNo || "—"}
-                          </TableCell>
-                          <TableCell
-                            className="text-right font-mono text-xs font-semibold"
-                            style={{ color: "var(--clr-accent-hi)" }}
-                          >
-                            {fmt(row.consumption, 3)}
-                          </TableCell>
-                          <TableCell
-                            className="text-right font-mono text-xs font-semibold"
-                            style={{ color: "var(--clr-commercial)" }}
-                          >
-                            {fmt(row.uncorrectedConsumption, 3)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-xs font-medium text-foreground">
-                            {fmt(row.correctedVolumeVb)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                            {fmt(row.uncorrectedVolumeVm)}
+                          <TableCell className="font-mono text-xs text-foreground whitespace-nowrap">
+                            {row.meterSerialNo || row.deviceSerialNo}
                           </TableCell>
                           <TableCell
                             className="text-right font-mono text-xs"
@@ -694,11 +690,47 @@ export default function ReportsPage() {
                           >
                             {fmt(row.gasTemperature)}
                           </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                            {fmt(row.correctionFactor)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                            {fmt(row.currentFlowRate)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs font-medium text-foreground">
+                            {fmt(row.correctedVolumeVb)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                            {fmt(row.uncorrectedVolumeVm)}
+                          </TableCell>
+                          <TableCell
+                            className="text-right font-mono text-xs"
+                            style={{ color: "var(--clr-commercial)" }}
+                          >
+                            {fmt(row.prevDayUncorrected, 3)}
+                          </TableCell>
+                          <TableCell
+                            className="text-right font-mono text-xs font-semibold"
+                            style={{ color: "var(--clr-accent-hi)" }}
+                          >
+                            {fmt(row.prevDayCorrected, 3)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                            {fmt(row.prevDayUncorrectedTotalizer)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs font-medium text-foreground">
+                            {fmt(row.prevDayCorrectedTotalizer)}
+                          </TableCell>
                           <TableCell
                             className="text-right font-mono text-xs"
                             style={{ color: "var(--clr-online)" }}
                           >
                             {row.batteryLevel != null ? `${Math.round(row.batteryLevel)}%` : "—"}
+                          </TableCell>
+                          <TableCell className="text-xs whitespace-normal max-w-[200px]">
+                            {"---"}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                            {row.readingDate.split("T")[0]}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -711,90 +743,6 @@ export default function ReportsPage() {
                   onPageChange={setCurrentPage}
                 />
               </>
-            ) : activeReportMode === "rangeSelection" &&
-              rangeReportData &&
-              rangeReportData.meters?.length > 0 ? (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-secondary border-b border-border">
-                    <TableRow className="border-border hover:bg-transparent">
-                      <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
-                        Customer
-                      </TableHead>
-                      <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
-                        Device Serial
-                      </TableHead>
-                      <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
-                        Meter Serial
-                      </TableHead>
-                      <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
-                        Start Date
-                      </TableHead>
-                      <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                        Start Value (SCM)
-                      </TableHead>
-                      <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
-                        End Date
-                      </TableHead>
-                      <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                        End Value (SCM)
-                      </TableHead>
-                      <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                        Consumption (SCM)
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rangeReportData.meters.map((meter) => (
-                      <TableRow
-                        key={meter.deviceId}
-                        className={cn(
-                          "border-border hover:bg-secondary/60",
-                          meter.suspect && "bg-destructive/10",
-                        )}
-                      >
-                        <TableCell className="text-sm font-medium text-foreground whitespace-nowrap">
-                          {meter.customerName || "—"}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-foreground">
-                          {meter.deviceSerialNo}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">
-                          {meter.meterSerialNo || "—"}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">
-                          {meter.startDate}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                          {fmt(meter.startValue)}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">
-                          {meter.endDate}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                          {fmt(meter.endValue)}
-                        </TableCell>
-                        <TableCell
-                          className={cn(
-                            "text-right font-mono text-xs font-semibold",
-                            meter.suspect ? "text-destructive" : "text-foreground",
-                          )}
-                          style={!meter.suspect ? { color: "var(--clr-accent-hi)" } : undefined}
-                        >
-                          {meter.suspect ? (
-                            <span className="inline-flex items-center text-xs text-destructive font-medium">
-                              <AlertCircle className="w-3.5 h-3.5 mr-1" />
-                              Suspect (Reset)
-                            </span>
-                          ) : (
-                            fmt(meter.consumption, 3)
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
             ) : (
               <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
                 <FileDown className="w-10 h-10 mb-4 opacity-30" />

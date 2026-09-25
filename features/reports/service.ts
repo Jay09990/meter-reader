@@ -38,13 +38,22 @@ export interface ReportReading {
   meterSerialNo: string | null;
   customerName: string | null;
   customerCategory: string | null;
+  gaName: string | null;
   readingDate: string;
   receivedAt: string;
-  correctedVolumeVb: number | null;
-  uncorrectedVolumeVm: number | null;
   gasPressure: number | null;
   gasTemperature: number | null;
+  correctionFactor: number | null;
+  currentFlowRate: number | null;
+  correctedVolumeVb: number | null;
+  uncorrectedVolumeVm: number | null;
+  prevDayUncorrected: number | null;
+  prevDayCorrected: number | null;
+  prevDayUncorrectedTotalizer: number | null;
+  prevDayCorrectedTotalizer: number | null;
   batteryLevel: number | null;
+  alarms: string | null;
+  // Legacy aliases
   consumption: number | null;
   uncorrectedConsumption: number | null;
 }
@@ -117,11 +126,12 @@ function resampleByFrequency<T extends { receivedAt: string; readingDate: string
 
 /**
  * Computes consumption for report table rows:
- * - Second row's data minus its upper row's data (current row - previous row)
- * - For the first row, looks up the preceding reading prior to the start date if available
+ * - Previous day totalizers & deltas carried over directly in memory
+ * - If prior reading exists in DB before start date, first row carries over prior reading
+ * - If no prior reading in DB, first row shows null (-)
  */
 async function computeConsumption(
-  rawReadings: Omit<ReportReading, "consumption" | "uncorrectedConsumption">[],
+  rawReadings: Omit<ReportReading, "prevDayCorrected" | "prevDayUncorrected" | "prevDayCorrectedTotalizer" | "prevDayUncorrectedTotalizer" | "consumption" | "uncorrectedConsumption">[],
 ): Promise<ReportReading[]> {
   if (rawReadings.length === 0) return [];
 
@@ -133,9 +143,9 @@ async function computeConsumption(
     const prevReading = await db.reading.findFirst({
       where: {
         deviceId: first.deviceId,
-        receivedAt: { lt: new Date(first.receivedAt) },
+        readingDate: { lt: new Date(first.readingDate) },
       },
-      orderBy: { receivedAt: "desc" },
+      orderBy: [{ readingDate: "desc" }, { receivedAt: "desc" }],
       select: { correctedVolumeVb: true, uncorrectedVolumeVm: true },
     });
     firstPrevVolumeVb = prevReading?.correctedVolumeVb ?? null;
@@ -146,22 +156,31 @@ async function computeConsumption(
     const prevVb = i === 0 ? firstPrevVolumeVb : rawReadings[i - 1].correctedVolumeVb;
     const prevVm = i === 0 ? firstPrevVolumeVm : rawReadings[i - 1].uncorrectedVolumeVm;
 
-    let consumption: number | null = null;
+    let prevDayCorrected: number | null = null;
     if (r.correctedVolumeVb != null && prevVb != null) {
       const deltaVb = r.correctedVolumeVb - prevVb;
-      consumption = deltaVb < 0 ? null : Number(deltaVb.toFixed(3));
+      prevDayCorrected = deltaVb < 0 ? null : Number(deltaVb.toFixed(3));
     }
 
-    let uncorrectedConsumption: number | null = null;
+    let prevDayUncorrected: number | null = null;
     if (r.uncorrectedVolumeVm != null && prevVm != null) {
       const deltaVm = r.uncorrectedVolumeVm - prevVm;
-      uncorrectedConsumption = deltaVm < 0 ? null : Number(deltaVm.toFixed(3));
+      prevDayUncorrected = deltaVm < 0 ? null : Number(deltaVm.toFixed(3));
     }
+
+    const correctionFactor = (r.correctedVolumeVb != null && r.uncorrectedVolumeVm != null && r.uncorrectedVolumeVm > 0)
+      ? Number((r.correctedVolumeVb / r.uncorrectedVolumeVm).toFixed(4))
+      : null;
 
     return {
       ...r,
-      consumption,
-      uncorrectedConsumption,
+      correctionFactor,
+      prevDayUncorrected,
+      prevDayCorrected,
+      prevDayUncorrectedTotalizer: prevVm,
+      prevDayCorrectedTotalizer: prevVb,
+      consumption: prevDayCorrected,
+      uncorrectedConsumption: prevDayUncorrected,
     };
   });
 }
@@ -211,6 +230,7 @@ export async function getCustomerReport({
 
   const customers = await db.customer.findMany({
     where: { id: { in: customerIds } },
+    include: { ga: { select: { name: true } } },
   });
   if (customers.length === 0) {
     throw new ReportNotFoundError("No customers found");
@@ -237,14 +257,25 @@ export async function getCustomerReport({
           id: true,
           deviceSerialNo: true,
           meterSerialNo: true,
-          customer: { select: { name: true, category: true } },
+          alarms: {
+            where: { status: "OPEN" },
+            take: 1,
+            select: { cause: true, type: true },
+          },
+          customer: {
+            select: {
+              name: true,
+              category: true,
+              ga: { select: { name: true } },
+            },
+          },
         },
       },
     },
     orderBy: [{ device: { deviceSerialNo: "asc" } }, { receivedAt: "asc" }],
   });
 
-  type RawReading = Omit<ReportReading, "consumption" | "uncorrectedConsumption">;
+  type RawReading = Omit<ReportReading, "prevDayCorrected" | "prevDayUncorrected" | "prevDayCorrectedTotalizer" | "prevDayUncorrectedTotalizer" | "consumption" | "uncorrectedConsumption">;
 
   // Group raw readings per meter
   const meterMap = new Map<string,
@@ -267,6 +298,10 @@ export async function getCustomerReport({
       };
       meterMap.set(r.device.id, group);
     }
+
+    // const openAlarm = r.device.alarms[0];
+    // const alarmText = openAlarm ? openAlarm.cause || openAlarm.type : "NORMAL";
+
     group.readings.push({
       id: r.id,
       deviceId: r.device.id,
@@ -274,13 +309,17 @@ export async function getCustomerReport({
       meterSerialNo: r.device.meterSerialNo,
       customerName: r.device.customer?.name || null,
       customerCategory: r.device.customer?.category || null,
+      gaName: r.device.customer?.ga?.name || null,
       readingDate: r.readingDate.toISOString(),
       receivedAt: r.receivedAt.toISOString(),
-      correctedVolumeVb: r.correctedVolumeVb,
-      uncorrectedVolumeVm: r.uncorrectedVolumeVm,
       gasPressure: r.gasPressure,
       gasTemperature: r.gasTemperature,
+      correctionFactor: null,
+      currentFlowRate: r.currentFlowRate,
+      correctedVolumeVb: r.correctedVolumeVb,
+      uncorrectedVolumeVm: r.uncorrectedVolumeVm,
       batteryLevel: r.batteryLevel,
+      alarms: "---",
     });
   }
 
@@ -290,7 +329,7 @@ export async function getCustomerReport({
   for (const group of meterMap.values()) {
     // 1. Resample first by the selected frequency (e.g. 1 distinct row per calendar day)
     const resampledRaw = resampleByFrequency(group.readings, frequency, frequencyMs);
-    // 2. Compute consumption deltas between consecutive table rows (row[i] - row[i-1])
+    // 2. Compute consumption deltas between consecutive table rows
     const withCons = await computeConsumption(resampledRaw);
 
     processedMeters.push({

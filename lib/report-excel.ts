@@ -1,12 +1,9 @@
-import * as XLSX from "xlsx";
-import type { MeterReportGroup, ReportReading, CustomerRangeReport } from "@/features/reports";
+// lib/report-excel.ts
+import ExcelJS from "exceljs";
+import type { MeterReportGroup, ReportReading } from "@/features/reports";
 
 /**
  * Groups a flat reading list into one bucket per device/meter.
- * The API already returns pre-grouped `meters`, but this exists as a
- * client-side fallback so the UI degrades gracefully instead of crashing
- * if it ever receives a response without that field (e.g. a stale cached
- * route during a deploy).
  */
 export function groupReadingsByMeter(readings: ReportReading[]): MeterReportGroup[] {
   const meterMap = new Map<string, MeterReportGroup>();
@@ -31,13 +28,6 @@ export function groupReadingsByMeter(readings: ReportReading[]): MeterReportGrou
 const EXCEL_SHEET_NAME_INVALID_CHARS = /[\\/?*[\]:]/g;
 const MAX_SHEET_NAME_LENGTH = 31;
 
-/**
- * Sanitizes a worksheet name to comply with Excel's rules:
- * - max 31 characters
- * - no \ / ? * [ ] :
- * - falls back to a placeholder if the name becomes empty
- * - de-duplicates against names already used in the same workbook
- */
 export function sanitizeSheetName(
   rawName: string,
   fallback: string,
@@ -58,54 +48,141 @@ export function sanitizeSheetName(
   return candidate;
 }
 
-function autoSizeColumns(worksheet: XLSX.WorkSheet, rows: Record<string, unknown>[]) {
-  if (rows.length === 0) return;
-  const headers = Object.keys(rows[0]);
-  worksheet["!cols"] = headers.map((header) => {
-    const maxLen = rows.reduce((max, row) => {
-      const val = row[header];
+// Column order mirrors the AMR reference template (AMR REPORT FORMAT.xlsx).
+// "TOTAIZER" reproduces a typo in the reference; DATE is appended because the
+// report covers a date range while the reference is a single-day snapshot.
+export const AMR_REPORT_HEADERS = [
+  "SR.NO",
+  "NAME OF INDUSTRY",
+  "CUSTOMER TYPE",
+  "SOURCE/SEGMENT",
+  "STREAM NO",
+  "PRESSURE",
+  "TEMPERATURE",
+  "CORRECTION FACTOR",
+  "CURRENT FLOWRATE (CORRECTED)",
+  "CORRECTED VOLUME TOTALIZER",
+  "UNCORRECTED VOLUME TOTALIZER",
+  "PREVIOUS DAY UNCORRECTED",
+  "PREVIOUS DAY CORRECTED",
+  "PREVIOUS DAY UNCORRECTED TOTALIZER",
+  "PREVIOUS DAY CORRECTED TOTAIZER",
+  "EVC BATTERY/BALANCE DAYS",
+  "ALARMS",
+  "DATE",
+];
+
+export const AMR_REPORT_UNITS = [
+  "—", "—", "—", "—", "—", "Bar", "°C", "—", "SCMH", "SCM", "m³", "m³",
+  "SCMD", "m³", "SCM", "%", "—", "—",
+];
+
+// One entry per column, same order as AMR_REPORT_HEADERS. "center" = numeric
+// values and units; "left" = free-text/identifier columns.
+type Align = "left" | "center";
+const AMR_REPORT_ALIGN: Align[] = [
+  "center", // SR.NO
+  "left",   // NAME OF INDUSTRY
+  "left",   // CUSTOMER TYPE
+  "left",   // SOURCE/SEGMENT
+  "left",   // STREAM NO
+  "center", // PRESSURE
+  "center", // TEMPERATURE
+  "center", // CORRECTION FACTOR
+  "center", // CURRENT FLOWRATE (CORRECTED)
+  "center", // CORRECTED VOLUME TOTALIZER
+  "center", // UNCORRECTED VOLUME TOTALIZER
+  "center", // PREVIOUS DAY UNCORRECTED
+  "center", // PREVIOUS DAY CORRECTED
+  "center", // PREVIOUS DAY UNCORRECTED TOTALIZER
+  "center", // PREVIOUS DAY CORRECTED TOTAIZER
+  "center", // EVC BATTERY/BALANCE DAYS
+  "left",   // ALARMS
+  "center", // DATE
+];
+
+function fmtVal(val: number | null | undefined): string | number {
+  if (val === null || val === undefined) return "-";
+  return val;
+}
+
+function readingDay(row: ReportReading): string {
+  const d = new Date(row.readingDate);
+  if (!isNaN(d.getTime()) && d.getFullYear() > 1970) {
+    return row.readingDate.split("T")[0];
+  }
+  return row.receivedAt.split("T")[0];
+}
+
+function toExcelRowAoa(row: ReportReading, srNo: number): (string | number)[] {
+  return [
+    srNo,
+    row.customerName || "-",
+    row.customerCategory || "-",
+    "IBAFO",
+    row.meterSerialNo || row.deviceSerialNo || "-",
+    fmtVal(row.gasPressure),
+    fmtVal(row.gasTemperature),
+    fmtVal(row.correctionFactor),
+    fmtVal(row.currentFlowRate),
+    fmtVal(row.correctedVolumeVb),
+    fmtVal(row.uncorrectedVolumeVm),
+    fmtVal(row.prevDayUncorrected),
+    fmtVal(row.prevDayCorrected),
+    fmtVal(row.prevDayUncorrectedTotalizer),
+    fmtVal(row.prevDayCorrectedTotalizer),
+    row.batteryLevel != null ? Math.round(row.batteryLevel) : "-",
+    row.alarms || "NORMAL",
+    readingDay(row),
+  ];
+}
+
+function autoSizeColumns(worksheet: ExcelJS.Worksheet, aoa: (string | number)[][]) {
+  if (aoa.length === 0) return;
+  const colCount = aoa[0].length;
+  worksheet.columns = Array.from({ length: colCount }, (_, c) => {
+    let maxLen = 0;
+    for (let r = 0; r < aoa.length; r++) {
+      const val = aoa[r][c];
       const len = val == null ? 0 : String(val).length;
-      return Math.max(max, len);
-    }, header.length);
-    return { wch: maxLen + 4 }; // padding so nothing touches the cell edge
+      if (len > maxLen) maxLen = len;
+    }
+    return { width: Math.max(maxLen + 4, 12) };
   });
 }
 
-function toExcelRow(row: ReportReading) {
-  return {
-    "Customer": row.customerName || "N/A",
-    "Customer Type": row.customerCategory || "N/A",
-    "Reading Date": new Date(row.readingDate).toLocaleString(),
-    "Device Serial No": row.deviceSerialNo,
-    "Meter Serial No": row.meterSerialNo || "N/A",
-    "Consumption (Corr) (SCM)": row.consumption,
-    "Consumption (Uncorr) (m³)": row.uncorrectedConsumption,
-    "Corrected Vol ttl (SCM)": row.correctedVolumeVb,
-    "Uncorrected Vol ttl (m³)": row.uncorrectedVolumeVm,
-    "Gas Pressure (barg)": row.gasPressure,
-    "Gas Temperature (°C)": row.gasTemperature,
-    "Battery Level (%)": row.batteryLevel != null ? Math.round(row.batteryLevel) : null,
-  };
-}
-
 /**
- * Builds a workbook with one worksheet per meter. Meters with no readings in
- * the selected range are skipped so we never produce an empty/misleading sheet.
+ * Builds a single "REPORT" worksheet in the standard AMR format: one row per
+ * meter reading, with SR.NO sequential across the whole report.
  */
-export function buildCustomerReportWorkbook(meters: MeterReportGroup[]): XLSX.WorkBook {
-  const workbook = XLSX.utils.book_new();
-  const usedNames = new Set<string>();
+export function buildCustomerReportWorkbook(meters: MeterReportGroup[]): ExcelJS.Workbook {
+  const workbook = new ExcelJS.Workbook();
 
-  meters
+  const readings = meters
     .filter((meter) => meter.readings.length > 0)
-    .forEach((meter, index) => {
-      const rawName = meter.meterSerialNo || meter.deviceSerialNo;
-      const sheetName = sanitizeSheetName(rawName, `Meter-${index + 1}`, usedNames);
-      const rows = meter.readings.map(toExcelRow);
-      const worksheet = XLSX.utils.json_to_sheet(rows);
-      autoSizeColumns(worksheet, rows);
-      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    .flatMap((meter) => meter.readings);
+
+  if (readings.length === 0) {
+    return workbook;
+  }
+
+  const dataRows = readings.map((r, i) => toExcelRowAoa(r, i + 1));
+  const aoa = [AMR_REPORT_HEADERS, AMR_REPORT_UNITS, ...dataRows];
+
+  const worksheet = workbook.addWorksheet("REPORT");
+  autoSizeColumns(worksheet, aoa);
+
+  aoa.forEach((rowValues, rowIndex) => {
+    const row = worksheet.addRow(rowValues);
+    const isHeaderRow = rowIndex === 0;
+    const isUnitRow = rowIndex === 1;
+
+    row.eachCell((cell, colIndex) => {
+      cell.alignment = { horizontal: AMR_REPORT_ALIGN[colIndex - 1], vertical: "middle" };
+      if (isHeaderRow) cell.font = { bold: true };
+      if (isUnitRow) cell.font = { italic: true, color: { argb: "FF666666" } };
     });
+  });
 
   return workbook;
 }
@@ -120,63 +197,33 @@ export function buildCustomerReportFilename(
 }
 
 /**
- * Builds the per-meter workbook and triggers a browser download.
- * Throws if there's no meter data to export, so callers can surface a
- * user-friendly error message.
+ * Builds the AMR report workbook and triggers a browser download.
+ * NOTE: now async (ExcelJS writes asynchronously) — call sites need `await`.
  */
-export function downloadCustomerReportExcel(
+export async function downloadCustomerReportExcel(
   meters: MeterReportGroup[],
   customerName: string,
   startDate: string,
   endDate: string,
-): void {
+): Promise<void> {
   const workbook = buildCustomerReportWorkbook(meters);
 
-  if (workbook.SheetNames.length === 0) {
+  if (workbook.worksheets.length === 0) {
     throw new Error("No meter data available to export.");
   }
 
   const filename = buildCustomerReportFilename(customerName, startDate, endDate);
-  XLSX.writeFile(workbook, filename);
-}
+  const buffer = await workbook.xlsx.writeBuffer();
 
-/**
- * Builds a range summary workbook (one worksheet, one row per meter).
- */
-export function buildRangeSummaryWorkbook(report: CustomerRangeReport): XLSX.WorkBook {
-  const workbook = XLSX.utils.book_new();
-
-  const rows = report.meters.map((meter) => ({
-    "Customer": meter.customerName || "N/A",
-    "Device Serial No": meter.deviceSerialNo,
-    "Meter Serial No": meter.meterSerialNo || "N/A",
-    "Start Date": meter.startDate,
-    "Start Value (SCM)": meter.startValue,
-    "End Date": meter.endDate,
-    "End Value (SCM)": meter.endValue,
-    "Consumption (SCM)": meter.consumption,
-  }));
-
-  const worksheet = XLSX.utils.json_to_sheet(rows);
-  autoSizeColumns(worksheet, rows);
-
-  const sheetName = sanitizeSheetName(report.rangeLabel, "Summary", new Set<string>());
-  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-
-  return workbook;
-}
-
-/**
- * Downloads the range summary report workbook.
- */
-export function downloadRangeSummaryExcel(report: CustomerRangeReport): void {
-  const workbook = buildRangeSummaryWorkbook(report);
-
-  if (workbook.SheetNames.length === 0) {
-    throw new Error("No range summary data available to export.");
-  }
-
-  const sanitizedCustomerName = report.customerName.replace(/[^a-z0-9]/gi, "_");
-  const filename = `Range_Summary_${sanitizedCustomerName}_${report.startDate}_${report.endDate}.xlsx`;
-  XLSX.writeFile(workbook, filename);
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }

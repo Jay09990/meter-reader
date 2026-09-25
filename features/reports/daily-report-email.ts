@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { db } from "@/lib/db";
 import { getSystemSettings } from "@/features/system-capacity/service";
 import { getCustomerReport, type MeterReportGroup } from "@/features/reports/service";
@@ -81,20 +81,22 @@ export async function sendDailyReport(forDateStr: string): Promise<{
   }
 
   // Build Excel workbook
-  let workbook: XLSX.WorkBook;
+  // Build Excel workbook
+  let workbook: ExcelJS.Workbook;
   if (allMeters.length > 0) {
     workbook = buildCustomerReportWorkbook(allMeters);
   } else {
-    workbook = XLSX.utils.book_new();
+    workbook = new ExcelJS.Workbook();
     const sheetName = sanitizeSheetName("Summary", "Summary", new Set());
-    const ws = XLSX.utils.json_to_sheet([
-      { "Status": "No meter data recorded for date " + forDateStr }
-    ]);
-    XLSX.utils.book_append_sheet(workbook, ws, sheetName);
+    const sheet = workbook.addWorksheet(sheetName);
+    sheet.addRow(["Status"]);
+    sheet.addRow([`No meter data recorded for date ${forDateStr}`]);
   }
 
   // Write Excel file into a Node Buffer
-  const excelBuffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
+
+  // Write Excel file into a Node Buffer
+  const excelBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
   const attachmentFilename = `Daily_Gas_Report_${forDateStr}.xlsx`;
 
   const formattedCorrected = totalCorrectedConsumption.toFixed(3);

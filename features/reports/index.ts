@@ -13,9 +13,3 @@ export type {
   RangeSelectorType,
   DataFrequency,
 } from "./service";
-export { getCustomerRangeReport } from "./range-summary";
-export type {
-  MeterRangeSummary,
-  CustomerRangeReport,
-  GetCustomerRangeReportParams,
-} from "./range-summary";
