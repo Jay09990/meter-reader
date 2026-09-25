@@ -246,6 +246,7 @@ export default function ReportsPage() {
         startDate: queryStartDate,
         endDate: queryEndDate,
         frequency: frequency,
+        mode: reportMode,
       });
 
       const res = await fetch(`/api/reports/customer?${params.toString()}`);
@@ -279,26 +280,7 @@ export default function ReportsPage() {
       const meters = reportData.meters ?? [];
       if (meters.length === 0) return;
 
-      // Group meters by customer name for per-customer worksheets
-      const customerMap = new Map<string, MeterReportGroup[]>();
-      for (const meter of meters) {
-        // Find the customer name from the first reading of this meter
-        const customerName = meter.readings[0]?.customerName || "Unknown";
-        const existing = customerMap.get(customerName) ?? [];
-        existing.push(meter);
-        customerMap.set(customerName, existing);
-      }
-
-      const customers = Array.from(customerMap.entries()).map(([customerName, meters]) => ({
-        customerName,
-        meters,
-      }));
-
-      downloadCustomerReportExcel(
-        customers,
-        reportData.startDate,
-        reportData.endDate,
-      );
+      downloadCustomerReportExcel(meters, reportMode, reportData.startDate, reportData.endDate);
     } catch (err) {
       console.error("Failed to export Excel:", err);
       const message = err instanceof Error ? err.message : "An error occurred while generating the Excel file.";
@@ -308,11 +290,17 @@ export default function ReportsPage() {
     }
   };
 
-  // Pagination for Mode 1
+  // Pagination for dateRange mode only — rangeSelection produces one row per meter
   const allReadings = reportData?.readings ?? [];
-  const totalPages = Math.max(1, Math.ceil(allReadings.length / ROWS_PER_PAGE));
+  const isRangeSelection = reportData?.meters?.length !== undefined
+    && reportMode === "rangeSelection";
+  const totalPages = isRangeSelection
+    ? 1
+    : Math.max(1, Math.ceil(allReadings.length / ROWS_PER_PAGE));
   const pageStartIndex = (currentPage - 1) * ROWS_PER_PAGE;
-  const paginatedReadings = allReadings.slice(pageStartIndex, pageStartIndex + ROWS_PER_PAGE);
+  const paginatedReadings = isRangeSelection
+    ? allReadings
+    : allReadings.slice(pageStartIndex, pageStartIndex + ROWS_PER_PAGE);
 
   return (
     <div className="space-y-6 w-full">
@@ -580,9 +568,9 @@ export default function ReportsPage() {
               <CardTitle className="text-lg text-foreground">Report Data</CardTitle>
               {allReadings.length > 0 && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  Showing {pageStartIndex + 1}–
-                  {Math.min(pageStartIndex + ROWS_PER_PAGE, allReadings.length)} of{" "}
-                  {allReadings.length} readings
+                  {isRangeSelection
+                    ? `Showing ${allReadings.length} meter${allReadings.length === 1 ? "" : "s"} (aggregated)`
+                    : `Showing ${pageStartIndex + 1}–${Math.min(pageStartIndex + ROWS_PER_PAGE, allReadings.length)} of ${allReadings.length} readings`}
                 </p>
               )}
             </div>
@@ -654,17 +642,17 @@ export default function ReportsPage() {
                           UNCORRECTED VOLUME TOTALIZER (m³)
                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                          PREVIOUS DAY UNCORRECTED (m³)
-                        </TableHead>
-                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                          PREVIOUS DAY CORRECTED (SCMD)
-                        </TableHead>
-                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                          PREVIOUS DAY UNCORRECTED TOTALIZER (m³)
-                        </TableHead>
-                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
-                          PREVIOUS DAY CORRECTED TOTAIZER (SCM)
-                        </TableHead>
+                           {isRangeSelection ? "PERIOD CONSUMPTION (m³)" : "PREVIOUS DAY UNCORRECTED (m³)"}
+                         </TableHead>
+                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                           {isRangeSelection ? "START CORRECTED TOTALIZER (SCM)" : "PREVIOUS DAY CORRECTED (SCMD)"}
+                         </TableHead>
+                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                           {isRangeSelection ? "START UNCORRECTED TOTALIZER (m³)" : "PREVIOUS DAY UNCORRECTED TOTALIZER (m³)"}
+                         </TableHead>
+                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                           {isRangeSelection ? "—" : "PREVIOUS DAY CORRECTED TOTAIZER (SCM)"}
+                         </TableHead>
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
                           EVC BATTERY/BALANCE DAYS (%)
                         </TableHead>
@@ -722,19 +710,19 @@ export default function ReportsPage() {
                             className="text-right font-mono text-xs"
                             style={{ color: "var(--clr-commercial)" }}
                           >
-                            {fmt(row.prevDayUncorrected, 3)}
+                            {isRangeSelection ? fmt(row.prevDayCorrected, 3) : fmt(row.prevDayUncorrected, 3)}
                           </TableCell>
                           <TableCell
                             className="text-right font-mono text-xs font-semibold"
                             style={{ color: "var(--clr-accent-hi)" }}
                           >
-                            {fmt(row.prevDayCorrected, 3)}
+                            {isRangeSelection ? fmt(row.prevDayCorrectedTotalizer) : fmt(row.prevDayCorrected, 3)}
                           </TableCell>
                           <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                            {fmt(row.prevDayUncorrectedTotalizer)}
+                            {isRangeSelection ? fmt(row.prevDayUncorrectedTotalizer) : fmt(row.prevDayUncorrectedTotalizer)}
                           </TableCell>
                           <TableCell className="text-right font-mono text-xs font-medium text-foreground">
-                            {fmt(row.prevDayCorrectedTotalizer)}
+                            {isRangeSelection ? "-" : fmt(row.prevDayCorrectedTotalizer)}
                           </TableCell>
                           <TableCell
                             className="text-right font-mono text-xs"
@@ -753,11 +741,13 @@ export default function ReportsPage() {
                     </TableBody>
                   </Table>
                 </div>
-                <PaginationControls
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={setCurrentPage}
-                />
+                {!isRangeSelection && (
+                  <PaginationControls
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                  />
+                )}
               </>
             ) : (
               <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">

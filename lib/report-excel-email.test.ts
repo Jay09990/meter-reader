@@ -55,6 +55,20 @@ function sheetRows(
   return rows;
 }
 
+function makeMeterGroup(overrides: Partial<MeterReportGroup> = {}): MeterReportGroup {
+  return {
+    deviceId: "device-1",
+    deviceSerialNo: "DEV-001",
+    meterSerialNo: "METER-001",
+    readings: [makeReading()],
+    ...overrides,
+  };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// sanitizeSheetName (shared between both test files)
+// ──────────────────────────────────────────────────────────────────────────
+
 describe("sanitizeSheetName", () => {
   it("removes characters Excel disallows in sheet names", () => {
     const used = new Set<string>();
@@ -82,34 +96,26 @@ describe("sanitizeSheetName", () => {
   });
 });
 
-describe("buildCustomerReportWorkbook", () => {
+// ──────────────────────────────────────────────────────────────────────────
+// buildCustomerReportWorkbook — dateRange mode
+// ──────────────────────────────────────────────────────────────────────────
+
+describe("buildCustomerReportWorkbook — dateRange mode", () => {
   it("creates one worksheet per customer with AMR headers and units", () => {
-    const customers = [
-      {
-        customerName: "REDEEM CHURCH",
-        meters: [
-          {
-            deviceId: "device-1",
-            deviceSerialNo: "DEV-001",
-            meterSerialNo: "METER-001",
-            readings: [makeReading({ customerName: "REDEEM CHURCH" })],
-          },
-        ],
-      },
-      {
-        customerName: "ANOTHER CLIENT",
-        meters: [
-          {
-            deviceId: "device-2",
-            deviceSerialNo: "DEV-002",
-            meterSerialNo: "METER-002",
-            readings: [makeReading({ id: "r2", deviceId: "device-2", customerName: "ANOTHER CLIENT" })],
-          },
-        ],
-      },
+    const meters: MeterReportGroup[] = [
+      makeMeterGroup({
+        deviceId: "d1",
+        readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "REDEEM CHURCH" })],
+      }),
+      makeMeterGroup({
+        deviceId: "d2",
+        deviceSerialNo: "DEV-002",
+        meterSerialNo: "METER-002",
+        readings: [makeReading({ id: "r2", deviceId: "d2", customerName: "ANOTHER CLIENT" })],
+      }),
     ];
 
-    const workbook = buildCustomerReportWorkbook(customers);
+    const workbook = buildCustomerReportWorkbook(meters, "dateRange");
 
     expect(sheetNames(workbook)).toEqual(["REDEEM CHURCH", "ANOTHER CLIENT"]);
 
@@ -125,87 +131,68 @@ describe("buildCustomerReportWorkbook", () => {
   });
 
   it("maps reading fields to the AMR row layout per customer sheet", () => {
-    const customers = [
-      {
-        customerName: "REDEEM CHURCH",
-        meters: [
-          {
-            deviceId: "device-1",
-            deviceSerialNo: "DEV-001",
-            meterSerialNo: "METER-001",
-            readings: [
-              makeReading({
-                customerName: "REDEEM CHURCH",
-                customerCategory: "PNG",
-                gaName: "Chennai GA",
-              }),
-            ],
-          },
+    const meters: MeterReportGroup[] = [
+      makeMeterGroup({
+        readings: [
+          makeReading({
+            customerName: "REDEEM CHURCH",
+            customerCategory: "PNG",
+          }),
         ],
-      },
+      }),
     ];
 
-    const workbook = buildCustomerReportWorkbook(customers);
+    const workbook = buildCustomerReportWorkbook(meters, "dateRange");
     const rows = sheetRows(workbook, "REDEEM CHURCH");
     const dataRow = rows[2];
 
     expect(dataRow[0]).toBe(1); // SR.NO
-    expect(dataRow[1]).toBe("REDEEM CHURCH"); // NAME OF INDUSTRY
+    expect(dataRow[1]).toBe("REDEEM CHURCH"); // NAME
     expect(dataRow[2]).toBe("PNG"); // CUSTOMER TYPE
-    expect(dataRow[3]).toBe("IBAFO"); // SOURCE/SEGMENT
-    expect(dataRow[4]).toBe("METER-001"); // STREAM NO
+    expect(dataRow[3]).toBe("IBAFO"); // SOURCE
+    expect(dataRow[4]).toBe("METER-001"); // STREAM
     expect(dataRow[5]).toBe(1.2); // PRESSURE
     expect(dataRow[6]).toBe(20); // TEMPERATURE
     expect(dataRow[7]).toBe(1.05); // CORRECTION FACTOR
-    expect(dataRow[8]).toBe(12.5); // CURRENT FLOWRATE (CORRECTED)
-    expect(dataRow[9]).toBe(100); // CORRECTED VOLUME TOTALIZER
-    expect(dataRow[10]).toBe(95); // UNCORRECTED VOLUME TOTALIZER
-    expect(dataRow[11]).toBe(10); // PREVIOUS DAY UNCORRECTED
-    expect(dataRow[12]).toBe(10.5); // PREVIOUS DAY CORRECTED
-    expect(dataRow[13]).toBe(85); // PREVIOUS DAY UNCORRECTED TOTALIZER
-    expect(dataRow[14]).toBe(89.5); // PREVIOUS DAY CORRECTED TOTAIZER
-    expect(dataRow[15]).toBe(80); // EVC BATTERY VOLTAGE/BALANCE DAYS
-    expect(dataRow[16]).toBe("NORMAL"); // ALARMS fallback
+    expect(dataRow[8]).toBe(12.5); // CURRENT FLOWRATE
+    expect(dataRow[9]).toBe(100); // CORRECTED TOTALIZER
+    expect(dataRow[10]).toBe(95); // UNCORRECTED TOTALIZER
+    expect(dataRow[11]).toBe(10); // PREV DAY UNCORRECTED
+    expect(dataRow[12]).toBe(10.5); // PREV DAY CORRECTED
+    expect(dataRow[13]).toBe(85); // PREV DAY UNC TOTALIZER
+    expect(dataRow[14]).toBe(89.5); // PREV DAY CORR TOTALIZER
+    expect(dataRow[15]).toBe(80); // BATTERY
+    expect(dataRow[16]).toBe("NORMAL"); // ALARMS
     expect(dataRow[17]).toBe("2026-08-01"); // DATE
   });
 
   it("restarts SR.NO at 1 for each customer sheet", () => {
-    const customers = [
-      {
-        customerName: "CUSTOMER A",
-        meters: [
-          {
+    const meters: MeterReportGroup[] = [
+      makeMeterGroup({
+        deviceId: "d1",
+        deviceSerialNo: "DEV-A1",
+        meterSerialNo: "M-A1",
+        readings: [
+          makeReading({ id: "a1", deviceId: "d1", customerName: "CUSTOMER A" }),
+          makeReading({
+            id: "a2",
             deviceId: "d1",
-            deviceSerialNo: "DEV-A1",
-            meterSerialNo: "M-A1",
-            readings: [
-              makeReading({ id: "a1", deviceId: "d1", customerName: "CUSTOMER A" }),
-              makeReading({
-                id: "a2",
-                deviceId: "d1",
-                readingDate: "2026-08-02T00:00:00.000Z",
-                customerName: "CUSTOMER A",
-              }),
-            ],
-          },
+            readingDate: "2026-08-02T00:00:00.000Z",
+            customerName: "CUSTOMER A",
+          }),
         ],
-      },
+      }),
       {
-        customerName: "CUSTOMER B",
-        meters: [
-          {
-            deviceId: "d2",
-            deviceSerialNo: "DEV-B1",
-            meterSerialNo: "M-B1",
-            readings: [
-              makeReading({ id: "b1", deviceId: "d2", customerName: "CUSTOMER B" }),
-            ],
-          },
+        deviceId: "d2",
+        deviceSerialNo: "DEV-B1",
+        meterSerialNo: "M-B1",
+        readings: [
+          makeReading({ id: "b1", deviceId: "d2", customerName: "CUSTOMER B" }),
         ],
       },
     ];
 
-    const workbook = buildCustomerReportWorkbook(customers);
+    const workbook = buildCustomerReportWorkbook(meters, "dateRange");
 
     const rowsA = sheetRows(workbook, "CUSTOMER A");
     expect(rowsA.slice(2).map((r) => r[0])).toEqual([1, 2]);
@@ -215,148 +202,254 @@ describe("buildCustomerReportWorkbook", () => {
   });
 
   it("skips customers with no readings (no empty sheets)", () => {
-    const customers = [
-      {
-        customerName: "EMPTY CUSTOMER",
-        meters: [
-          {
-            deviceId: "d1",
-            deviceSerialNo: "DEV-001",
-            meterSerialNo: "METER-001",
-            readings: [],
-          },
-        ],
-      },
-      {
-        customerName: "ACTIVE CUSTOMER",
-        meters: [
-          {
-            deviceId: "d2",
-            deviceSerialNo: "DEV-002",
-            meterSerialNo: "METER-002",
-            readings: [makeReading({ id: "r2", deviceId: "d2", customerName: "ACTIVE CUSTOMER" })],
-          },
-        ],
-      },
+    const meters: MeterReportGroup[] = [
+      { deviceId: "d1", deviceSerialNo: "DEV-001", meterSerialNo: "M-001", readings: [] },
+      makeMeterGroup({
+        deviceId: "d2",
+        deviceSerialNo: "DEV-002",
+        meterSerialNo: "M-002",
+        readings: [makeReading({ id: "r2", deviceId: "d2", customerName: "ACTIVE" })],
+      }),
     ];
 
-    const workbook = buildCustomerReportWorkbook(customers);
-
-    expect(sheetNames(workbook)).toEqual(["ACTIVE CUSTOMER"]);
-    expect(sheetRows(workbook, "ACTIVE CUSTOMER")).toHaveLength(3);
+    const workbook = buildCustomerReportWorkbook(meters, "dateRange");
+    expect(sheetNames(workbook)).toEqual(["ACTIVE"]);
+    expect(sheetRows(workbook, "ACTIVE")).toHaveLength(3);
   });
 
   it("returns an empty workbook when no customer has readings", () => {
-    const customers = [
-      {
-        customerName: "EMPTY 1",
-        meters: [
-          {
-            deviceId: "d1",
-            deviceSerialNo: "DEV-001",
-            meterSerialNo: "METER-001",
-            readings: [],
-          },
-        ],
-      },
+    const meters: MeterReportGroup[] = [
+      { deviceId: "d1", deviceSerialNo: "DEV-001", meterSerialNo: "M-001", readings: [] },
     ];
 
-    const workbook = buildCustomerReportWorkbook(customers);
-
+    const workbook = buildCustomerReportWorkbook(meters, "dateRange");
     expect(sheetNames(workbook)).toEqual([]);
   });
 
   it("deduplicates sheet names when customer names collide after sanitization", () => {
-    const customers = [
-      {
-        customerName: "Meter:001",
-        meters: [
-          {
-            deviceId: "d1",
-            deviceSerialNo: "DEV-001",
-            meterSerialNo: "M-001",
-            readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "Meter:001" })],
-          },
-        ],
-      },
-      {
-        customerName: "Meter*001",
-        meters: [
-          {
-            deviceId: "d2",
-            deviceSerialNo: "DEV-002",
-            meterSerialNo: "M-002",
-            readings: [makeReading({ id: "r2", deviceId: "d2", customerName: "Meter*001" })],
-          },
-        ],
-      },
+    const meters: MeterReportGroup[] = [
+      makeMeterGroup({
+        deviceId: "d1",
+        readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "Meter:001" })],
+      }),
+      makeMeterGroup({
+        deviceId: "d2",
+        readings: [makeReading({ id: "r2", deviceId: "d2", customerName: "Meter*001" })],
+      }),
     ];
 
-    const workbook = buildCustomerReportWorkbook(customers);
+    const workbook = buildCustomerReportWorkbook(meters, "dateRange");
     const names = sheetNames(workbook);
-
     expect(names).toHaveLength(2);
     expect(names[0]).not.toBe(names[1]);
   });
 
   it("uses sanitized fallback name when customer name is empty", () => {
-    const customers = [
-      {
-        customerName: "",
-        meters: [
-          {
-            deviceId: "d1",
-            deviceSerialNo: "DEV-001",
-            meterSerialNo: "M-001",
-            readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "" })],
-          },
-        ],
-      },
+    const meters: MeterReportGroup[] = [
+      makeMeterGroup({
+        deviceId: "d1",
+        readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "" })],
+      }),
     ];
 
-    const workbook = buildCustomerReportWorkbook(customers);
+    const workbook = buildCustomerReportWorkbook(meters, "dateRange");
     expect(sheetNames(workbook)).toContain("Customer");
   });
 
   it("handles multiple meters within a single customer", () => {
-    const customers = [
-      {
-        customerName: "MULTI METER CO",
-        meters: [
-          {
+    const meters: MeterReportGroup[] = [
+      makeMeterGroup({
+        deviceId: "d1",
+        deviceSerialNo: "DEV-001",
+        meterSerialNo: "M-001",
+        readings: [
+          makeReading({
+            id: "r1",
             deviceId: "d1",
-            deviceSerialNo: "DEV-001",
+            customerName: "MULTI METER CO",
             meterSerialNo: "M-001",
-            readings: [
-              makeReading({
-                id: "r1",
-                deviceId: "d1",
-                customerName: "MULTI METER CO",
-                meterSerialNo: "M-001",
-              }),
-            ],
-          },
-          {
-            deviceId: "d2",
-            deviceSerialNo: "DEV-002",
-            meterSerialNo: "M-002",
-            readings: [
-              makeReading({
-                id: "r2",
-                deviceId: "d2",
-                customerName: "MULTI METER CO",
-                meterSerialNo: "M-002",
-              }),
-            ],
-          },
+          }),
         ],
-      },
+      }),
+      makeMeterGroup({
+        deviceId: "d2",
+        deviceSerialNo: "DEV-002",
+        meterSerialNo: "M-002",
+        readings: [
+          makeReading({
+            id: "r2",
+            deviceId: "d2",
+            customerName: "MULTI METER CO",
+            meterSerialNo: "M-002",
+          }),
+        ],
+      }),
     ];
 
-    const workbook = buildCustomerReportWorkbook(customers);
+    const workbook = buildCustomerReportWorkbook(meters, "dateRange");
     const rows = sheetRows(workbook, "MULTI METER CO");
 
     expect(rows.slice(2).map((r) => r[0])).toEqual([1, 2]);
     expect(rows.slice(2).map((r) => r[4])).toEqual(["M-001", "M-002"]);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// buildCustomerReportWorkbook — rangeSelection mode (single sheet, summed)
+// ──────────────────────────────────────────────────────────────────────────
+
+describe("buildCustomerReportWorkbook — rangeSelection mode", () => {
+  it("creates a single worksheet with one row per customer", () => {
+    const meters: MeterReportGroup[] = [
+      makeMeterGroup({
+        deviceId: "d1",
+        deviceSerialNo: "DEV-A1",
+        meterSerialNo: "M-A1",
+        readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "CUSTOMER A" })],
+      }),
+      makeMeterGroup({
+        deviceId: "d2",
+        deviceSerialNo: "DEV-B1",
+        meterSerialNo: "M-B1",
+        readings: [makeReading({ id: "r2", deviceId: "d2", customerName: "CUSTOMER B" })],
+      }),
+    ];
+
+    const workbook = buildCustomerReportWorkbook(meters, "rangeSelection");
+    expect(sheetNames(workbook)).toEqual(["CUSTOMER A"]);
+
+    const rows = sheetRows(workbook, "CUSTOMER A");
+    expect(rows).toHaveLength(4); // headers + units + 2 data rows (2 customers)
+    expect(rows[2][1]).toBe("CUSTOMER A");
+    expect(rows[2][0]).toBe(1); // SR.NO = 1
+  });
+
+  it("sums numeric columns across all meters of the same customer", () => {
+    const meters: MeterReportGroup[] = [
+      makeMeterGroup({
+        deviceId: "d1",
+        deviceSerialNo: "DEV-A1",
+        meterSerialNo: "M-A1",
+        readings: [
+          makeReading({
+            id: "r1",
+            deviceId: "d1",
+            customerName: "SUMCUSTOMER",
+            correctedVolumeVb: 100,
+            uncorrectedVolumeVm: 90,
+            prevDayCorrected: 10,
+            prevDayUncorrected: 5,
+            prevDayCorrectedTotalizer: 80,
+            prevDayUncorrectedTotalizer: 70,
+            gasPressure: 1.0,
+            gasTemperature: 25,
+            currentFlowRate: 10,
+            batteryLevel: 80,
+          }),
+        ],
+      }),
+      makeMeterGroup({
+        deviceId: "d2",
+        deviceSerialNo: "DEV-A2",
+        meterSerialNo: "M-A2",
+        readings: [
+          makeReading({
+            id: "r2",
+            deviceId: "d2",
+            customerName: "SUMCUSTOMER",
+            correctedVolumeVb: 200,
+            uncorrectedVolumeVm: 180,
+            prevDayCorrected: 20,
+            prevDayUncorrected: 15,
+            prevDayCorrectedTotalizer: 150,
+            prevDayUncorrectedTotalizer: 130,
+            gasPressure: 2.0,
+            gasTemperature: 30,
+            currentFlowRate: 20,
+            batteryLevel: 90,
+          }),
+        ],
+      }),
+    ];
+
+    const workbook = buildCustomerReportWorkbook(meters, "rangeSelection");
+    const rows = sheetRows(workbook, "SUMCUSTOMER");
+    const dataRow = rows[2];
+
+    expect(dataRow[0]).toBe(1);
+    expect(dataRow[1]).toBe("SUMCUSTOMER");
+    // Summed correctedVolumeVb: 100 + 200 = 300
+    expect(dataRow[9]).toBe(300);
+    // Summed uncorrectedVolumeVm: 90 + 180 = 270
+    expect(dataRow[10]).toBe(270);
+    // Summed prevDayCorrected: 10 + 20 = 30
+    expect(dataRow[12]).toBe(30);
+    // Summed prevDayUncorrected: 5 + 15 = 20
+    expect(dataRow[11]).toBe(20);
+    // Summed prevDayCorrectedTotalizer: 80 + 150 = 230
+    expect(dataRow[14]).toBe(230);
+    // Summed prevDayUncorrectedTotalizer: 70 + 130 = 200
+    expect(dataRow[13]).toBe(200);
+    // Avg pressure: (1.0 + 2.0) / 2 = 1.5
+    expect(dataRow[5]).toBe(1.5);
+    // Avg temperature: (25 + 30) / 2 = 27.5
+    expect(dataRow[6]).toBe(27.5);
+    // Avg flow rate: (10 + 20) / 2 = 15
+    expect(dataRow[8]).toBe(15);
+    // Avg battery: (80 + 90) / 2 = 85
+    expect(dataRow[15]).toBe(85);
+  });
+
+  it("handles 3+ customers on the single sheet, sorted alphabetically", () => {
+    const meters: MeterReportGroup[] = [
+      makeMeterGroup({
+        deviceId: "d1",
+        readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "CUST C" })],
+      }),
+      makeMeterGroup({
+        deviceId: "d2",
+        readings: [makeReading({ id: "r2", deviceId: "d2", customerName: "CUST A" })],
+      }),
+      makeMeterGroup({
+        deviceId: "d3",
+        readings: [makeReading({ id: "r3", deviceId: "d3", customerName: "CUST B" })],
+      }),
+    ];
+
+    const workbook = buildCustomerReportWorkbook(meters, "rangeSelection");
+    expect(sheetNames(workbook)).toEqual(["CUST A"]);
+
+    const rows = sheetRows(workbook, "CUST A");
+    expect(rows).toHaveLength(5); // headers + units + 3 customer rows
+
+    expect(rows[2][1]).toBe("CUST A");
+    expect(rows[2][0]).toBe(1);
+    expect(rows[3][1]).toBe("CUST B");
+    expect(rows[3][0]).toBe(2);
+    expect(rows[4][1]).toBe("CUST C");
+    expect(rows[4][0]).toBe(3);
+  });
+
+  it("returns an empty workbook when no readings", () => {
+    const meters: MeterReportGroup[] = [
+      { deviceId: "d1", deviceSerialNo: "DEV-001", meterSerialNo: "M-001", readings: [] },
+    ];
+
+    const workbook = buildCustomerReportWorkbook(meters, "rangeSelection");
+    expect(sheetNames(workbook)).toEqual([]);
+  });
+
+  it("defaults to dateRange behaviour when mode is not provided", () => {
+    const meters: MeterReportGroup[] = [
+      makeMeterGroup({
+        deviceId: "d1",
+        readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "DEFAULT" })],
+      }),
+    ];
+
+    const workbook = buildCustomerReportWorkbook(meters);
+    expect(sheetNames(workbook)).toEqual(["DEFAULT"]);
+    const rows = sheetRows(workbook, "DEFAULT");
+    expect(rows).toHaveLength(3);
   });
 });

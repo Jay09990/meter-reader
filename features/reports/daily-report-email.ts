@@ -3,7 +3,7 @@ import ExcelJS from "exceljs";
 import { db } from "@/lib/db";
 import { getSystemSettings } from "@/features/system-capacity/service";
 import { getCustomerReport, type MeterReportGroup } from "@/features/reports/service";
-import { buildCustomerReportWorkbook, sanitizeSheetName } from "@/lib/report-excel";
+import { buildCustomerReportWorkbook } from "@/lib/report-excel";
 
 const DEFAULT_FROM = "AMR Reports <onboarding@resend.dev>";
 
@@ -80,31 +80,16 @@ export async function sendDailyReport(forDateStr: string): Promise<{
     }
   }
 
-  // Build Excel workbook — one worksheet per customer
+  // Build Excel workbook — one worksheet per customer (dateRange mode)
   let workbook: ExcelJS.Workbook;
   if (allMeters.length > 0) {
-    // Group meters by customer name
-    const customerMap = new Map<string, MeterReportGroup[]>();
-    for (const meter of allMeters) {
-      const customerName = meter.readings[0]?.customerName || "Unknown";
-      const existing = customerMap.get(customerName) ?? [];
-      existing.push(meter);
-      customerMap.set(customerName, existing);
-    }
-    const customers = Array.from(customerMap.entries()).map(([customerName, meters]) => ({
-      customerName,
-      meters,
-    }));
-    workbook = buildCustomerReportWorkbook(customers);
+    workbook = buildCustomerReportWorkbook(allMeters, "dateRange");
   } else {
     workbook = new ExcelJS.Workbook();
-    const sheetName = sanitizeSheetName("Summary", "Summary", new Set());
-    const sheet = workbook.addWorksheet(sheetName);
+    const sheet = workbook.addWorksheet("Summary");
     sheet.addRow(["Status"]);
     sheet.addRow([`No meter data recorded for date ${forDateStr}`]);
   }
-
-  // Write Excel file into a Node Buffer
 
   // Write Excel file into a Node Buffer
   const excelBuffer = Buffer.from(await workbook.xlsx.writeBuffer());

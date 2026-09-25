@@ -81,6 +81,7 @@ export interface GetCustomerReportParams {
   startDate: string;
   endDate: string;
   frequency?: DataFrequency;
+  mode?: ReportMode;
 }
 
 function resampleByFrequency<T extends { receivedAt: string; readingDate: string }>(
@@ -190,6 +191,7 @@ export async function getCustomerReport({
   startDate,
   endDate,
   frequency = "1d",
+  mode = "dateRange",
 }: GetCustomerReportParams): Promise<CustomerReport> {
   if (!customerId) {
     throw new ReportValidationError("Customer ID is required");
@@ -326,20 +328,86 @@ export async function getCustomerReport({
   const processedMeters: MeterReportGroup[] = [];
   const allProcessedReadings: ReportReading[] = [];
 
-  for (const group of meterMap.values()) {
-    // 1. Resample first by the selected frequency (e.g. 1 distinct row per calendar day)
-    const resampledRaw = resampleByFrequency(group.readings, frequency, frequencyMs);
-    // 2. Compute consumption deltas between consecutive table rows
-    const withCons = await computeConsumption(resampledRaw);
+  // Range-selector mode (monthly/quarterly/yearly): one aggregated row per meter
+  if (mode === "rangeSelection") {
+    for (const group of meterMap.values()) {
+      const sorted = [...group.readings].sort(
+        (a, b) => new Date(a.readingDate).getTime() - new Date(b.readingDate).getTime(),
+      );
+      if (sorted.length === 0) continue;
 
-    processedMeters.push({
-      deviceId: group.deviceId,
-      deviceSerialNo: group.deviceSerialNo,
-      meterSerialNo: group.meterSerialNo,
-      readings: withCons,
-    });
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
 
-    allProcessedReadings.push(...withCons);
+      const startCorrected = first.correctedVolumeVb;
+      const endCorrected = last.correctedVolumeVb;
+      const startUncorrected = first.uncorrectedVolumeVm;
+      const endUncorrected = last.uncorrectedVolumeVm;
+
+      const periodConsumption =
+        endCorrected != null && startCorrected != null && endCorrected >= startCorrected
+          ? Number((endCorrected - startCorrected).toFixed(3))
+          : null;
+      const periodUncorrected =
+        endUncorrected != null && startUncorrected != null && endUncorrected >= startUncorrected
+          ? Number((endUncorrected - startUncorrected).toFixed(3))
+          : null;
+
+      const cf =
+        endCorrected != null && endUncorrected != null && endUncorrected > 0
+          ? Number((endCorrected / endUncorrected).toFixed(4))
+          : null;
+
+      const aggregated: ReportReading = {
+        id: `${group.deviceId}:aggregated`,
+        deviceId: group.deviceId,
+        deviceSerialNo: group.deviceSerialNo,
+        meterSerialNo: group.meterSerialNo,
+        customerName: first.customerName,
+        customerCategory: first.customerCategory,
+        gaName: first.gaName,
+        readingDate: last.readingDate,
+        receivedAt: last.receivedAt,
+        gasPressure: last.gasPressure,
+        gasTemperature: last.gasTemperature,
+        correctionFactor: cf,
+        currentFlowRate: last.currentFlowRate,
+        correctedVolumeVb: endCorrected,
+        uncorrectedVolumeVm: endUncorrected,
+        prevDayUncorrected: periodUncorrected,
+        prevDayCorrected: periodConsumption,
+        prevDayUncorrectedTotalizer: startUncorrected,
+        prevDayCorrectedTotalizer: startCorrected,
+        batteryLevel: last.batteryLevel,
+        alarms: "---",
+        consumption: periodConsumption,
+        uncorrectedConsumption: periodUncorrected,
+      };
+
+      processedMeters.push({
+        deviceId: group.deviceId,
+        deviceSerialNo: group.deviceSerialNo,
+        meterSerialNo: group.meterSerialNo,
+        readings: [aggregated],
+      });
+      allProcessedReadings.push(aggregated);
+    }
+  } else {
+    for (const group of meterMap.values()) {
+      // 1. Resample first by the selected frequency (e.g. 1 distinct row per calendar day)
+      const resampledRaw = resampleByFrequency(group.readings, frequency, frequencyMs);
+      // 2. Compute consumption deltas between consecutive table rows
+      const withCons = await computeConsumption(resampledRaw);
+
+      processedMeters.push({
+        deviceId: group.deviceId,
+        deviceSerialNo: group.deviceSerialNo,
+        meterSerialNo: group.meterSerialNo,
+        readings: withCons,
+      });
+
+      allProcessedReadings.push(...withCons);
+    }
   }
 
   // Re-sort flattened array matching ordering convention (by deviceSerialNo then readingDate)
