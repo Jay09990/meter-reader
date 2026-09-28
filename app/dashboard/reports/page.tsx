@@ -645,9 +645,14 @@ export default function ReportsPage() {
                             </TableHead>
                           </>
                         ) : (
-                          <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
-                            METER SERIAL NO
-                          </TableHead>
+                          <>
+                            <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                              CUSTOMER
+                            </TableHead>
+                            <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                              METER SERIAL NO
+                            </TableHead>
+                          </>
                         )}
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
                           PRESSURE (Bar)
@@ -712,9 +717,14 @@ export default function ReportsPage() {
                               </TableCell>
                             </>
                           ) : (
-                            <TableCell className="font-mono text-xs text-foreground whitespace-nowrap">
-                              {row.meterSerialNo || row.deviceSerialNo}
-                            </TableCell>
+                            <>
+                              <TableCell className="text-sm font-medium text-foreground whitespace-nowrap">
+                                {row.customerName || "—"}
+                              </TableCell>
+                              <TableCell className="font-mono text-xs text-foreground whitespace-nowrap">
+                                {row.meterSerialNo || row.deviceSerialNo}
+                              </TableCell>
+                            </>
                           )}
                           <TableCell
                             className="text-right font-mono text-xs"
@@ -765,7 +775,7 @@ export default function ReportsPage() {
                             {row.batteryLevel != null ? `${Math.round(row.batteryLevel)}%` : "—"}
                           </TableCell>
                           <TableCell className="text-xs whitespace-normal max-w-[200px]">
-                            {"---"}
+                            {row.alarms || "---"}
                           </TableCell>
                           <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
                             {row.readingDate.split("T")[0]}

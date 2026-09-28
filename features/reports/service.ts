@@ -14,6 +14,8 @@ export class ReportNotFoundError extends Error {
   }
 }
 
+export const NO_DATA_ALARM_TEXT = "NO DATA IN PERIOD";
+
 export type ReportMode = "dateRange" | "rangeSelection";
 export type RangeSelectorType = "monthly" | "quarterly" | "yearly";
 
@@ -186,6 +188,47 @@ async function computeConsumption(
   });
 }
 
+interface ReportDevice {
+  id: string;
+  deviceSerialNo: string;
+  meterSerialNo: string | null;
+  customer: {
+    name: string;
+    category: string;
+    ga: { name: string } | null;
+  } | null;
+}
+
+/** Placeholder row for a meter that has no readings in the selected period. */
+function buildNoDataReading(device: ReportDevice, periodEnd: Date): ReportReading {
+  const periodEndIso = periodEnd.toISOString();
+  return {
+    id: `${device.id}:no-data`,
+    deviceId: device.id,
+    deviceSerialNo: device.deviceSerialNo,
+    meterSerialNo: device.meterSerialNo,
+    customerName: device.customer?.name || null,
+    customerCategory: device.customer?.category || null,
+    gaName: device.customer?.ga?.name || null,
+    readingDate: periodEndIso,
+    receivedAt: periodEndIso,
+    gasPressure: null,
+    gasTemperature: null,
+    correctionFactor: null,
+    currentFlowRate: null,
+    correctedVolumeVb: null,
+    uncorrectedVolumeVm: null,
+    prevDayUncorrected: null,
+    prevDayCorrected: null,
+    prevDayUncorrectedTotalizer: null,
+    prevDayCorrectedTotalizer: null,
+    batteryLevel: null,
+    alarms: NO_DATA_ALARM_TEXT,
+    consumption: null,
+    uncorrectedConsumption: null,
+  };
+}
+
 export async function getCustomerReport({
   customerId,
   startDate,
@@ -277,6 +320,22 @@ export async function getCustomerReport({
     orderBy: [{ device: { deviceSerialNo: "asc" } }, { receivedAt: "asc" }],
   });
 
+  // Every meter (device) that belongs to the selected customers, whether or not it
+  // has readings in this period. Range mode uses this so a meter with no readings
+  // still gets its own row instead of silently disappearing from the report.
+  const customerDevices = await db.device.findMany({
+    where: { customerId: { in: customerIds } },
+    select: {
+      id: true,
+      deviceSerialNo: true,
+      meterSerialNo: true,
+      customer: {
+        select: { name: true, category: true, ga: { select: { name: true } } },
+      },
+    },
+    orderBy: { deviceSerialNo: "asc" },
+  });
+
   type RawReading = Omit<ReportReading, "prevDayCorrected" | "prevDayUncorrected" | "prevDayCorrectedTotalizer" | "prevDayUncorrectedTotalizer" | "consumption" | "uncorrectedConsumption">;
 
   // Group raw readings per meter
@@ -330,11 +389,25 @@ export async function getCustomerReport({
 
   // Range-selector mode (monthly/quarterly/yearly): one aggregated row per meter
   if (mode === "rangeSelection") {
-    for (const group of meterMap.values()) {
+    // Devices that have readings keep their aggregated row; devices without any
+    // readings in the period get a placeholder row (see buildNoDataReading).
+    for (const device of customerDevices) {
+      const group = meterMap.get(device.id);
+      if (!group || group.readings.length === 0) {
+        const noDataReading = buildNoDataReading(device, endOfDay);
+        processedMeters.push({
+          deviceId: device.id,
+          deviceSerialNo: device.deviceSerialNo,
+          meterSerialNo: device.meterSerialNo,
+          readings: [noDataReading],
+        });
+        allProcessedReadings.push(noDataReading);
+        continue;
+      }
+
       const sorted = [...group.readings].sort(
         (a, b) => new Date(a.readingDate).getTime() - new Date(b.readingDate).getTime(),
       );
-      if (sorted.length === 0) continue;
 
       const first = sorted[0];
       const last = sorted[sorted.length - 1];
