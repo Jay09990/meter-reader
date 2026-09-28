@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getSystemSettings } from "@/features/system-capacity/service";
 import { getCustomerReport, type MeterReportGroup } from "@/features/reports/service";
 import { buildCustomerReportWorkbook } from "@/lib/report-excel";
+import { sanitizeSheetName } from "@/lib/report-excel-common";
 
 const DEFAULT_FROM = "AMR Reports <onboarding@resend.dev>";
 

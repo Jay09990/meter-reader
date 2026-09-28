@@ -25,6 +25,7 @@ import {
   downloadCustomerReportExcel,
   groupReadingsByMeter,
 } from "@/lib/report-excel";
+import { sanitizeSheetName } from "@/lib/report-excel-common";
 import type {
   CustomerReport,
   MeterReportGroup,
@@ -101,6 +102,15 @@ export default function ReportsPage() {
   // Mode 1 & 2 Form State (Multi-select customers)
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  // Entering rangeSelection mode selects all customers; the user can then deselect.
+  // Deliberately depends only on mode + customer list (not on the selection itself),
+  // so deselecting every customer doesn't immediately re-select them all.
+  useEffect(() => {
+    if (reportMode === "rangeSelection") {
+      setSelectedCustomerIds(customers.map((c) => c.id));
+    }
+  }, [reportMode, customers]);
 
   // Mode 1: Date Range Form State
   const [startDate, setStartDate] = useState("");
@@ -271,7 +281,7 @@ export default function ReportsPage() {
   };
 
   // Export to Excel Handler
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     setError(null);
     setExporting(true);
 
@@ -280,7 +290,7 @@ export default function ReportsPage() {
       const meters = reportData.meters ?? [];
       if (meters.length === 0) return;
 
-      downloadCustomerReportExcel(meters, reportMode, reportData.startDate, reportData.endDate);
+      await downloadCustomerReportExcel(meters, reportMode, reportData.startDate, reportData.endDate);
     } catch (err) {
       console.error("Failed to export Excel:", err);
       const message = err instanceof Error ? err.message : "An error occurred while generating the Excel file.";
@@ -290,10 +300,9 @@ export default function ReportsPage() {
     }
   };
 
-  // Pagination for dateRange mode only — rangeSelection produces one row per meter
+  // Pagination for dateRange mode only — rangeSelection shows all meters at once
   const allReadings = reportData?.readings ?? [];
-  const isRangeSelection = reportData?.meters?.length !== undefined
-    && reportMode === "rangeSelection";
+  const isRangeSelection = reportMode === "rangeSelection";
   const totalPages = isRangeSelection
     ? 1
     : Math.max(1, Math.ceil(allReadings.length / ROWS_PER_PAGE));
@@ -301,6 +310,15 @@ export default function ReportsPage() {
   const paginatedReadings = isRangeSelection
     ? allReadings
     : allReadings.slice(pageStartIndex, pageStartIndex + ROWS_PER_PAGE);
+
+  // For range selection: compute sequential STREAM NO per customer
+  const streamNoMap = new Map<string, number>();
+  function getStreamNo(customerName: string): number {
+    const current = streamNoMap.get(customerName) ?? 0;
+    const next = current + 1;
+    streamNoMap.set(customerName, next);
+    return next;
+  }
 
   return (
     <div className="space-y-6 w-full">
@@ -611,18 +629,26 @@ export default function ReportsPage() {
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
                           SR.NO
                         </TableHead>
-                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
-                          NAME OF INDUSTRY
-                        </TableHead>
-                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
-                          CUSTOMER TYPE
-                        </TableHead>
-                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
-                          SOURCE/SEGMENT
-                        </TableHead>
-                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
-                          STREAM NO
-                        </TableHead>
+                        {!isRangeSelection ? (
+                          <>
+                            <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                              NAME OF INDUSTRY
+                            </TableHead>
+                            <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                              CUSTOMER TYPE
+                            </TableHead>
+                            <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                              SOURCE/SEGMENT
+                            </TableHead>
+                            <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                              STREAM NO
+                            </TableHead>
+                          </>
+                        ) : (
+                          <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                            METER SERIAL NO
+                          </TableHead>
+                        )}
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
                           PRESSURE (Bar)
                         </TableHead>
@@ -670,18 +696,26 @@ export default function ReportsPage() {
                           <TableCell className="font-mono text-xs text-muted-foreground">
                             {pageStartIndex + idx + 1}
                           </TableCell>
-                          <TableCell className="text-sm font-medium text-foreground whitespace-nowrap">
-                            {row.customerName || "—"}
-                          </TableCell>
-                          <TableCell className="text-xs font-semibold text-muted-foreground whitespace-nowrap">
-                            {row.customerCategory || "—"}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            IBAFO
-                          </TableCell>
-                          <TableCell className="font-mono text-xs text-foreground whitespace-nowrap">
-                            {row.meterSerialNo || row.deviceSerialNo}
-                          </TableCell>
+                          {!isRangeSelection ? (
+                            <>
+                              <TableCell className="text-sm font-medium text-foreground whitespace-nowrap">
+                                {row.customerName || "—"}
+                              </TableCell>
+                              <TableCell className="text-xs font-semibold text-muted-foreground whitespace-nowrap">
+                                {row.customerCategory || "—"}
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                                IBAFO
+                              </TableCell>
+                              <TableCell className="font-mono text-xs text-foreground whitespace-nowrap">
+                                {row.meterSerialNo || row.deviceSerialNo}
+                              </TableCell>
+                            </>
+                          ) : (
+                            <TableCell className="font-mono text-xs text-foreground whitespace-nowrap">
+                              {row.meterSerialNo || row.deviceSerialNo}
+                            </TableCell>
+                          )}
                           <TableCell
                             className="text-right font-mono text-xs"
                             style={{ color: "var(--clr-commercial)" }}

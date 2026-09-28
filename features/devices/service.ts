@@ -417,14 +417,14 @@ export async function getDeviceLatest(deviceIdOrSerial: string) {
   }
 
   let todayVolumeDelta: number | null = null;
-  if (todayEarliest?.correctedVolumeVb != null && priorReading?.correctedVolumeVb != null) {
-    const delta = todayEarliest.correctedVolumeVb - priorReading.correctedVolumeVb;
+  if (todayEarliest && latestReading?.correctedVolumeVb != null && priorReading?.correctedVolumeVb != null) {
+    const delta = latestReading.correctedVolumeVb - priorReading.correctedVolumeVb;
     todayVolumeDelta = delta >= 0 ? delta : null;
   }
 
   let todayUncorrectedVolumeDelta: number | null = null;
-  if (todayEarliest?.uncorrectedVolumeVm != null && priorReading?.uncorrectedVolumeVm != null) {
-    const deltaVm = todayEarliest.uncorrectedVolumeVm - priorReading.uncorrectedVolumeVm;
+  if (todayEarliest && latestReading?.uncorrectedVolumeVm != null && priorReading?.uncorrectedVolumeVm != null) {
+    const deltaVm = latestReading.uncorrectedVolumeVm - priorReading.uncorrectedVolumeVm;
     todayUncorrectedVolumeDelta = deltaVm >= 0 ? deltaVm : null;
   }
 

@@ -1,340 +1,318 @@
 // lib/report-excel.ts
 import ExcelJS from "exceljs";
 import type { MeterReportGroup, ReportMode, ReportReading } from "@/features/reports";
+import { groupReadingsByMeter, sanitizeSheetName } from "@/lib/report-excel-common";
 
-// ── Re-export for backward compatibility ──────────────────────────────────
+// ── Shared helpers (single source of truth lives in report-excel-common) ──
 
-export function groupReadingsByMeter(readings: ReportReading[]): MeterReportGroup[] {
-  const meterMap = new Map<string, MeterReportGroup>();
+// Re-exported so existing `@/lib/report-excel` imports keep working.
+export { groupReadingsByMeter, sanitizeSheetName };
 
-  for (const reading of readings) {
-    let group = meterMap.get(reading.deviceId);
-    if (!group) {
-      group = {
-        deviceId: reading.deviceId,
-        deviceSerialNo: reading.deviceSerialNo,
-        meterSerialNo: reading.meterSerialNo,
-        readings: [],
-      };
-      meterMap.set(reading.deviceId, group);
-    }
-    group.readings.push(reading);
-  }
+// ── Constants ─────────────────────────────────────────────────────────────
 
-  return Array.from(meterMap.values());
-}
+const SOURCE_SEGMENT = "IBAFO";
+// Used as sheet/group name when a meter has no customer name (matches the previous "Customer" fallback).
+const UNKNOWN_CUSTOMER_NAME = "Customer";
+const RANGE_REPORT_SHEET_NAME = "Range Report";
+const MIN_COLUMN_WIDTH = 12;
 
-// ── Sheet name helpers ────────────────────────────────────────────────────
+// Customer header block layout (dateRange sheets): label spans columns 1-2, value spans 3-6.
+const DETAIL_LABEL_END_COLUMN = 2;
+const DETAIL_VALUE_START_COLUMN = 3;
+const DETAIL_VALUE_END_COLUMN = 6;
+const DETAIL_VALUE_CHARS_PER_LINE = 60; // rough estimate, used only to size the row height
 
-const EXCEL_SHEET_NAME_INVALID_CHARS = /[\\/?:*[\]]/g;
-const MAX_SHEET_NAME_LENGTH = 31;
-
-export function sanitizeSheetName(
-  rawName: string,
-  fallback: string,
-  usedNames: Set<string>,
-): string {
-  let name = (rawName || "").replace(EXCEL_SHEET_NAME_INVALID_CHARS, "_").trim();
-  if (!name) name = fallback;
-  name = name.slice(0, MAX_SHEET_NAME_LENGTH);
-
-  let candidate = name;
-  let suffix = 1;
-  while (usedNames.has(candidate)) {
-    const suffixStr = `_${suffix}`;
-    candidate = `${name.slice(0, MAX_SHEET_NAME_LENGTH - suffixStr.length)}${suffixStr}`;
-    suffix++;
-  }
-  usedNames.add(candidate);
-  return candidate;
-}
+const HEADER_FILL_COLOR = "FF1F3A5F";
+const LABEL_FILL_COLOR = "FFE8EDF3";
 
 // ── Column definitions ────────────────────────────────────────────────────
 
-// Column order mirrors the AML reference template (AMR REPORT FORMAT.xlsx).
+type CellValue = string | number;
+
+interface RowContext {
+  reading: ReportReading;
+  srNo: number;
+  streamNo: number;
+}
+
+interface ReportColumn {
+  header: string;
+  unit: string;
+  align: "left" | "center";
+  /** Customer-identifying columns. In dateRange mode they move into the sheet header block. */
+  isCustomerDetail?: boolean;
+  getValue: (context: RowContext) => CellValue;
+}
+
+function formatValue(value: number | null | undefined): CellValue {
+  return value === null || value === undefined ? "-" : value;
+}
+
+function readingDay(reading: ReportReading): string {
+  const date = new Date(reading.readingDate);
+  if (!isNaN(date.getTime()) && date.getFullYear() > 1970) {
+    return reading.readingDate.split("T")[0];
+  }
+  return reading.receivedAt.split("T")[0];
+}
+
+// Column order mirrors the AMR reference template (AMR REPORT FORMAT.xlsx).
 // "TOTAIZER" reproduces a typo in the reference; DATE is appended because the
 // report covers a date range while the reference is a single-day snapshot.
-export const AMR_REPORT_HEADERS = [
-  "SR.NO",
-  "NAME OF INDUSTRY",
-  "CUSTOMER TYPE",
-  "SOURCE/SEGMENT",
-  "STREAM NO",
-  "PRESSURE",
-  "TEMPERATURE",
-  "CORRECTION FACTOR",
-  "CURRENT FLOWRATE (CORRECTED)",
-  "CORRECTED VOLUME TOTALIZER",
-  "UNCORRECTED VOLUME TOTALIZER",
-  "PREVIOUS DAY UNCORRECTED",
-  "PREVIOUS DAY CORRECTED",
-  "PREVIOUS DAY UNCORRECTED TOTALIZER",
-  "PREVIOUS DAY CORRECTED TOTAIZER",
-  "EVC BATTERY/BALANCE DAYS",
-  "ALARMS",
-  "DATE",
+const REPORT_COLUMNS: ReportColumn[] = [
+  { header: "SR.NO", unit: "—", align: "center", getValue: ({ srNo }) => srNo },
+  {
+    header: "NAME OF INDUSTRY", unit: "—", align: "left", isCustomerDetail: true,
+    getValue: ({ reading }) => reading.customerName || "-",
+  },
+  {
+    header: "CUSTOMER TYPE", unit: "—", align: "left", isCustomerDetail: true,
+    getValue: ({ reading }) => reading.customerCategory || "-",
+  },
+  {
+    header: "SOURCE/SEGMENT", unit: "—", align: "left", isCustomerDetail: true,
+    getValue: () => SOURCE_SEGMENT,
+  },
+  {
+    header: "METER SERIAL NO", unit: "—", align: "left",
+    getValue: ({ reading }) => reading.meterSerialNo || reading.deviceSerialNo || "-",
+  },
+  { header: "STREAM NO", unit: "—", align: "center", getValue: ({ streamNo }) => streamNo },
+  { header: "PRESSURE", unit: "Bar", align: "center", getValue: ({ reading }) => formatValue(reading.gasPressure) },
+  { header: "TEMPERATURE", unit: "°C", align: "center", getValue: ({ reading }) => formatValue(reading.gasTemperature) },
+  { header: "CORRECTION FACTOR", unit: "—", align: "center", getValue: ({ reading }) => formatValue(reading.correctionFactor) },
+  { header: "CURRENT FLOWRATE (CORRECTED)", unit: "SCMH", align: "center", getValue: ({ reading }) => formatValue(reading.currentFlowRate) },
+  { header: "CORRECTED VOLUME TOTALIZER", unit: "SCM", align: "center", getValue: ({ reading }) => formatValue(reading.correctedVolumeVb) },
+  { header: "UNCORRECTED VOLUME TOTALIZER", unit: "m³", align: "center", getValue: ({ reading }) => formatValue(reading.uncorrectedVolumeVm) },
+  { header: "PREVIOUS DAY UNCORRECTED", unit: "m³", align: "center", getValue: ({ reading }) => formatValue(reading.prevDayUncorrected) },
+  { header: "PREVIOUS DAY CORRECTED", unit: "SCMD", align: "center", getValue: ({ reading }) => formatValue(reading.prevDayCorrected) },
+  { header: "PREVIOUS DAY UNCORRECTED TOTALIZER", unit: "m³", align: "center", getValue: ({ reading }) => formatValue(reading.prevDayUncorrectedTotalizer) },
+  { header: "PREVIOUS DAY CORRECTED TOTAIZER", unit: "SCM", align: "center", getValue: ({ reading }) => formatValue(reading.prevDayCorrectedTotalizer) },
+  {
+    header: "EVC BATTERY/BALANCE DAYS", unit: "%", align: "center",
+    getValue: ({ reading }) => (reading.batteryLevel != null ? Math.round(reading.batteryLevel) : "-"),
+  },
+  { header: "ALARMS", unit: "—", align: "left", getValue: ({ reading }) => reading.alarms || "NORMAL" },
+  { header: "DATE", unit: "—", align: "center", getValue: ({ reading }) => readingDay(reading) },
 ];
 
-export const AMR_REPORT_UNITS = [
-  "—", "—", "—", "—", "—", "Bar", "°C", "—", "SCMH", "SCM", "m³", "m³",
-  "SCMD", "m³", "SCM", "%", "—", "—",
-];
+// Kept for backward compatibility with any other importer.
+export const AMR_REPORT_HEADERS = REPORT_COLUMNS.map((column) => column.header);
+export const AMR_REPORT_UNITS = REPORT_COLUMNS.map((column) => column.unit);
 
-type Align = "left" | "center";
-const AMR_REPORT_ALIGN: Align[] = [
-  "center", // SR.NO
-  "left",   // NAME OF INDUSTRY
-  "left",   // CUSTOMER TYPE
-  "left",   // SOURCE/SEGMENT
-  "left",   // STREAM NO
-  "center", // PRESSURE
-  "center", // TEMPERATURE
-  "center", // CORRECTION FACTOR
-  "center", // CURRENT FLOWRATE (CORRECTED)
-  "center", // CORRECTED VOLUME TOTALIZER
-  "center", // UNCORRECTED VOLUME TOTALIZER
-  "center", // PREVIOUS DAY UNCORRECTED
-  "center", // PREVIOUS DAY CORRECTED
-  "center", // PREVIOUS DAY UNCORRECTED TOTALIZER
-  "center", // PREVIOUS DAY CORRECTED TOTAIZER
-  "center", // EVC BATTERY/BALANCE DAYS
-  "left",   // ALARMS
-  "center", // DATE
-];
+// ── Worksheet helpers ─────────────────────────────────────────────────────
 
-// ── Row builders ──────────────────────────────────────────────────────────
-
-function fmtVal(val: number | null | undefined): string | number {
-  if (val === null || val === undefined) return "-";
-  return val;
+function toDataRow(columns: ReportColumn[], context: RowContext): CellValue[] {
+  return columns.map((column) => column.getValue(context));
 }
 
-function readingDay(row: ReportReading): string {
-  const d = new Date(row.readingDate);
-  if (!isNaN(d.getTime()) && d.getFullYear() > 1970) {
-    return row.readingDate.split("T")[0];
+function setColumnWidths(
+  worksheet: ExcelJS.Worksheet,
+  columns: ReportColumn[],
+  dataRows: CellValue[][],
+) {
+  worksheet.columns = columns.map((column, columnIndex) => {
+    const longestDataLength = dataRows.reduce(
+      (longest, row) => Math.max(longest, String(row[columnIndex] ?? "").length),
+      0,
+    );
+    const longest = Math.max(column.header.length, column.unit.length, longestDataLength);
+    return { width: Math.max(longest + 4, MIN_COLUMN_WIDTH) };
+  });
+}
+
+/** Writes the header row, the units row, then all data rows with styling. */
+function writeTable(
+  worksheet: ExcelJS.Worksheet,
+  columns: ReportColumn[],
+  dataRows: CellValue[][],
+) {
+  const headerRow = worksheet.addRow(columns.map((column) => column.header));
+  const unitRow = worksheet.addRow(columns.map((column) => column.unit));
+  const bodyRows = dataRows.map((values) => worksheet.addRow(values));
+
+  for (const row of [headerRow, unitRow, ...bodyRows]) {
+    row.eachCell((cell, columnNumber) => {
+      cell.alignment = { horizontal: columns[columnNumber - 1].align, vertical: "middle" };
+    });
   }
-  return row.receivedAt.split("T")[0];
+  headerRow.eachCell((cell) => {
+    cell.font = { bold: true };
+  });
+  unitRow.eachCell((cell) => {
+    cell.font = { italic: true, color: { argb: "FF666666" } };
+  });
 }
 
-/** Builds one AMR-format row for a single reading (used by dateRange mode). */
-function toExcelRowAoa(row: ReportReading, srNo: number): (string | number)[] {
-  return [
-    srNo,
-    row.customerName || "-",
-    row.customerCategory || "-",
-    "IBAFO",
-    row.meterSerialNo || row.deviceSerialNo || "-",
-    fmtVal(row.gasPressure),
-    fmtVal(row.gasTemperature),
-    fmtVal(row.correctionFactor),
-    fmtVal(row.currentFlowRate),
-    fmtVal(row.correctedVolumeVb),
-    fmtVal(row.uncorrectedVolumeVm),
-    fmtVal(row.prevDayUncorrected),
-    fmtVal(row.prevDayCorrected),
-    fmtVal(row.prevDayUncorrectedTotalizer),
-    fmtVal(row.prevDayCorrectedTotalizer),
-    row.batteryLevel != null ? Math.round(row.batteryLevel) : "-",
-    row.alarms || "NORMAL",
-    readingDay(row),
+interface CustomerHeaderDetails {
+  customerName: string;
+  customerType: string;
+  meterSerialNumbers: string[];
+}
+
+/** Large banner + customer detail rows placed above the table in each dateRange sheet. */
+function addCustomerHeaderBlock(
+  worksheet: ExcelJS.Worksheet,
+  details: CustomerHeaderDetails,
+  columnCount: number,
+) {
+  const titleRow = worksheet.addRow(["CUSTOMER DETAILS"]);
+  worksheet.mergeCells(titleRow.number, 1, titleRow.number, columnCount);
+  titleRow.height = 32;
+  const titleCell = titleRow.getCell(1);
+  titleCell.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+  titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_FILL_COLOR } };
+  titleCell.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+
+  const fields: Array<[label: string, value: string]> = [
+    ["Customer Name", details.customerName],
+    ["Customer Type", details.customerType],
+    ["Source/Segment", SOURCE_SEGMENT],
+    ["Meter Serial No(s)", details.meterSerialNumbers.join(", ")],
   ];
+  const valueEndColumn = Math.min(DETAIL_VALUE_END_COLUMN, columnCount);
+
+  for (const [label, value] of fields) {
+    // Label goes in column 1, value in column 3 (columns 1-2 and 3-6 are merged below).
+    const row = worksheet.addRow([label, "", value]);
+    worksheet.mergeCells(row.number, 1, row.number, DETAIL_LABEL_END_COLUMN);
+    worksheet.mergeCells(row.number, DETAIL_VALUE_START_COLUMN, row.number, valueEndColumn);
+
+    // Merged cells don't auto-grow, so long serial lists need an explicit height.
+    row.height = 20 * Math.max(1, Math.ceil(value.length / DETAIL_VALUE_CHARS_PER_LINE));
+
+    const labelCell = row.getCell(1);
+    labelCell.font = { bold: true };
+    labelCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LABEL_FILL_COLOR } };
+    labelCell.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+
+    row.getCell(DETAIL_VALUE_START_COLUMN).alignment = {
+      horizontal: "left",
+      vertical: "middle",
+      wrapText: true,
+    };
+  }
+
+  worksheet.addRow([]); // spacer between header block and table
+}
+
+// ── Data helpers ──────────────────────────────────────────────────────────
+
+/** Groups meters by customer name, sorted alphabetically. MeterReportGroup has no customer field, so it comes from the readings. */
+function groupMetersByCustomer(meters: MeterReportGroup[]): Array<[string, MeterReportGroup[]]> {
+  const customerMap = new Map<string, MeterReportGroup[]>();
+
+  for (const meter of meters) {
+    const customerName = meter.readings[0]?.customerName?.trim() || UNKNOWN_CUSTOMER_NAME;
+    const customerMeters = customerMap.get(customerName) ?? [];
+    customerMeters.push(meter);
+    customerMap.set(customerName, customerMeters);
+  }
+
+  return Array.from(customerMap.entries()).sort(([nameA], [nameB]) => nameA.localeCompare(nameB));
+}
+
+function getMeterLabel(meter: MeterReportGroup): string {
+  return meter.meterSerialNo || meter.deviceSerialNo;
+}
+
+function getLatestReading(readings: ReportReading[]): ReportReading | undefined {
+  return readings.reduce<ReportReading | undefined>(
+    (latest, reading) =>
+      !latest || new Date(reading.readingDate).getTime() > new Date(latest.readingDate).getTime()
+        ? reading
+        : latest,
+    undefined,
+  );
+}
+
+// ── Sheet builders ────────────────────────────────────────────────────────
+
+/**
+ * dateRange mode: one worksheet per customer.
+ * Top of the sheet is a customer header block (name, type, source/segment, meter serials);
+ * the table below omits those customer columns.
+ */
+function addDateRangeSheets(workbook: ExcelJS.Workbook, meters: MeterReportGroup[]) {
+  const usedSheetNames = new Set<string>();
+  const tableColumns = REPORT_COLUMNS.filter((column) => !column.isCustomerDetail);
+
+  for (const [customerName, customerMeters] of groupMetersByCustomer(meters)) {
+    const readings = customerMeters
+      .flatMap((meter) => meter.readings)
+      .sort((a, b) => {
+        if (a.deviceSerialNo !== b.deviceSerialNo) {
+          return a.deviceSerialNo.localeCompare(b.deviceSerialNo);
+        }
+        return new Date(a.readingDate).getTime() - new Date(b.readingDate).getTime();
+      });
+    if (readings.length === 0) continue;
+
+    const dataRows = readings.map((reading, index) =>
+      toDataRow(tableColumns, { reading, srNo: index + 1, streamNo: index + 1 }),
+    );
+
+    const worksheet = workbook.addWorksheet(
+      sanitizeSheetName(customerName, "Customer", usedSheetNames),
+    );
+    setColumnWidths(worksheet, tableColumns, dataRows);
+    addCustomerHeaderBlock(
+      worksheet,
+      {
+        customerName,
+        customerType: readings[0].customerCategory || "-",
+        meterSerialNumbers: Array.from(new Set(customerMeters.map(getMeterLabel))).sort(),
+      },
+      tableColumns.length,
+    );
+    writeTable(worksheet, tableColumns, dataRows);
+  }
 }
 
 /**
- * Sums numeric columns across all readings of a customer (used by
- * rangeSelection mode — one row per customer, all meters aggregated).
+ * rangeSelection mode: ONE worksheet for all customers.
+ * One row per meter (latest reading, which the service already aggregates for the period).
+ * SR.NO is global; STREAM NO restarts at 1 for each customer.
  */
-function summarizeCustomerRow(readings: ReportReading[], srNo: number): (string | number)[] {
-  if (readings.length === 0) {
-    return [
-      srNo, "-", "-", "IBAFO", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "NORMAL", "-",
-    ];
+function addRangeSelectionSheet(workbook: ExcelJS.Workbook, meters: MeterReportGroup[]) {
+  const dataRows: CellValue[][] = [];
+  let srNo = 0;
+
+  for (const [, customerMeters] of groupMetersByCustomer(meters)) {
+    let streamNo = 0;
+    const sortedMeters = [...customerMeters].sort((a, b) =>
+      getMeterLabel(a).localeCompare(getMeterLabel(b)),
+    );
+
+    for (const meter of sortedMeters) {
+      const reading = getLatestReading(meter.readings);
+      if (!reading) continue;
+
+      srNo++;
+      streamNo++;
+      dataRows.push(toDataRow(REPORT_COLUMNS, { reading, srNo, streamNo }));
+    }
   }
 
-  let sumCorrectedVolumeVb = 0;
-  let sumUncorrectedVolumeVm = 0;
-  let sumPrevDayUncorrected = 0;
-  let sumPrevDayCorrected = 0;
-  let sumPrevDayUncorrectedTotalizer = 0;
-  let sumPrevDayCorrectedTotalizer = 0;
-  let pressureSum = 0, pressureCount = 0;
-  let tempSum = 0, tempCount = 0;
-  let cfSum = 0, cfCount = 0;
-  let flowSum = 0, flowCount = 0;
-  let batterySum = 0, batteryCount = 0;
+  if (dataRows.length === 0) return;
 
-  let latestDate = readings[0].readingDate;
-  const alarmSet = new Set<string>();
-  let latestCustomerName = readings[0].customerName || "Unknown";
-  let latestCustomerCategory = readings[0].customerCategory || "-";
-  let latestMeterSerialNo = readings[0].meterSerialNo || readings[0].deviceSerialNo || "-";
-
-  for (const r of readings) {
-    if (r.correctedVolumeVb != null) sumCorrectedVolumeVb += r.correctedVolumeVb;
-    if (r.uncorrectedVolumeVm != null) sumUncorrectedVolumeVm += r.uncorrectedVolumeVm;
-    if (r.prevDayUncorrected != null) sumPrevDayUncorrected += r.prevDayUncorrected;
-    if (r.prevDayCorrected != null) sumPrevDayCorrected += r.prevDayCorrected;
-    if (r.prevDayUncorrectedTotalizer != null) sumPrevDayUncorrectedTotalizer += r.prevDayUncorrectedTotalizer;
-    if (r.prevDayCorrectedTotalizer != null) sumPrevDayCorrectedTotalizer += r.prevDayCorrectedTotalizer;
-
-    if (r.gasPressure != null) { pressureSum += r.gasPressure; pressureCount++; }
-    if (r.gasTemperature != null) { tempSum += r.gasTemperature; tempCount++; }
-    if (r.correctionFactor != null) { cfSum += r.correctionFactor; cfCount++; }
-    if (r.currentFlowRate != null) { flowSum += r.currentFlowRate; flowCount++; }
-    if (r.batteryLevel != null) { batterySum += r.batteryLevel; batteryCount++; }
-
-    if (r.readingDate > latestDate) latestDate = r.readingDate;
-    if (r.alarms && r.alarms !== "NORMAL" && r.alarms !== "---") alarmSet.add(r.alarms);
-    if (r.customerName) latestCustomerName = r.customerName;
-    if (r.customerCategory) latestCustomerCategory = r.customerCategory;
-    if (r.meterSerialNo) latestMeterSerialNo = r.meterSerialNo;
-  }
-
-  const alarms = alarmSet.size > 0 ? [...alarmSet].join("; ") : "NORMAL";
-  const avg = (sum: number, count: number) =>
-    count > 0 ? Number((sum / count).toFixed(2)) : "-";
-
-  return [
-    srNo,
-    latestCustomerName,
-    latestCustomerCategory,
-    "IBAFO",
-    latestMeterSerialNo,
-    avg(pressureSum, pressureCount),
-    avg(tempSum, tempCount),
-    avg(cfSum, cfCount),
-    avg(flowSum, flowCount),
-    Number(sumCorrectedVolumeVb.toFixed(3)),
-    Number(sumUncorrectedVolumeVm.toFixed(3)),
-    Number(sumPrevDayUncorrected.toFixed(3)),
-    Number(sumPrevDayCorrected.toFixed(3)),
-    Number(sumPrevDayUncorrectedTotalizer.toFixed(3)),
-    Number(sumPrevDayCorrectedTotalizer.toFixed(3)),
-    batteryCount > 0 ? Math.round(batterySum / batteryCount) : "-",
-    alarms,
-    latestDate.split("T")[0],
-  ];
+  const worksheet = workbook.addWorksheet(RANGE_REPORT_SHEET_NAME);
+  setColumnWidths(worksheet, REPORT_COLUMNS, dataRows);
+  writeTable(worksheet, REPORT_COLUMNS, dataRows);
 }
 
 // ── Workbook builder ──────────────────────────────────────────────────────
 
-function autoSizeColumns(worksheet: ExcelJS.Worksheet, aoa: (string | number)[][]) {
-  if (aoa.length === 0) return;
-  const colCount = aoa[0].length;
-  worksheet.columns = Array.from({ length: colCount }, (_, c) => {
-    let maxLen = 0;
-    for (let r = 0; r < aoa.length; r++) {
-      const val = aoa[r][c];
-      const len = val == null ? 0 : String(val).length;
-      if (len > maxLen) maxLen = len;
-    }
-    return { width: Math.max(maxLen + 4, 12) };
-  });
-}
-
-/**
- * Builds an Excel workbook from meter report groups.
- *
- * - `mode === "rangeSelection"`: all customers on a SINGLE worksheet.
- *   Readings grouped by customerName; numeric columns summed across all
- *   meters of the same customer → one row per customer. SR.NO restarts at 1.
- * - `mode === "dateRange"` (or omitted): legacy — one worksheet per customer,
- *   each containing that customer's meter readings with SR.NO restarting at 1.
- */
 export function buildCustomerReportWorkbook(
   meters: MeterReportGroup[],
   mode?: ReportMode,
 ): ExcelJS.Workbook {
   const workbook = new ExcelJS.Workbook();
-  const usedSheetNames = new Set<string>();
 
   if (mode === "rangeSelection") {
-    // Single sheet, one row per customer, summed across all meters
-    const customerMap = new Map<string, { customerName: string; customerCategory: string | null; readings: ReportReading[] }>();
-
-    for (const group of meters) {
-      for (const reading of group.readings) {
-        const name = reading.customerName || "Unknown";
-        let entry = customerMap.get(name);
-        if (!entry) {
-          entry = { customerName: name, customerCategory: reading.customerCategory, readings: [] };
-          customerMap.set(name, entry);
-        }
-        entry.readings.push(reading);
-      }
-    }
-
-    const sortedCustomers = Array.from(customerMap.values()).sort((a, b) =>
-      (a.customerName || "").localeCompare(b.customerName || ""),
-    );
-
-    if (sortedCustomers.length > 0) {
-      const sheetName = sanitizeSheetName(
-        sortedCustomers[0].customerName || "Customers",
-        "Customers",
-        usedSheetNames,
-      );
-
-      const dataRows: (string | number)[][] = [];
-      sortedCustomers.forEach((entry, idx) => {
-        dataRows.push(summarizeCustomerRow(entry.readings, idx + 1));
-      });
-
-      const aoa = [AMR_REPORT_HEADERS, AMR_REPORT_UNITS, ...dataRows];
-      const worksheet = workbook.addWorksheet(sheetName);
-      autoSizeColumns(worksheet, aoa);
-
-      aoa.forEach((rowValues, rowIndex) => {
-        const row = worksheet.addRow(rowValues);
-        const isHeaderRow = rowIndex === 0;
-        const isUnitRow = rowIndex === 1;
-
-        row.eachCell((cell, colIndex) => {
-          cell.alignment = { horizontal: AMR_REPORT_ALIGN[colIndex - 1], vertical: "middle" };
-          if (isHeaderRow) cell.font = { bold: true };
-          if (isUnitRow) cell.font = { italic: true, color: { argb: "FF666666" } };
-        });
-      });
-    }
+    addRangeSelectionSheet(workbook, meters);
   } else {
-    // Legacy: one worksheet per customer
-    const customerMap = new Map<string, MeterReportGroup[]>();
-    for (const group of meters) {
-      const rawName = group.readings[0]?.customerName;
-      const name = rawName && rawName.trim() !== "" ? rawName : "Customer";
-      const existing = customerMap.get(name) ?? [];
-      existing.push(group);
-      customerMap.set(name, existing);
-    }
-
-    for (const [customerName, customerMeters] of customerMap.entries()) {
-      const sheetName = sanitizeSheetName(customerName, "Customer", usedSheetNames);
-
-      const relevantReadings = customerMeters
-        .filter((m) => m.readings.length > 0)
-        .flatMap((m) => m.readings);
-
-      if (relevantReadings.length === 0) continue;
-
-      const dataRows = relevantReadings.map((r, i) => toExcelRowAoa(r, i + 1));
-      const aoa = [AMR_REPORT_HEADERS, AMR_REPORT_UNITS, ...dataRows];
-
-      const worksheet = workbook.addWorksheet(sheetName);
-      autoSizeColumns(worksheet, aoa);
-
-      aoa.forEach((rowValues, rowIndex) => {
-        const row = worksheet.addRow(rowValues);
-        const isHeaderRow = rowIndex === 0;
-        const isUnitRow = rowIndex === 1;
-
-        row.eachCell((cell, colIndex) => {
-          cell.alignment = { horizontal: AMR_REPORT_ALIGN[colIndex - 1], vertical: "middle" };
-          if (isHeaderRow) cell.font = { bold: true };
-          if (isUnitRow) cell.font = { italic: true, color: { argb: "FF666666" } };
-        });
-      });
-    }
+    addDateRangeSheets(workbook, meters);
   }
 
   return workbook;
@@ -342,11 +320,7 @@ export function buildCustomerReportWorkbook(
 
 // ── Download helper ───────────────────────────────────────────────────────
 
-function buildReportFilename(
-  mode?: ReportMode,
-  startDate?: string,
-  endDate?: string,
-): string {
+function buildReportFilename(mode?: ReportMode, startDate?: string, endDate?: string): string {
   const modeLabel = mode === "rangeSelection" ? "RangeSelection" : "DateRange";
   const dateRange = startDate && endDate ? `_${startDate}_${endDate}` : "";
   return `Customer_Report_${modeLabel}${dateRange}.xlsx`;
