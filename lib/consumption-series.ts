@@ -43,6 +43,16 @@ export interface ConsumptionBucket {
   value: number | null;
   /** true → endReading < startReading (meter reset). Render as zero bar + warning. */
   suspect: boolean;
+  /**
+   * Fleet-only: delta value summed over devices belonging to CNG-category
+   * customers. Undefined for per-device series.
+   */
+  cngValue?: number | null;
+  /**
+   * Fleet-only: delta value summed over devices belonging to PNG-category
+   * customers. Undefined for per-device series.
+   */
+  pngValue?: number | null;
 }
 
 /** A raw boundary-reading lookup result, keyed by boundary ISO date. */

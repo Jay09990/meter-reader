@@ -9,9 +9,8 @@ import {
   ArrowRight,
   RefreshCw,
   Activity,
-  Building2,
+  Fuel,
   Factory,
-  MapPin,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +20,7 @@ import { BarChart, Bar, CartesianGrid, Cell, XAxis, YAxis, PieChart, Pie } from 
 import { useAutoRefresh } from "@/lib/auto-refresh";
 import { formatLocalTs } from "@/lib/utils";
 import { getChartTheme } from "@/lib/chart-theme";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { CapacityBanner } from "@/components/layout/capacity-banner";
 import { PeriodSelector } from "@/components/ui/period-selector";
 import { pickTicks, tickCountForMode, type ConsumptionBucket, type ConsumptionMode } from "@/lib/consumption-series";
@@ -40,7 +39,6 @@ interface FleetOverviewData {
   metersOnline?: { value: number; totalDevices: number; uptimePercent: number };
   consumptionByCategory?: Array<{ category: string; totalVolume: number }>;
   activeAlerts?: number;
-  consumption?: ConsumptionBucket[];
   topConsumingCustomers?: Array<{
     customerName: string;
     deviceSerialNo: string;
@@ -59,14 +57,24 @@ interface FleetOverviewData {
     suspect?: boolean;
     status: "NEW" | "ONLINE" | "OFFLINE" | "ALERT";
   }>;
-  consumptionByGa?: Array<{ ga: string; totalVolume: number }>;
-  liveEvents?: Array<{
-    id: string;
-    kind: "ALARM" | "READING";
-    label: string;
-    message: string;
-    timestamp: string;
-  }>;
+}
+
+interface AlarmFeedItem {
+  id: string;
+  deviceId: string;
+  deviceSerialNo: string;
+  meterSerialNo: string | null;
+  customerName: string | null;
+  gaName: string | null;
+  type: string;
+  cause: string;
+  gasValue: number | null;
+  averageValue: number | null;
+  forDate: string;
+  status: string;
+  severity: string;
+  acknowledged: boolean;
+  createdAt: string;
 }
 
 const categoryColors: Record<string, string> = {
@@ -74,9 +82,14 @@ const categoryColors: Record<string, string> = {
   COMMERCIAL: "var(--clr-commercial)",
   RESIDENTIAL: "var(--clr-residential)",
   DRS: "var(--clr-drs)",
+  CNG: "var(--clr-cng)",
+  PNG: "var(--clr-png)",
 };
 
-const humanCategoryLabel = (category: string) => category.charAt(0) + category.slice(1).toLowerCase();
+const humanCategoryLabel = (category: string) => {
+  if (category === "CNG" || category === "PNG") return category;
+  return category.charAt(0) + category.slice(1).toLowerCase();
+};
 
 const fmt = (value: number | null | undefined, decimals = 2) => {
   if (value == null || Number.isNaN(value)) return "—";
@@ -149,11 +162,61 @@ const renderStatus = (status: string) => {
   }
 };
 
+const renderCategory = (category: string) => {
+  const color = categoryColors[category] ?? "var(--clr-accent-mid)";
+  return (
+    <Badge
+      variant="outline"
+      style={{ borderColor: `${color}55`, color, background: `${color}18` }}
+    >
+      {humanCategoryLabel(category)}
+    </Badge>
+  );
+};
+
+const renderAlarmSeverity = (severity: string) => {
+  const color = severity === "CRITICAL" ? "var(--clr-critical)" : "var(--clr-alert)";
+  return (
+    <Badge
+      className="font-bold"
+      style={{ background: `${color}18`, color, border: `1px solid ${color}44` }}
+    >
+      {severity}
+    </Badge>
+  );
+};
+
+const renderAlarmStatus = (status: string, acknowledged: boolean) => (
+  <>
+    {status === "OPEN" ? (
+      <Badge className="font-bold" style={{ background: "var(--clr-alert)", color: "#fff" }}>
+        OPEN
+      </Badge>
+    ) : (
+      <Badge
+        className="font-bold"
+        style={{ background: "var(--clr-resolved)22", color: "var(--clr-resolved)", border: "1px solid var(--clr-resolved)44" }}
+      >
+        RESOLVED
+      </Badge>
+    )}
+    {acknowledged && (
+      <Badge
+        style={{ background: "var(--clr-online)18", color: "var(--clr-online)", border: "1px solid var(--clr-online)44" }}
+      >
+        ACK
+      </Badge>
+    )}
+  </>
+);
+
 export default function OverviewPage() {
   const chartTheme = getChartTheme();
   const [data, setData] = useState<FleetOverviewData | null>(null);
+  const [alarmFeed, setAlarmFeed] = useState<AlarmFeedItem[]>([]);
   const [maxMeterCapacity, setMaxMeterCapacity] = useState<number | null>(null);
   const [consumptionPeriod, setConsumptionPeriod] = useState<ConsumptionMode>("daily");
+  const [consumption, setConsumption] = useState<ConsumptionBucket[]>([]);
   const [kpiRange, setKpiRange] = useState<KpiRange>("today");
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingConsumption, setLoadingConsumption] = useState<boolean>(true);
@@ -179,6 +242,10 @@ export default function OverviewPage() {
       .then((res) => (res.ok ? res.json() : null))
       .then((status) => setMaxMeterCapacity(status?.maxCapacity ?? null))
       .catch(() => {});
+    fetch("/api/alarms?page=1&limit=10")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((result) => setAlarmFeed(result?.items ?? []))
+      .catch(() => {});
   }, [kpiRange]);
 
   const fetchConsumptionSeries = useCallback(() => {
@@ -189,6 +256,7 @@ export default function OverviewPage() {
         return res.json();
       })
       .then((d) => {
+        setConsumption(d?.consumption ?? []);
         setLoadingConsumption(false);
       })
       .catch(() => {
@@ -215,16 +283,16 @@ export default function OverviewPage() {
   const hasCategoryData =
     categorySeries.length > 0 &&
     categorySeries.some((item) => (item.totalVolume ?? 0) > 0);
-  const consumptionSeries = (data?.consumption ?? []).map((item) => ({
+  const consumptionSeries = consumption.map((item) => ({
     ...item,
     value: Number(item.value ?? 0),
+    cng: Number(item.cngValue ?? 0),
+    png: Number(item.pngValue ?? 0),
   }));
   const hasConsumptionData =
     consumptionSeries.length > 0 &&
-    consumptionSeries.some((item) => item.value > 0);
-  const peakConsumptionValue = Math.max(...consumptionSeries.map((item) => item.value), 0);
+    consumptionSeries.some((item) => item.cng > 0 || item.png > 0);
   const consumptionTicks = pickTicks(consumptionSeries.map((item) => item.label), tickCountForMode(consumptionPeriod));
-  const gaSeries = (data?.consumptionByGa ?? []).slice(0, 8);
 
   return (
     <div className="space-y-8 w-full">
@@ -320,14 +388,14 @@ export default function OverviewPage() {
         <Card className="bg-card border-border text-card-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Commercial Consumption
+              Industrial CNG Consumption
             </CardTitle>
-            <Building2 className="w-5 h-5" style={{color:'var(--clr-commercial)'}} />
+            <Fuel className="w-5 h-5" style={{color:'var(--clr-cng)'}} />
           </CardHeader>
           <CardContent>
             <ConsumptionKpiValue
               loading={loading}
-              value={categorySeries.find((item) => item.category === "COMMERCIAL")?.totalVolume ?? 0}
+              value={categorySeries.find((item) => item.category === "CNG")?.totalVolume ?? 0}
             />
             <p className="text-xs text-muted-foreground mt-1">Consumption for selected range</p>
           </CardContent>
@@ -336,14 +404,14 @@ export default function OverviewPage() {
         <Card className="bg-card border-border text-card-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              DRS Consumption
+              Industrial PNG Consumption
             </CardTitle>
-            <Building2 className="w-5 h-5" style={{color:"var(--clr-drs)"}} />
+            <Flame className="w-5 h-5" style={{color:'var(--clr-png)'}} />
           </CardHeader>
           <CardContent>
             <ConsumptionKpiValue
               loading={loading}
-              value={categorySeries.find((item) => item.category === "DRS")?.totalVolume ?? 0}
+              value={categorySeries.find((item) => item.category === "PNG")?.totalVolume ?? 0}
             />
             <p className="text-xs text-muted-foreground mt-1">Consumption for selected range</p>
           </CardContent>
@@ -374,7 +442,7 @@ export default function OverviewPage() {
             </div>
           </CardHeader>
           <CardContent className="h-80">
-            {loading ? (
+            {loadingConsumption ? (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 <RefreshCw className="h-4 w-4 animate-spin mr-2" style={{ color: "var(--clr-accent-mid)" }} />
                 Loading consumption…
@@ -389,7 +457,13 @@ export default function OverviewPage() {
                 </p>
               </div>
             ) : (
-              <ChartContainer config={{ value: { label: "Consumption", color: "var(--chart-1)" } }} className="h-full w-full">
+              <ChartContainer
+                config={{
+                  cng: { label: "CNG Consumption", color: "var(--clr-cng)" },
+                  png: { label: "PNG Consumption", color: "var(--clr-png)" },
+                }}
+                className="h-full w-full"
+              >
                 <BarChart data={consumptionSeries}>
                   <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} opacity={0.7} />
                   <XAxis dataKey="label" ticks={consumptionTicks} tick={{ fill: chartTheme.tick, fontSize: 12 }} />
@@ -398,9 +472,15 @@ export default function OverviewPage() {
                     cursor={{ fill: "var(--clr-accent-hi)", opacity: 0.07 }}
                     content={<ChartTooltipContent />}
                   />
-                  <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                  <ChartLegend content={<ChartLegendContent />} />
+                  <Bar dataKey="cng" radius={[6, 6, 0, 0]}>
                     {consumptionSeries.map((entry) => (
-                      <Cell key={entry.label} fill={entry.suspect ? "var(--clr-alert)" : entry.value === peakConsumptionValue ? "var(--chart-1)" : "var(--chart-5)"} />
+                      <Cell key={entry.label} fill={entry.suspect ? "var(--clr-alert)" : "var(--clr-cng)"} />
+                    ))}
+                  </Bar>
+                  <Bar dataKey="png" radius={[6, 6, 0, 0]}>
+                    {consumptionSeries.map((entry) => (
+                      <Cell key={entry.label} fill={entry.suspect ? "var(--clr-alert)" : "var(--clr-png)"} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -472,6 +552,7 @@ export default function OverviewPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Customer</TableHead>
+                  <TableHead>Category</TableHead>
                   <TableHead>Device</TableHead>
                   <TableHead>City</TableHead>
                   <TableHead>Flow</TableHead>
@@ -482,6 +563,7 @@ export default function OverviewPage() {
                 {(data?.topConsumingCustomers ?? []).map((customer) => (
                   <TableRow key={`${customer.deviceSerialNo}-${customer.customerName}`}>
                     <TableCell className="font-medium text-foreground">{customer.customerName}</TableCell>
+                    <TableCell>{renderCategory(customer.category)}</TableCell>
                     <TableCell className="text-muted-foreground">{customer.deviceSerialNo}</TableCell>
                     <TableCell className="text-muted-foreground">{customer.city}</TableCell>
                     <TableCell className="text-muted-foreground">
@@ -513,6 +595,7 @@ export default function OverviewPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Customer</TableHead>
+                  <TableHead>Category</TableHead>
                   <TableHead>Device</TableHead>
                   <TableHead>City</TableHead>
                   <TableHead>Flow</TableHead>
@@ -523,6 +606,7 @@ export default function OverviewPage() {
                 {(data?.leastConsumingCustomers ?? []).map((customer) => (
                   <TableRow key={`${customer.deviceSerialNo}-${customer.customerName}`}>
                     <TableCell className="font-medium text-foreground">{customer.customerName}</TableCell>
+                    <TableCell>{renderCategory(customer.category)}</TableCell>
                     <TableCell className="text-muted-foreground">{customer.deviceSerialNo}</TableCell>
                     <TableCell className="text-muted-foreground">{customer.city}</TableCell>
                     <TableCell className="text-muted-foreground">
@@ -546,47 +630,42 @@ export default function OverviewPage() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 h-[500px]">
-        <Card className="bg-card border-border overflow-y-scroll">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-foreground">Consumption by GA</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {gaSeries.map((ga) => (
-              <div key={ga.ga} className="flex items-center justify-between rounded-lg border border-border bg-secondary px-3 py-2">
-                <div className="flex items-center gap-2 text-sm text-foreground">
-                  <MapPin className="w-4 h-4" style={{color:'var(--clr-accent-mid)'}} />
-                  {ga.ga}
-                </div>
-                <div className="text-sm font-semibold text-foreground">{fmt(ga.totalVolume, 0)}</div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card border-border overflow-y-scroll">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-foreground">Live Event Feed</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {(data?.liveEvents ?? []).map((event) => (
-              <div key={event.id} className="rounded-lg border border-border bg-secondary px-3 py-3">
+      <Card className="bg-card border-border overflow-y-scroll h-[500px]">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold text-foreground">Live Event Feed</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {alarmFeed.length === 0 && !loading ? (
+            <div className="text-sm text-muted-foreground">No alarms recorded yet.</div>
+          ) : (
+            alarmFeed.map((alarm) => (
+              <div key={alarm.id} className="rounded-lg border border-border bg-secondary px-3 py-3">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-foreground">{event.label}</div>
-                  <Badge
-                    variant="outline"
-                    style={{borderColor:'var(--clr-accent-mid)55', color:'var(--clr-accent-hi)', background:'var(--clr-accent-hi)18'}}
-                  >
-                    {event.kind}
-                  </Badge>
+                  <div className="text-sm font-medium text-foreground">
+                    {alarm.type.replace(/_/g, " ")}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {renderAlarmSeverity(alarm.severity)}
+                    {renderAlarmStatus(alarm.status, alarm.acknowledged)}
+                  </div>
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">{event.message}</p>
-                <p className="mt-2 text-xs" style={{color:'var(--clr-accent-lo)'}}>{formatLocalTs(event.timestamp)}</p>
+                <p className="mt-1 text-sm text-muted-foreground break-words">{alarm.cause}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: "var(--clr-accent-lo)" }}>
+                  <span className="font-medium text-foreground">{alarm.customerName ?? "Unassigned"}</span>
+                  <span className="font-mono">{alarm.deviceSerialNo}</span>
+                  <span>for {alarm.forDate}</span>
+                  <span>{formatLocalTs(alarm.createdAt)}</span>
+                  {alarm.gasValue != null && alarm.averageValue != null && (
+                    <span>
+                      {fmt(alarm.gasValue, 1)} vs avg {fmt(alarm.averageValue, 1)}
+                    </span>
+                  )}
+                </div>
               </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="bg-card border-border hover:border-accent-mid p-6 flex flex-col justify-between transition-all">
         <div>

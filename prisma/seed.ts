@@ -111,13 +111,19 @@ const DEVICES: DeviceSeed[] = [
     customerName: "Electronic City DRS Supply", category: "DRS", address: "Electronic City Phase 2, Bengaluru",
     statusPlan: "ONLINE", baseVolume: 2050, baseFlow: 28, basePressure: 2.65, baseTemp: 18, baseBattery: 90, monthGrowth: 0.04 },
 
-  // ── Pune (2) ──
+  // ── Pune (4) ──
   { serial: "DEV-1001", meterSerial: "MET-5501", city: "PUNE", latJitter: 0, lngJitter: 0,
     customerName: "Acme Industrial Ltd", category: "INDUSTRIAL", address: "123 Factory Road, Pune",
     statusPlan: "ONLINE", baseVolume: 1500, baseFlow: 22, basePressure: 2.5, baseTemp: 15, baseBattery: 85, monthGrowth: 0.05 },
   { serial: "DEV-1002", meterSerial: "MET-5502", city: "PUNE", latJitter: -0.2, lngJitter: 0.25,
     customerName: "Pune Residency Complex", category: "RESIDENTIAL", address: "Kothrud, Pune",
     statusPlan: "OFFLINE", baseVolume: 340, baseFlow: 0, basePressure: 2.1, baseTemp: 15, baseBattery: 35, monthGrowth: 0.02 },
+  { serial: "DEV-1003", meterSerial: "MET-5503", city: "PUNE", latJitter: 0.25, lngJitter: -0.35,
+    customerName: "Pune Highway CNG Station", category: "CNG", address: "Nagar Road, Pune",
+    statusPlan: "ONLINE", baseVolume: 1350, baseFlow: 20, basePressure: 2.45, baseTemp: 16, baseBattery: 88, monthGrowth: 0.05 },
+  { serial: "DEV-1004", meterSerial: "MET-5504", city: "PUNE", latJitter: -0.35, lngJitter: -0.15,
+    customerName: "Bhosari PNG Industrial Park", category: "PNG", address: "Bhosari MIDC, Pune",
+    statusPlan: "ONLINE", baseVolume: 1600, baseFlow: 24, basePressure: 2.52, baseTemp: 16, baseBattery: 91, monthGrowth: 0.05 },
 
   // ── Chennai (2) ──
   { serial: "DEV-2601", meterSerial: "MET-6601", city: "CHENNAI", latJitter: 0.15, lngJitter: -0.1,
@@ -219,7 +225,13 @@ async function main() {
         deviceSerialNo: d.serial,
         meterSerialNo: d.meterSerial,
         customerId,
-        meterSize: customerId ? (d.category === "DRS" ? "150mm" : d.category === "INDUSTRIAL" ? "100mm" : "40mm") : null,
+        meterSize: customerId
+          ? d.category === "DRS"
+            ? "150mm"
+            : d.category === "INDUSTRIAL" || d.category === "CNG" || d.category === "PNG"
+              ? "100mm"
+              : "40mm"
+          : null,
         firmwareVersion: customerId ? "v2.3.1" : null,
         hardwareVersion: customerId ? "HW-Rev-C" : null,
         deviceModel: customerId ? "Teltonika RUT956 + AMR Gas Meter" : "Teltonika RUT956",

@@ -10,6 +10,8 @@ const fixtureMeters = [
   { serial: "DEMO-1803", meterSerial: "DM-1803", customer: "Demo Ahmedabad Residency", category: CustomerCategory.RESIDENTIAL, ga: { name: "Ahmedabad GA", code: "AMD-01" }, address: "Bopal, Ahmedabad", latitude: 23.0396, longitude: 72.4647, baseDailyUse: 245, pressure: 2.1, temperature: 29, battery: 89 },
   { serial: "DEMO-1804", meterSerial: "DM-1804", customer: "Demo Hyderabad DRS Supply", category: CustomerCategory.DRS, ga: { name: "Hyderabad GA", code: "HYD-01" }, address: "Gachibowli, Hyderabad", latitude: 17.4401, longitude: 78.3489, baseDailyUse: 2350, pressure: 2.65, temperature: 28, battery: 94 },
   { serial: "DEMO-1805", meterSerial: "DM-1805", customer: "Demo Chennai Components", category: CustomerCategory.INDUSTRIAL, ga: { name: "Chennai GA", code: "MAA-01" }, address: "Oragadam, Chennai", latitude: 12.8957, longitude: 80.086, baseDailyUse: 1460, pressure: 2.55, temperature: 31, battery: 92 },
+  { serial: "DEMO-1806", meterSerial: "DM-1806", customer: "Demo Pune CNG Station", category: CustomerCategory.CNG, ga: { name: "Pune City GA", code: "PUNE-01" }, address: "Nagar Road, Pune", latitude: 18.5510, longitude: 73.8840, baseDailyUse: 1280, pressure: 2.4, temperature: 25, battery: 93 },
+  { serial: "DEMO-1807", meterSerial: "DM-1807", customer: "Demo Pune PNG Works", category: CustomerCategory.PNG, ga: { name: "Pune City GA", code: "PUNE-01" }, address: "Bhosari MIDC, Pune", latitude: 18.6320, longitude: 73.8460, baseDailyUse: 1520, pressure: 2.5, temperature: 24, battery: 94 },
 ];
 
 function utcDay(date) {

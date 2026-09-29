@@ -88,6 +88,8 @@
  *  Commercial  #4c7a82  steel-teal
  *  Residential #5c8a5f  sage-green
  *  DRS         #b08a3f  dusty gold
+ *  CNG         #8f4f5c  muted plum
+ *  PNG         #556b8c  slate-indigo
  * ══════════════════════════════════════════════════════════════
  */
 
@@ -152,6 +154,8 @@
   --chart-3:             #7fb583;
   --chart-4:             #d1a862;
   --chart-5:             #9a9a90;
+  --clr-cng:             #c27b87;
+  --clr-png:             #8195bd;
 
   --sidebar:             #0e0f11;
   --sidebar-foreground:  #eceef0;
@@ -185,6 +189,8 @@
   --clr-commercial:  #4c7a82;
   --clr-residential: #5c8a5f;
   --clr-drs:         #b08a3f;
+  --clr-cng:         #8f4f5c;
+  --clr-png:         #556b8c;
 }
 
 @layer base {

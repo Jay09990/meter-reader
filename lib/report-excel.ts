@@ -56,11 +56,27 @@ function readingDay(reading: ReportReading): string {
   return reading.receivedAt.split("T")[0];
 }
 
+/**
+ * Formats an ISO timestamp as "YYYY-MM-DD HH:mm" using the UTC components embedded
+ * in the string itself (no timezone conversion). This keeps the export deterministic
+ * whether it runs in the browser (manual download) or on the server (daily email),
+ * matching how the other date columns in this sheet are already built.
+ */
+function formatDateTime(isoString: string): string {
+  const [datePart, timePart] = isoString.split("T");
+  if (!datePart || !timePart) return "-";
+  return `${datePart} ${timePart.slice(0, 5)}`;
+}
+
 // Column order mirrors the AMR reference template (AMR REPORT FORMAT.xlsx).
 // "TOTAIZER" reproduces a typo in the reference; DATE is appended because the
 // report covers a date range while the reference is a single-day snapshot.
 const REPORT_COLUMNS: ReportColumn[] = [
   { header: "SR.NO", unit: "—", align: "center", getValue: ({ srNo }) => srNo },
+  {
+    header: "DATE & TIME", unit: "—", align: "center",
+    getValue: ({ reading }) => formatDateTime(reading.receivedAt),
+  },
   {
     header: "NAME OF INDUSTRY", unit: "—", align: "left", isCustomerDetail: true,
     getValue: ({ reading }) => reading.customerName || "-",
@@ -232,25 +248,32 @@ function getLatestReading(readings: ReportReading[]): ReportReading | undefined 
  * dateRange mode: one worksheet per customer.
  * Top of the sheet is a customer header block (name, type, source/segment, meter serials);
  * the table below omits those customer columns.
+ * SR.NO is continuous across the whole sheet; STREAM NO restarts at 1 for each meter.
  */
 function addDateRangeSheets(workbook: ExcelJS.Workbook, meters: MeterReportGroup[]) {
   const usedSheetNames = new Set<string>();
   const tableColumns = REPORT_COLUMNS.filter((column) => !column.isCustomerDetail);
 
   for (const [customerName, customerMeters] of groupMetersByCustomer(meters)) {
-    const readings = customerMeters
-      .flatMap((meter) => meter.readings)
-      .sort((a, b) => {
-        if (a.deviceSerialNo !== b.deviceSerialNo) {
-          return a.deviceSerialNo.localeCompare(b.deviceSerialNo);
-        }
-        return new Date(a.readingDate).getTime() - new Date(b.readingDate).getTime();
-      });
-    if (readings.length === 0) continue;
-
-    const dataRows = readings.map((reading, index) =>
-      toDataRow(tableColumns, { reading, srNo: index + 1, streamNo: index + 1 }),
+    const sortedMeters = [...customerMeters].sort((a, b) =>
+      getMeterLabel(a).localeCompare(getMeterLabel(b)),
     );
+
+    const dataRows: CellValue[][] = [];
+    let firstReading: ReportReading | undefined;
+    let srNo = 0;
+
+    for (const meter of sortedMeters) {
+      const meterReadings = [...meter.readings].sort(
+        (a, b) => new Date(a.readingDate).getTime() - new Date(b.readingDate).getTime(),
+      );
+      meterReadings.forEach((reading, meterReadingIndex) => {
+        if (!firstReading) firstReading = reading;
+        srNo++;
+        dataRows.push(toDataRow(tableColumns, { reading, srNo, streamNo: meterReadingIndex + 1 }));
+      });
+    }
+    if (dataRows.length === 0 || !firstReading) continue;
 
     const worksheet = workbook.addWorksheet(
       sanitizeSheetName(customerName, "Customer", usedSheetNames),
@@ -260,8 +283,8 @@ function addDateRangeSheets(workbook: ExcelJS.Workbook, meters: MeterReportGroup
       worksheet,
       {
         customerName,
-        customerType: readings[0].customerCategory || "-",
-        meterSerialNumbers: Array.from(new Set(customerMeters.map(getMeterLabel))).sort(),
+        customerType: firstReading.customerCategory || "-",
+        meterSerialNumbers: Array.from(new Set(sortedMeters.map(getMeterLabel))),
       },
       tableColumns.length,
     );

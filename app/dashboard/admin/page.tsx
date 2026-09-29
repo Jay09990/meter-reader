@@ -152,6 +152,8 @@ export default function AdminPage() {
                   <option value="COMMERCIAL">Commercial</option>
                   <option value="RESIDENTIAL">Residential</option>
                   <option value="DRS">DRS</option>
+                  <option value="CNG">CNG</option>
+                  <option value="PNG">PNG</option>
                 </select>
               </div>
               <div className="space-y-2">

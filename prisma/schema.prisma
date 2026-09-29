@@ -24,6 +24,8 @@ enum CustomerCategory {
   COMMERCIAL
   RESIDENTIAL
   DRS
+  CNG
+  PNG
 }
 
 model Customer {

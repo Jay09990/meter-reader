@@ -16,7 +16,7 @@ import {
   toIsoDate,
 } from "../../lib/financial-calendar";
 
-const CATEGORY_ORDER = ["INDUSTRIAL", "COMMERCIAL", "RESIDENTIAL", "DRS"] as const;
+const CATEGORY_ORDER = ["INDUSTRIAL", "COMMERCIAL", "RESIDENTIAL", "DRS", "CNG", "PNG"] as const;
 const MAX_SUSPECT_VALUE = 1_000_000;
 
 export type KpiRange = "today" | "month" | "quarter" | "year";
@@ -75,7 +75,20 @@ export async function getFleetConsumptionSeries(
   const boundaries = uniqueBoundaryDates(specs);
 
   // One DISTINCT ON query per unique boundary date (parallel)
-  const boundaryMaps = await buildFleetBoundaryMaps(boundaries);
+  const [boundaryMaps, devices] = await Promise.all([
+    buildFleetBoundaryMaps(boundaries),
+    db.device.findMany({
+      select: {
+        id: true,
+        customer: { select: { category: true } },
+      },
+    }),
+  ]);
+
+  const deviceCategories = new Map<string, CustomerCategory | null>();
+  devices.forEach((device) => {
+    deviceCategories.set(device.id, device.customer?.category ?? null);
+  });
 
   return specs.map((spec) => {
     const startMap = boundaryMaps.get(spec.startDate)!;
@@ -85,6 +98,8 @@ export async function getFleetConsumptionSeries(
 
     // Sum per-device deltas — only for devices present on BOTH sides
     let total = 0;
+    let cngTotal = 0;
+    let pngTotal = 0;
     let deviceCount = 0;
 
     for (const [deviceId, endVal] of endMap) {
@@ -94,10 +109,20 @@ export async function getFleetConsumptionSeries(
       if (delta < 0) continue; // skip individual meter resets from the fleet sum
       total += delta;
       deviceCount++;
+
+      const category = deviceCategories.get(deviceId);
+      if (category === CustomerCategory.CNG) cngTotal += delta;
+      if (category === CustomerCategory.PNG) pngTotal += delta;
     }
 
-    if (deviceCount === 0) return { ...spec, value: null, suspect: false };
-    return computeBucket(spec, 0, total); // total is already the fleet delta
+    if (deviceCount === 0) {
+      return { ...spec, value: null, suspect: false, cngValue: null, pngValue: null };
+    }
+    return {
+      ...computeBucket(spec, 0, total), // total is already the fleet delta
+      cngValue: cngTotal,
+      pngValue: pngTotal,
+    };
   });
 }
 
@@ -208,20 +233,6 @@ export async function getFleetAnalytics(range: KpiRange, today: Date = new Date(
       })),
   );
 
-  const gaTotals = new Map<string, number>();
-  devices.forEach((device) => {
-    const ga = device.customer?.ga?.name;
-    const volume = deviceDeltas.get(device.id);
-
-    if (ga && volume != null) {
-      gaTotals.set(ga, (gaTotals.get(ga) ?? 0) + volume);
-    }
-  });
-
-  const consumptionByGa = Array.from(gaTotals.entries())
-    .map(([ga, totalVolume]) => ({ ga, totalVolume }))
-    .sort((left, right) => right.totalVolume - left.totalVolume);
-
   const rankedCustomers = devices
     .filter((device) => device.customer)
     .map((device) => {
@@ -247,49 +258,6 @@ export async function getFleetAnalytics(range: KpiRange, today: Date = new Date(
     .sort((left, right) => (left.flowValue ?? 0) - (right.flowValue ?? 0))
     .slice(0, 5);
 
-  const [alarms, recentReadings] = await Promise.all([
-    db.alarm.findMany({
-      take: 5,
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        severity: true,
-        status: true,
-        createdAt: true,
-        device: { select: { deviceSerialNo: true } },
-        type: true,
-      },
-    }),
-    db.reading.findMany({
-      take: 5,
-      orderBy: { receivedAt: "desc" },
-      select: {
-        id: true,
-        receivedAt: true,
-        device: { select: { deviceSerialNo: true } },
-      },
-    }),
-  ]);
-
-  const liveEvents = [
-    ...alarms.map((alarm) => ({
-      id: alarm.id,
-      kind: "ALARM" as const,
-      label: `${alarm.type} • ${alarm.severity}`,
-      message: `Alarm ${alarm.status.toLowerCase()} for ${alarm.device.deviceSerialNo}`,
-      timestamp: alarm.createdAt,
-    })),
-    ...recentReadings.map((reading) => ({
-      id: reading.id,
-      kind: "READING" as const,
-      label: "Reading received",
-      message: `Telemetry update from ${reading.device.deviceSerialNo}`,
-      timestamp: reading.receivedAt,
-    })),
-  ]
-    .sort((left, right) => right.timestamp.getTime() - left.timestamp.getTime())
-    .slice(0, 10);
-
   return {
     metersOnline: {
       value: onlineDevices,
@@ -300,7 +268,5 @@ export async function getFleetAnalytics(range: KpiRange, today: Date = new Date(
     activeAlerts: openAlertCount,
     topConsumingCustomers,
     leastConsumingCustomers,
-    consumptionByGa,
-    liveEvents,
   };
 }

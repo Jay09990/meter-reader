@@ -15,6 +15,8 @@ describe("overview analytics helpers", () => {
       { category: "COMMERCIAL", totalVolume: 500 },
       { category: "RESIDENTIAL", totalVolume: 250 },
       { category: "DRS", totalVolume: 125 },
+      { category: "CNG", totalVolume: 0 },
+      { category: "PNG", totalVolume: 0 },
     ]);
   });
 });

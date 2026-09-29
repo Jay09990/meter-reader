@@ -743,7 +743,7 @@ export default function CustomersPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">AMR Customer Registry</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Registered endpoints - Industrial, Commercial, Residential, and DRS.
+            Registered endpoints - Industrial, Commercial, Residential, DRS, CNG, and PNG.
           </p>
         </div>
         <div className="flex items-center space-x-3">
@@ -828,6 +828,8 @@ export default function CustomersPage() {
             <option value="COMMERCIAL">Commercial</option>
             <option value="RESIDENTIAL">Residential</option>
             <option value="DRS">DRS</option>
+            <option value="CNG">CNG</option>
+            <option value="PNG">PNG</option>
           </select>
         </div>
       </Card>
@@ -1193,6 +1195,8 @@ export default function CustomersPage() {
                       <option value="COMMERCIAL">Commercial</option>
                       <option value="INDUSTRIAL">Industrial</option>
                       <option value="DRS">DRS</option>
+                      <option value="CNG">CNG</option>
+                      <option value="PNG">PNG</option>
                     </select>
                   </div>
                   <div className="space-y-1.5">
@@ -1427,6 +1431,8 @@ export default function CustomersPage() {
                       <option value="COMMERCIAL">Commercial</option>
                       <option value="RESIDENTIAL">Residential</option>
                       <option value="DRS">DRS</option>
+                      <option value="CNG">CNG</option>
+                      <option value="PNG">PNG</option>
                     </select>
                   </div>
 
@@ -1663,6 +1669,8 @@ export default function CustomersPage() {
                         <option value="COMMERCIAL">Commercial</option>
                         <option value="INDUSTRIAL">Industrial</option>
                         <option value="DRS">DRS</option>
+                        <option value="CNG">CNG</option>
+                        <option value="PNG">PNG</option>
                       </select>
                     </div>
 
