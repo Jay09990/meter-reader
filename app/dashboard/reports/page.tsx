@@ -49,6 +49,13 @@ const REPORT_MODES: Array<{ value: ReportMode; label: string }> = [
   { value: "rangeSelection", label: "Range Selection" },
 ];
 
+const FREQUENCY_SELECT_OPTIONS: Array<{ value: DataFrequency; label: string }> = [
+  { value: "1h", label: "1 hour" },
+  { value: "6h", label: "6 hours" },
+  { value: "12h", label: "12 hours" },
+  { value: "1d", label: "1 day" },
+];
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(val: number | null | undefined, decimals = 2): string {
   if (val == null) return "—";
@@ -115,7 +122,7 @@ export default function ReportsPage() {
   // Mode 1: Date Range Form State
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [frequency] = useState<DataFrequency>("1d");
+  const [frequency, setFrequency] = useState<DataFrequency>("1d");
 
   // Mode 2: Range Selection Form State
   const [rangeType, setRangeType] = useState<RangeSelectorType>("monthly");
@@ -533,9 +540,17 @@ export default function ReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-muted-foreground">Data Frequency</label>
-                  <div className="h-10 px-3 py-2 flex items-center rounded-md border border-border bg-secondary text-sm text-foreground font-medium">
-                    1 day
-                  </div>
+                  <select
+                    className="w-full flex h-10 rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none"
+                    value={frequency}
+                    onChange={(e) => setFrequency(e.target.value as DataFrequency)}
+                  >
+                    {FREQUENCY_SELECT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             )}
