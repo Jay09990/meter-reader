@@ -464,6 +464,7 @@ export async function getDeviceLatest(deviceIdOrSerial: string) {
           temperatureMax: latestReading.temperatureMax,
           temperatureMin: latestReading.temperatureMin,
           compressibilityZ: latestReading.compressibilityZ,
+          gasDensity: latestReading.gasDensity,
           correctionFactorC: (latestReading.correctedVolumeVb != null && latestReading.uncorrectedVolumeVm != null && latestReading.uncorrectedVolumeVm > 0)
             ? latestReading.correctedVolumeVb / latestReading.uncorrectedVolumeVm
             : latestReading.correctionFactorC,
@@ -703,4 +704,3 @@ export async function getDeviceConsumptionSeriesUncorrected(
 
   return buildConsumptionSeries(mode, makeDeviceBoundaryResolverUncorrected(device.id));
 }
-

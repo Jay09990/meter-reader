@@ -434,6 +434,8 @@ export default function MeterDetailPage() {
           <DataRow label="Current" value={`${fmt(r?.gasPressure)} barg`} />
           <DataRow label="Max" value={`${fmt(r?.pressureMax)} barg`} />
           <DataRow label="Min" value={`${fmt(r?.pressureMin)} barg`} />
+          <DataRow label="Upper Limit" value={device.pressureUpperLimit != null ? `${fmt(device.pressureUpperLimit)} barg` : "Not set"} />
+          <DataRow label="Lower Limit" value={device.pressureLowerLimit != null ? `${fmt(device.pressureLowerLimit)} barg` : "Not set"} />
         </KpiCard>
 
         {/* Temperature */}
@@ -442,6 +444,8 @@ export default function MeterDetailPage() {
           <DataRow label="Current" value={`${fmt(r?.gasTemperature)} °C`} />
           <DataRow label="Max" value={`${fmt(r?.temperatureMax)} °C`} />
           <DataRow label="Min" value={`${fmt(r?.temperatureMin)} °C`} />
+          <DataRow label="Upper Limit" value={device.temperatureUpperLimit != null ? `${fmt(device.temperatureUpperLimit)} °C` : "Not set"} />
+          <DataRow label="Lower Limit" value={device.temperatureLowerLimit != null ? `${fmt(device.temperatureLowerLimit)} °C` : "Not set"} />
         </KpiCard>
 
         <div className="space-y-4">
@@ -460,6 +464,10 @@ export default function MeterDetailPage() {
           <DataRow
             label="Battery"
             value={r?.batteryLevel != null ? `${Math.round(r.batteryLevel)}%` : "—"}
+          />
+          <DataRow
+            label="Low Battery Limit"
+            value={device.batteryLowerLimit != null ? `${fmt(device.batteryLowerLimit)}%` : "Not set"}
           />
           <DataRow
             label="Last Seen"
