@@ -1,432 +1,827 @@
-import { describe, it, expect } from "vitest";
-import type { MeterReportGroup, ReportReading } from "@/features/reports";
-import type ExcelJS from "exceljs";
+﻿"use client";
+
+import { useEffect, useState } from "react";
 import {
-  sanitizeSheetName,
-  buildCustomerReportWorkbook,
-  AMR_REPORT_HEADERS,
-  AMR_REPORT_UNITS,
+  FileDown,
+  RefreshCw,
+  Search,
+  AlertCircle,
+  FileSpreadsheet
+} from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import {
+  downloadCustomerReportExcel,
+  groupReadingsByMeter,
 } from "@/lib/report-excel";
-import { groupReadingsByMeter } from "@/lib/report-excel-common";
+import { sanitizeSheetName } from "@/lib/report-excel-common";
+import type {
+  CustomerReport,
+  MeterReportGroup,
+  ReportMode,
+  RangeSelectorType,
+  DataFrequency,
+} from "@/features/reports";
+import { cn } from "@/lib/utils";
 
-// ── Fixtures ───────────────────────────────────────────────────────────────
-
-function makeReading(overrides: Partial<ReportReading> = {}): ReportReading {
-  return {
-    id: "reading-1",
-    deviceId: "device-1",
-    deviceSerialNo: "DEV-001",
-    meterSerialNo: "METER-001",
-    customerName: null,
-    customerCategory: null,
-    gaName: null,
-    readingDate: "2026-08-01T00:00:00.000Z",
-    receivedAt: "2026-08-01T01:00:00.000Z",
-    gasPressure: 1.2,
-    gasTemperature: 20,
-    correctionFactor: 1.05,
-    currentFlowRate: 12.5,
-    correctedVolumeVb: 100,
-    uncorrectedVolumeVm: 95,
-    prevDayUncorrected: 10,
-    prevDayCorrected: 10.5,
-    prevDayUncorrectedTotalizer: 85,
-    prevDayCorrectedTotalizer: 89.5,
-    batteryLevel: 80,
-    alarms: null,
-    consumption: null,
-    uncorrectedConsumption: null,
-    ...overrides,
-  };
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface Customer {
+  id: string;
+  name: string;
+  category: string;
 }
 
-function makeMeter(overrides: Partial<MeterReportGroup> = {}): MeterReportGroup {
-  const meterSerialNo = overrides.meterSerialNo ?? "METER-001";
-  const deviceSerialNo = overrides.deviceSerialNo ?? "DEV-001";
-  const deviceId = overrides.deviceId ?? "d1";
-  const readings: ReportReading[] = overrides.readings ?? [];
-  // Propagate meter-level fields to readings that don't override them
-  const propagatedReadings = readings.map((r) => ({
-    ...r,
-    deviceId: r.deviceId ?? deviceId,
-    deviceSerialNo: r.deviceSerialNo ?? deviceSerialNo,
-    meterSerialNo: r.meterSerialNo ?? meterSerialNo,
-  }));
-  return { deviceId, deviceSerialNo, meterSerialNo, readings: propagatedReadings, ...overrides };
-}
+const ROWS_PER_PAGE = 25;
 
-// ── Sheet readers ──────────────────────────────────────────────────────────
+const REPORT_MODES: Array<{ value: ReportMode; label: string }> = [
+  { value: "dateRange", label: "Date Range" },
+  { value: "rangeSelection", label: "Range Selection" },
+];
 
-type Row = (string | number)[];
+const FREQUENCY_SELECT_OPTIONS: Array<{ value: DataFrequency; label: string }> = [
+  { value: "1h", label: "1 hour" },
+  { value: "6h", label: "6 hours" },
+  { value: "12h", label: "12 hours" },
+  { value: "1d", label: "1 day" },
+];
 
-function sheetNames(wb: ExcelJS.Workbook): string[] {
-  return wb.worksheets.map((ws) => ws.name);
-}
-
-function sheetRows(wb: ExcelJS.Workbook, name: string): Row[] {
-  const ws = wb.getWorksheet(name);
-  if (!ws) return [];
-  const rows: Row[] = [];
-  ws.eachRow((row) => {
-    rows.push((row.values as (string | number | undefined)[]).slice(1) as Row);
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function fmt(val: number | null | undefined, decimals = 2): string {
+  if (val == null) return "—";
+  return val.toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   });
-  return rows;
 }
 
-/** Finds the table by its "SR.NO" header row, so tests don't depend on how tall the header block is. */
-function readTable(wb: ExcelJS.Workbook, name: string) {
-  const rows = sheetRows(wb, name);
-  const headerIndex = rows.findIndex((row) => row[0] === "SR.NO");
-  if (headerIndex === -1) throw new Error(`No table header row found in sheet "${name}"`);
-  return {
-    header: rows[headerIndex],
-    units: rows[headerIndex + 1],
-    data: rows.slice(headerIndex + 2),
+export function ReportModeSelector({
+  value,
+  onChange,
+}: {
+  value: ReportMode;
+  onChange: (value: ReportMode) => void;
+}) {
+  return (
+    <div className="relative grid grid-cols-2 rounded-lg bg-secondary p-1 text-xs font-semibold max-w-[320px]">
+      <span
+        className="absolute inset-y-1 w-1/2 rounded-md bg-card shadow-sm transition-transform duration-200"
+        style={{
+          transform: `translateX(${REPORT_MODES.findIndex((m) => m.value === value) * 100}%)`,
+        }}
+      />
+      {REPORT_MODES.map((m) => (
+        <button
+          key={m.value}
+          type="button"
+          onClick={() => onChange(m.value)}
+          className={cn(
+            "relative z-10 rounded-md px-3 py-1.5 transition-colors",
+            value === m.value ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {m.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+export default function ReportsPage() {
+  // Customers List State
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(true);
+
+  // Mode state
+  const [reportMode, setReportMode] = useState<ReportMode>("dateRange");
+
+  // Mode 1 & 2 Form State (Multi-select customers)
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  // Entering rangeSelection mode selects all customers; the user can then deselect.
+  // Deliberately depends only on mode + customer list (not on the selection itself),
+  // so deselecting every customer doesn't immediately re-select them all.
+  useEffect(() => {
+    if (reportMode === "rangeSelection") {
+      setSelectedCustomerIds(customers.map((c) => c.id));
+    }
+  }, [reportMode, customers]);
+
+  // Mode 1: Date Range Form State
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [frequency, setFrequency] = useState<DataFrequency>("1d");
+
+  // Mode 2: Range Selection Form State
+  const [rangeType, setRangeType] = useState<RangeSelectorType>("monthly");
+  const [month, setMonth] = useState(""); // YYYY-MM
+  const [fyStartYear, setFyStartYear] = useState<number | "">("");
+  const [quarter, setQuarter] = useState<1 | 2 | 3 | 4 | "">("");
+
+  // Report State
+  const [loadingReport, setLoadingReport] = useState(false);
+  const [reportData, setReportData] = useState<CustomerReport | null>(null);
+
+  const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Fetch Customers on Mount
+  useEffect(() => {
+    let isMounted = true;
+    fetch("/api/customers?limit=1000")
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        if (isMounted) {
+          setCustomers(data.data || []);
+          setLoadingCustomers(false);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch customers:", err);
+        if (isMounted) {
+          setLoadingCustomers(false);
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Form Validation
+  const isDateRangeFormValid = selectedCustomerIds.length > 0 && startDate !== "" && endDate !== "";
+  
+  const isRangeSelectionFormValid = (() => {
+    if (selectedCustomerIds.length === 0) return false;
+    if (rangeType === "monthly") return month !== "";
+    if (rangeType === "quarterly") return fyStartYear !== "" && quarter !== "";
+    if (rangeType === "yearly") return fyStartYear !== "";
+    return false;
+  })();
+
+  const isFormValid = reportMode === "dateRange" ? isDateRangeFormValid : isRangeSelectionFormValid;
+
+  // Generate FY start year options going back ~6 years
+  const getFyOptions = () => {
+    const currentYear = new Date().getFullYear();
+    const options = [];
+    // If we're early in the calendar year (before April), the current FY starts the previous year,
+    // but we can generate starting from the current calendar year.
+    for (let i = 0; i < 6; i++) {
+      const year = currentYear - i;
+      const nextYearShort = String(year + 1).slice(2);
+      options.push({
+        value: year,
+        label: `FY ${String(year).slice(2)}-${nextYearShort}`,
+      });
+    }
+    return options;
   };
-}
 
-const DETAIL_LABELS = ["Customer Name", "Customer Type", "Source/Segment", "Meter Serial No(s)"];
+  // Fetch Report Handler
+  const handleFetchReport = async () => {
+    if (!isFormValid) {
+      setError("Please fill in all criteria.");
+      return;
+    }
 
-/** Reads the label/value rows of the customer header block (label in column 1, value in column 3). */
-function readCustomerDetails(wb: ExcelJS.Workbook, name: string): Record<string, string | number> {
-  const details: Record<string, string | number> = {};
-  for (const row of sheetRows(wb, name)) {
-    if (DETAIL_LABELS.includes(String(row[0]))) details[String(row[0])] = row[2];
+    if (reportMode === "dateRange" && new Date(startDate) > new Date(endDate)) {
+      setError("Start date cannot be later than end date.");
+      return;
+    }
+
+    setLoadingReport(true);
+    setError(null);
+    setHasSearched(true);
+    setReportData(null);
+    setCurrentPage(1);
+
+    try {
+      const selectedIdParam =
+        selectedCustomerIds.length === customers.length
+          ? "all"
+          : selectedCustomerIds.join(",");
+
+      let queryStartDate = startDate;
+      let queryEndDate = endDate;
+
+      if (reportMode === "rangeSelection") {
+        const todayIso = new Date().toISOString().split("T")[0];
+        if (rangeType === "monthly") {
+          const [yStr, mStr] = month.split("-");
+          const y = parseInt(yStr, 10);
+          const m = parseInt(mStr, 10);
+          queryStartDate = `${month}-01`;
+          const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+          const end = `${month}-${String(lastDay).padStart(2, "0")}`;
+          queryEndDate = end > todayIso ? todayIso : end;
+        } else if (rangeType === "quarterly") {
+          const y = Number(fyStartYear);
+          if (quarter === 1) {
+            queryStartDate = `${y}-04-01`;
+            const end = `${y}-06-30`;
+            queryEndDate = end > todayIso ? todayIso : end;
+          } else if (quarter === 2) {
+            queryStartDate = `${y}-07-01`;
+            const end = `${y}-09-30`;
+            queryEndDate = end > todayIso ? todayIso : end;
+          } else if (quarter === 3) {
+            queryStartDate = `${y}-10-01`;
+            const end = `${y}-12-31`;
+            queryEndDate = end > todayIso ? todayIso : end;
+          } else {
+            queryStartDate = `${y + 1}-01-01`;
+            const end = `${y + 1}-03-31`;
+            queryEndDate = end > todayIso ? todayIso : end;
+          }
+        } else if (rangeType === "yearly") {
+          const y = Number(fyStartYear);
+          queryStartDate = `${y}-04-01`;
+          const end = `${y + 1}-03-31`;
+          queryEndDate = end > todayIso ? todayIso : end;
+        }
+      }
+
+      const params = new URLSearchParams({
+        customerId: selectedIdParam,
+        startDate: queryStartDate,
+        endDate: queryEndDate,
+        frequency: frequency,
+        mode: reportMode,
+      });
+
+      const res = await fetch(`/api/reports/customer?${params.toString()}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to fetch report data.");
+      }
+
+      const readings = data.readings ?? [];
+      setReportData({
+        ...data,
+        readings,
+        meters: data.meters ?? groupReadingsByMeter(readings),
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "An unexpected error occurred.";
+      setError(message);
+    } finally {
+      setLoadingReport(false);
+    }
+  };
+
+  // Export to Excel Handler
+  const handleExportExcel = async () => {
+    setError(null);
+    setExporting(true);
+
+    try {
+      if (!reportData) return;
+      const meters = reportData.meters ?? [];
+      if (meters.length === 0) return;
+
+      await downloadCustomerReportExcel(meters, reportMode, reportData.startDate, reportData.endDate);
+    } catch (err) {
+      console.error("Failed to export Excel:", err);
+      const message = err instanceof Error ? err.message : "An error occurred while generating the Excel file.";
+      setError(message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Pagination for dateRange mode only — rangeSelection shows all meters at once
+  const allReadings = reportData?.readings ?? [];
+  const isRangeSelection = reportMode === "rangeSelection";
+  const totalPages = isRangeSelection
+    ? 1
+    : Math.max(1, Math.ceil(allReadings.length / ROWS_PER_PAGE));
+  const pageStartIndex = (currentPage - 1) * ROWS_PER_PAGE;
+  const paginatedReadings = isRangeSelection
+    ? allReadings
+    : allReadings.slice(pageStartIndex, pageStartIndex + ROWS_PER_PAGE);
+
+  // For range selection: compute sequential STREAM NO per customer
+  const streamNoMap = new Map<string, number>();
+  function getStreamNo(customerName: string): number {
+    const current = streamNoMap.get(customerName) ?? 0;
+    const next = current + 1;
+    streamNoMap.set(customerName, next);
+    return next;
   }
-  return details;
+
+  return (
+    <div className="space-y-6 w-full">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Customer Reports</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Generate and export telemetry reports based on customer and date range.
+          </p>
+        </div>
+        <ReportModeSelector value={reportMode} onChange={setReportMode} />
+      </div>
+
+      <Card className="bg-card border-border !overflow-visible">
+        <CardHeader className="border-b border-border pb-4">
+          <CardTitle className="text-lg text-foreground">Report Criteria</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6 !overflow-visible">
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+              {/* Customer Selection (Multi-select) */}
+              <div className="space-y-2 md:col-span-2 relative z-30">
+                <label className="text-sm font-medium text-muted-foreground">Customer(s)</label>
+                <button
+                  type="button"
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                  className="w-full flex items-center justify-between h-10 rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none disabled:opacity-50 text-left"
+                  disabled={loadingCustomers}
+                >
+                  <span className="truncate">
+                    {loadingCustomers
+                      ? "Loading customers..."
+                      : selectedCustomerIds.length === 0
+                      ? "Select customer(s)..."
+                      : selectedCustomerIds.length === customers.length
+                      ? "All Customers Selected"
+                      : `${selectedCustomerIds.length} Customer(s) Selected`}
+                  </span>
+                  <span className="ml-2 text-xs text-muted-foreground">▼</span>
+                </button>
+
+                {dropdownOpen && !loadingCustomers && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setDropdownOpen(false)}
+                    />
+                    <div className="absolute left-0 right-0 mt-1 max-h-60 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-xl z-50 p-2 space-y-1">
+                      {/* Select All option */}
+                      <label className="flex items-center space-x-2 p-1.5 hover:bg-accent rounded-md cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedCustomerIds.length === customers.length && customers.length > 0}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedCustomerIds(customers.map((c) => c.id));
+                            } else {
+                              setSelectedCustomerIds([]);
+                            }
+                          }}
+                          className="rounded border-border bg-transparent accent-[var(--clr-accent-mid)]"
+                        />
+                        <span className="font-semibold text-foreground">Select All</span>
+                      </label>
+                      <div className="border-t border-border my-1" />
+                      {customers.map((c) => {
+                        const isChecked = selectedCustomerIds.includes(c.id);
+                        return (
+                          <label
+                            key={c.id}
+                            className="flex items-center space-x-2 p-1.5 hover:bg-accent rounded-md cursor-pointer text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                if (isChecked) {
+                                  setSelectedCustomerIds(
+                                    selectedCustomerIds.filter((id) => id !== c.id)
+                                  );
+                                } else {
+                                  setSelectedCustomerIds([...selectedCustomerIds, c.id]);
+                                }
+                              }}
+                              className="rounded border-border bg-transparent accent-[var(--clr-accent-mid)]"
+                            />
+                            <span className="text-foreground">{c.name}</span>
+                            <span className="text-xs text-muted-foreground">({c.category})</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {reportMode === "dateRange" ? (
+                <>
+                  {/* Start Date */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">Start Date</label>
+                    <Input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="bg-secondary border-border text-foreground"
+                    />
+                  </div>
+
+                  {/* End Date */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">End Date</label>
+                    <Input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="bg-secondary border-border text-foreground"
+                    />
+                  </div>
+                </>
+                ) : (
+                <>
+                  {/* Range Type — occupies same slot as Start Date */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">Range Type</label>
+                    <select
+                      className="w-full flex h-10 rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none"
+                      value={rangeType}
+                      onChange={(e) => {
+                        setRangeType(e.target.value as RangeSelectorType);
+                        setMonth("");
+                        setFyStartYear("");
+                        setQuarter("");
+                      }}
+                    >
+                      <option value="monthly">Monthly</option>
+                      <option value="quarterly">Quarterly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
+                  </div>
+
+                  {/* Dynamic input — occupies same slot as End Date */}
+                  {rangeType === "monthly" && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-muted-foreground">Select Month</label>
+                      <Input
+                        type="month"
+                        value={month}
+                        onChange={(e) => setMonth(e.target.value)}
+                        className="bg-secondary border-border text-foreground"
+                      />
+                    </div>
+                  )}
+
+                  {rangeType === "quarterly" && (
+                    <>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-muted-foreground">Financial Year</label>
+                        <select
+                          className="w-full flex h-10 rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none"
+                          value={fyStartYear}
+                          onChange={(e) => setFyStartYear(e.target.value ? parseInt(e.target.value, 10) : "")}
+                        >
+                          <option value="">Select FY...</option>
+                          {getFyOptions().map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-muted-foreground">Quarter</label>
+                        <select
+                          className="w-full flex h-10 rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none"
+                          value={quarter}
+                          onChange={(e) => setQuarter(e.target.value ? (parseInt(e.target.value, 10) as 1 | 2 | 3 | 4) : "")}
+                          disabled={fyStartYear === ""}
+                        >
+                          <option value="">Select Quarter...</option>
+                          <option value="1">Q1: Apr-Jun</option>
+                          <option value="2">Q2: Jul-Sep</option>
+                          <option value="3">Q3: Oct-Dec</option>
+                          <option value="4">Q4: Jan-Mar</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+
+                  {rangeType === "yearly" && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-muted-foreground">Financial Year</label>
+                      <select
+                        className="w-full flex h-10 rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none"
+                        value={fyStartYear}
+                        onChange={(e) => setFyStartYear(e.target.value ? parseInt(e.target.value, 10) : "")}
+                      >
+                        <option value="">Select FY...</option>
+                        {getFyOptions().map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {reportMode === "dateRange" && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">Data Frequency</label>
+                  <select
+                    className="w-full flex h-10 rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none"
+                    value={frequency}
+                    onChange={(e) => setFrequency(e.target.value as DataFrequency)}
+                  >
+                    {FREQUENCY_SELECT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <div
+              className="mt-4 p-3 rounded-md flex items-center text-sm"
+              style={{
+                background: "var(--clr-alert)14",
+                border: "1px solid var(--clr-alert)44",
+                color: "var(--clr-alert)",
+              }}
+            >
+              <AlertCircle className="w-4 h-4 mr-2" />
+              {error}
+            </div>
+          )}
+
+          <div className="mt-6 flex justify-end">
+            <Button
+              onClick={handleFetchReport}
+              disabled={!isFormValid || loadingReport}
+              style={{ background: "var(--clr-accent-mid)", color: "#fff" }}
+              className="min-w-[140px] hover:opacity-90"
+            >
+              {loadingReport ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Fetching...
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4 mr-2" />
+                  Fetch Report
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Report Results */}
+      {hasSearched && (
+        <Card className="bg-card border-border overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-border bg-secondary pb-4">
+            <div>
+              <CardTitle className="text-lg text-foreground">Report Data</CardTitle>
+              {allReadings.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {isRangeSelection
+                    ? `Showing ${allReadings.length} meter${allReadings.length === 1 ? "" : "s"} (aggregated)`
+                    : `Showing ${pageStartIndex + 1}–${Math.min(pageStartIndex + ROWS_PER_PAGE, allReadings.length)} of ${allReadings.length} readings`}
+                </p>
+              )}
+            </div>
+
+            <Button
+              onClick={handleExportExcel}
+              disabled={
+                loadingReport ||
+                exporting ||
+                (!reportData || (reportData.meters?.length ?? 0) === 0)
+              }
+              variant="outline"
+              className="border-border bg-card hover:bg-accent text-foreground"
+            >
+              {exporting ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="w-4 h-4 mr-2" style={{ color: "var(--clr-online)" }} />
+              )}
+              Download Report
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            {loadingReport ? (
+              <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
+                <RefreshCw
+                  className="w-8 h-8 animate-spin mb-4 opacity-50"
+                  style={{ color: "var(--clr-accent-mid)" }}
+                />
+                <p>Generating report...</p>
+              </div>
+            ) : reportData && reportData.readings?.length > 0 ? (
+              <>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-secondary border-b border-border">
+                      <TableRow className="border-border hover:bg-transparent">
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                          SR.NO
+                        </TableHead>
+                        {!isRangeSelection ? (
+                          <>
+                            <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                              NAME OF INDUSTRY
+                            </TableHead>
+                            <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                              CUSTOMER TYPE
+                            </TableHead>
+                            <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                              SOURCE/SEGMENT
+                            </TableHead>
+                            <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                              STREAM NO
+                            </TableHead>
+                          </>
+                        ) : (
+                          <>
+                            <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                              CUSTOMER
+                            </TableHead>
+                            <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                              METER SERIAL NO
+                            </TableHead>
+                          </>
+                        )}
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                          PRESSURE (Bar)
+                        </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                          TEMPERATURE (°C)
+                        </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                          CORRECTION FACTOR
+                        </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                          CURRENT FLOWRATE (CORRECTED) (SCMH)
+                        </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                          CORRECTED VOLUME TOTALIZER (SCM)
+                        </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                          UNCORRECTED VOLUME TOTALIZER (m³)
+                        </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                           {isRangeSelection ? "PERIOD CONSUMPTION (m³)" : "PREVIOUS DAY UNCORRECTED (m³)"}
+                         </TableHead>
+                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                           {isRangeSelection ? "START CORRECTED TOTALIZER (SCM)" : "PREVIOUS DAY CORRECTED (SCMD)"}
+                         </TableHead>
+                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                           {isRangeSelection ? "START UNCORRECTED TOTALIZER (m³)" : "PREVIOUS DAY UNCORRECTED TOTALIZER (m³)"}
+                         </TableHead>
+                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                           {isRangeSelection ? "—" : "PREVIOUS DAY CORRECTED TOTAIZER (SCM)"}
+                         </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap text-right">
+                          EVC BATTERY/BALANCE DAYS (%)
+                        </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                          ALARMS
+                        </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                          DATE
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedReadings.map((row, idx) => (
+                        <TableRow key={row.id} className="border-border hover:bg-secondary/60">
+                          <TableCell className="font-mono text-xs text-muted-foreground">
+                            {pageStartIndex + idx + 1}
+                          </TableCell>
+                          {!isRangeSelection ? (
+                            <>
+                              <TableCell className="text-sm font-medium text-foreground whitespace-nowrap">
+                                {row.customerName || "—"}
+                              </TableCell>
+                              <TableCell className="text-xs font-semibold text-muted-foreground whitespace-nowrap">
+                                {row.customerCategory || "—"}
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                                IBAFO
+                              </TableCell>
+                              <TableCell className="font-mono text-xs text-foreground whitespace-nowrap">
+                                {row.meterSerialNo || row.deviceSerialNo}
+                              </TableCell>
+                            </>
+                          ) : (
+                            <>
+                              <TableCell className="text-sm font-medium text-foreground whitespace-nowrap">
+                                {row.customerName || "—"}
+                              </TableCell>
+                              <TableCell className="font-mono text-xs text-foreground whitespace-nowrap">
+                                {row.meterSerialNo || row.deviceSerialNo}
+                              </TableCell>
+                            </>
+                          )}
+                          <TableCell
+                            className="text-right font-mono text-xs"
+                            style={{ color: "var(--clr-commercial)" }}
+                          >
+                            {fmt(row.gasPressure)}
+                          </TableCell>
+                          <TableCell
+                            className="text-right font-mono text-xs"
+                            style={{ color: "var(--clr-stale)" }}
+                          >
+                            {fmt(row.gasTemperature)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                            {fmt(row.correctionFactor)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                            {fmt(row.currentFlowRate)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs font-medium text-foreground">
+                            {fmt(row.correctedVolumeVb)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                            {fmt(row.uncorrectedVolumeVm)}
+                          </TableCell>
+                          <TableCell
+                            className="text-right font-mono text-xs"
+                            style={{ color: "var(--clr-commercial)" }}
+                          >
+                            {isRangeSelection ? fmt(row.prevDayCorrected, 3) : fmt(row.prevDayUncorrected, 3)}
+                          </TableCell>
+                          <TableCell
+                            className="text-right font-mono text-xs font-semibold"
+                            style={{ color: "var(--clr-accent-hi)" }}
+                          >
+                            {isRangeSelection ? fmt(row.prevDayCorrectedTotalizer) : fmt(row.prevDayCorrected, 3)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                            {isRangeSelection ? fmt(row.prevDayUncorrectedTotalizer) : fmt(row.prevDayUncorrectedTotalizer)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs font-medium text-foreground">
+                            {isRangeSelection ? "-" : fmt(row.prevDayCorrectedTotalizer)}
+                          </TableCell>
+                          <TableCell
+                            className="text-right font-mono text-xs"
+                            style={{ color: "var(--clr-online)" }}
+                          >
+                            {row.batteryLevel != null ? `${Math.round(row.batteryLevel)}%` : "—"}
+                          </TableCell>
+                          <TableCell className="text-xs whitespace-normal max-w-[200px]">
+                            {row.alarms || "---"}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                            {row.readingDate.split("T")[0]}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {!isRangeSelection && (
+                  <PaginationControls
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                  />
+                )}
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
+                <FileDown className="w-10 h-10 mb-4 opacity-30" />
+                <p className="text-center font-medium">
+                  No report data is available for the selected customer and criteria.
+                </p>
+                <p className="text-sm opacity-70 mt-1">
+                  Try selecting a different period or a different customer.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
 }
-
-// Column indexes: dateRange sheets omit the three customer columns (they live in the header block).
-const DATE_RANGE_COL = {
-  SR_NO: 0, DATE_TIME: 1, METER_SN: 2, STREAM: 3,
-  PRESSURE: 4, TEMP: 5, CF: 6, FLOW: 7, CORR_VB: 8, UNC_VM: 9,
-  PREV_UNC: 10, PREV_CORR: 11, PREV_UNC_TOT: 12, PREV_CORR_TOT: 13,
-  BATTERY: 14, ALARMS: 15, DATE: 16,
-};
-
-// rangeSelection sheet has the full 19-column layout.
-const RANGE_COL = {
-  SR_NO: 0, DATE_TIME: 1, NAME: 2, CATEGORY: 3, SOURCE: 4, METER_SN: 5, STREAM: 6,
-  PRESSURE: 7, TEMP: 8, CF: 9, FLOW: 10, CORR_VB: 11, UNC_VM: 12,
-  PREV_UNC: 13, PREV_CORR: 14, PREV_UNC_TOT: 15, PREV_CORR_TOT: 16,
-  BATTERY: 17, ALARMS: 18, DATE: 19,
-};
-
-// ── Helpers under test ─────────────────────────────────────────────────────
-
-describe("sanitizeSheetName", () => {
-  it("removes Excel-invalid chars", () => {
-    expect(sanitizeSheetName("Meter/001:Main*", "Fallback", new Set())).toBe("Meter_001_Main_");
-  });
-  it("truncates to 31 chars", () => {
-    expect(sanitizeSheetName("A".repeat(50), "Fallback", new Set()).length).toBeLessThanOrEqual(31);
-  });
-  it("uses fallback when empty", () => {
-    expect(sanitizeSheetName("", "Fallback", new Set())).toBe("Fallback");
-  });
-  it("deduplicates collisions", () => {
-    const used = new Set<string>();
-    const a = sanitizeSheetName("A:001", "Fallback", used);
-    const b = sanitizeSheetName("A*001", "Fallback2", used);
-    expect(a).not.toBe(b);
-  });
-});
-
-describe("groupReadingsByMeter", () => {
-  it("keeps readings of different devices in separate groups", () => {
-    const groups = groupReadingsByMeter([
-      makeReading({ id: "r1", deviceId: "d1" }),
-      makeReading({ id: "r2", deviceId: "d2" }),
-      makeReading({ id: "r3", deviceId: "d1" }),
-    ]);
-    expect(groups.map((g) => [g.deviceId, g.readings.length])).toEqual([
-      ["d1", 2],
-      ["d2", 1],
-    ]);
-  });
-});
-
-describe("AMR report column definitions", () => {
-  it("exports 20 headers with a matching unit for each", () => {
-    expect(AMR_REPORT_HEADERS).toHaveLength(20);
-    expect(AMR_REPORT_UNITS).toHaveLength(AMR_REPORT_HEADERS.length);
-  });
-  it("puts DATE & TIME right after SR.NO", () => {
-    expect(AMR_REPORT_HEADERS[0]).toBe("SR.NO");
-    expect(AMR_REPORT_HEADERS[1]).toBe("DATE & TIME");
-  });
-});
-
-// ── dateRange mode ─────────────────────────────────────────────────────────
-
-describe("buildCustomerReportWorkbook — dateRange mode", () => {
-  it("creates one sheet per customer, sorted alphabetically", () => {
-    const meters = [
-      makeMeter({ deviceId: "d1", readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "REDEEM CHURCH" })] }),
-      makeMeter({ deviceId: "d2", deviceSerialNo: "DEV-002", meterSerialNo: "M-002",
-        readings: [makeReading({ id: "r2", deviceId: "d2", customerName: "ANOTHER CLIENT" })] }),
-    ];
-    const wb = buildCustomerReportWorkbook(meters, "dateRange");
-    expect(sheetNames(wb)).toEqual(["ANOTHER CLIENT", "REDEEM CHURCH"]);
-    expect(readTable(wb, "REDEEM CHURCH").data).toHaveLength(1);
-    expect(readTable(wb, "ANOTHER CLIENT").data).toHaveLength(1);
-  });
-
-  it("puts a customer details header block above the table", () => {
-    const meters = [
-      makeMeter({ readings: [makeReading({ customerName: "REDEEM CHURCH", customerCategory: "COMMERCIAL" })] }),
-    ];
-    const wb = buildCustomerReportWorkbook(meters, "dateRange");
-    const rows = sheetRows(wb, "REDEEM CHURCH");
-
-    expect(rows[0][0]).toBe("CUSTOMER DETAILS");
-    expect(readCustomerDetails(wb, "REDEEM CHURCH")).toEqual({
-      "Customer Name": "REDEEM CHURCH",
-      "Customer Type": "COMMERCIAL",
-      "Source/Segment": "IBAFO",
-      "Meter Serial No(s)": "METER-001",
-    });
-
-    // The header block sits above the table
-    const bannerIndex = rows.findIndex((row) => row[0] === "CUSTOMER DETAILS");
-    const tableIndex = rows.findIndex((row) => row[0] === "SR.NO");
-    expect(bannerIndex).toBeLessThan(tableIndex);
-  });
-
-  it("lists every meter serial number of the customer in the header block", () => {
-    const meters = [
-      makeMeter({ deviceId: "d2", deviceSerialNo: "DEV-002", meterSerialNo: "M-002",
-        readings: [makeReading({ id: "r2", deviceId: "d2", customerName: "MULTI", meterSerialNo: "M-002" })] }),
-      makeMeter({ deviceId: "d1", deviceSerialNo: "DEV-001", meterSerialNo: "M-001",
-        readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "MULTI", meterSerialNo: "M-001" })] }),
-    ];
-    const wb = buildCustomerReportWorkbook(meters, "dateRange");
-    expect(readCustomerDetails(wb, "MULTI")["Meter Serial No(s)"]).toBe("M-001, M-002");
-  });
-
-  it("omits the customer columns from the table (they are in the header block)", () => {
-    const meters = [makeMeter({ readings: [makeReading({ customerName: "ACME" })] })];
-    const wb = buildCustomerReportWorkbook(meters, "dateRange");
-    const { header } = readTable(wb, "ACME");
-    expect(header).toHaveLength(17);
-    expect(header).not.toContain("NAME OF INDUSTRY");
-    expect(header).not.toContain("CUSTOMER TYPE");
-    expect(header).not.toContain("SOURCE/SEGMENT");
-    expect(header).toContain("METER SERIAL NO");
-    expect(header).toContain("DATE & TIME");
-    expect(header[1]).toBe("DATE & TIME");
-  });
-
-  it("formats DATE & TIME as \"YYYY-MM-DD HH:mm\" from receivedAt", () => {
-    const meters = [
-      makeMeter({ readings: [makeReading({ customerName: "TIME CO", receivedAt: "2026-08-01T14:32:07.000Z" })] }),
-    ];
-    const [d] = readTable(buildCustomerReportWorkbook(meters, "dateRange"), "TIME CO").data;
-    expect(d[DATE_RANGE_COL.DATE_TIME]).toBe("2026-08-01 14:32");
-  });
-
-  it("maps reading fields to the right columns", () => {
-    const meters = [
-      makeMeter({ readings: [makeReading({ customerName: "REDEEM CHURCH", customerCategory: "COMMERCIAL" })] }),
-    ];
-    const wb = buildCustomerReportWorkbook(meters, "dateRange");
-    const [d] = readTable(wb, "REDEEM CHURCH").data;
-    expect(d[DATE_RANGE_COL.SR_NO]).toBe(1);
-    expect(d[DATE_RANGE_COL.DATE_TIME]).toBe("2026-08-01 01:00");
-    expect(d[DATE_RANGE_COL.METER_SN]).toBe("METER-001");
-    expect(d[DATE_RANGE_COL.STREAM]).toBe(1);
-    expect(d[DATE_RANGE_COL.PRESSURE]).toBe(1.2);
-    expect(d[DATE_RANGE_COL.TEMP]).toBe(20);
-    expect(d[DATE_RANGE_COL.CF]).toBe(1.05);
-    expect(d[DATE_RANGE_COL.FLOW]).toBe(12.5);
-    expect(d[DATE_RANGE_COL.CORR_VB]).toBe(100);
-    expect(d[DATE_RANGE_COL.UNC_VM]).toBe(95);
-    expect(d[DATE_RANGE_COL.PREV_UNC]).toBe(10);
-    expect(d[DATE_RANGE_COL.PREV_CORR]).toBe(10.5);
-    expect(d[DATE_RANGE_COL.PREV_UNC_TOT]).toBe(85);
-    expect(d[DATE_RANGE_COL.PREV_CORR_TOT]).toBe(89.5);
-    expect(d[DATE_RANGE_COL.BATTERY]).toBe(80);
-    expect(d[DATE_RANGE_COL.ALARMS]).toBe("NORMAL");
-    expect(d[DATE_RANGE_COL.DATE]).toBe("2026-08-01");
-  });
-
-  it("stream numbers are sequential within a single meter", () => {
-    const meters = [
-      makeMeter({ deviceId: "d1", readings: [
-        makeReading({ id: "a1", deviceId: "d1", customerName: "CUST A" }),
-        makeReading({ id: "a2", deviceId: "d1", readingDate: "2026-08-02T00:00:00.000Z", customerName: "CUST A" }),
-      ]}),
-      makeMeter({ deviceId: "d2", deviceSerialNo: "DEV-B1", meterSerialNo: "M-B1",
-        readings: [makeReading({ id: "b1", deviceId: "d2", customerName: "CUST B" })] }),
-    ];
-    const wb = buildCustomerReportWorkbook(meters, "dateRange");
-    expect(readTable(wb, "CUST A").data.map((r) => r[DATE_RANGE_COL.STREAM])).toEqual([1, 2]);
-    expect(readTable(wb, "CUST B").data.map((r) => r[DATE_RANGE_COL.STREAM])).toEqual([1]);
-  });
-
-  it("stream number restarts at 1 for each meter, while SR.NO stays continuous", () => {
-    // Customer with 2 meters, 2 readings each -> STREAM NO should read 1,2,1,2 (not 1,2,3,4).
-    const meters = [
-      makeMeter({ deviceId: "d1", deviceSerialNo: "DEV-001", meterSerialNo: "MTR-1", readings: [
-        makeReading({ id: "a1", deviceId: "d1", meterSerialNo: "MTR-1", customerName: "MULTI METER CO", readingDate: "2026-09-28T00:00:00.000Z" }),
-        makeReading({ id: "a2", deviceId: "d1", meterSerialNo: "MTR-1", customerName: "MULTI METER CO", readingDate: "2026-09-29T00:00:00.000Z" }),
-      ]}),
-      makeMeter({ deviceId: "d2", deviceSerialNo: "DEV-002", meterSerialNo: "MTR-2", readings: [
-        makeReading({ id: "b1", deviceId: "d2", meterSerialNo: "MTR-2", customerName: "MULTI METER CO", readingDate: "2026-09-28T00:00:00.000Z" }),
-        makeReading({ id: "b2", deviceId: "d2", meterSerialNo: "MTR-2", customerName: "MULTI METER CO", readingDate: "2026-09-29T00:00:00.000Z" }),
-      ]}),
-    ];
-    const { data } = readTable(buildCustomerReportWorkbook(meters, "dateRange"), "MULTI METER CO");
-    expect(data.map((r) => r[DATE_RANGE_COL.METER_SN])).toEqual(["MTR-1", "MTR-1", "MTR-2", "MTR-2"]);
-    expect(data.map((r) => r[DATE_RANGE_COL.STREAM])).toEqual([1, 2, 1, 2]);
-    expect(data.map((r) => r[DATE_RANGE_COL.SR_NO])).toEqual([1, 2, 3, 4]);
-  });
-
-  it("skips customers with no readings", () => {
-    const meters = [
-      { deviceId: "d1", deviceSerialNo: "DEV-001", meterSerialNo: "M-001", readings: [] },
-      makeMeter({ deviceId: "d2", deviceSerialNo: "DEV-002", meterSerialNo: "M-002",
-        readings: [makeReading({ id: "r2", deviceId: "d2", customerName: "ACTIVE" })] }),
-    ];
-    const wb = buildCustomerReportWorkbook(meters, "dateRange");
-    expect(sheetNames(wb)).toEqual(["ACTIVE"]);
-  });
-
-  it("returns empty workbook when no readings at all", () => {
-    expect(sheetNames(buildCustomerReportWorkbook([], "dateRange"))).toEqual([]);
-  });
-
-  it("deduplicates sheet names on collision", () => {
-    const meters = [
-      makeMeter({ deviceId: "d1", readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "Meter:001" })] }),
-      makeMeter({ deviceId: "d2", readings: [makeReading({ id: "r2", deviceId: "d2", customerName: "Meter*001" })] }),
-    ];
-    const names = sheetNames(buildCustomerReportWorkbook(meters, "dateRange"));
-    expect(names).toHaveLength(2);
-    expect(names[0]).not.toBe(names[1]);
-  });
-
-  it("uses fallback name for empty customer name", () => {
-    const meters = [
-      makeMeter({ deviceId: "d1", readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "" })] }),
-    ];
-    expect(sheetNames(buildCustomerReportWorkbook(meters, "dateRange"))).toContain("Customer");
-  });
-
-  it("handles multiple meters per customer: each reading is its own row, SR.NO continuous, STREAM NO per-meter", () => {
-    const meters = [
-      makeMeter({ deviceId: "d1", deviceSerialNo: "DEV-001", meterSerialNo: "M-001",
-        readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "MULTI", meterSerialNo: "M-001" })] }),
-      makeMeter({ deviceId: "d2", deviceSerialNo: "DEV-002", meterSerialNo: "M-002",
-        readings: [makeReading({ id: "r2", deviceId: "d2", customerName: "MULTI", meterSerialNo: "M-002" })] }),
-    ];
-    const { data } = readTable(buildCustomerReportWorkbook(meters, "dateRange"), "MULTI");
-    expect(data.map((r) => r[DATE_RANGE_COL.SR_NO])).toEqual([1, 2]);
-    expect(data.map((r) => r[DATE_RANGE_COL.METER_SN])).toEqual(["M-001", "M-002"]);
-    // Each meter has only 1 reading, so STREAM NO restarts at 1 for both -> [1, 1], not [1, 2].
-    expect(data.map((r) => r[DATE_RANGE_COL.STREAM])).toEqual([1, 1]);
-  });
-
-  it("defaults to dateRange when mode omitted", () => {
-    const meters = [
-      makeMeter({ deviceId: "d1", readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "DEFAULT" })] }),
-    ];
-    const wb = buildCustomerReportWorkbook(meters);
-    expect(sheetNames(wb)).toEqual(["DEFAULT"]);
-    expect(readCustomerDetails(wb, "DEFAULT")["Customer Name"]).toBe("DEFAULT");
-  });
-});
-
-// ── rangeSelection mode ────────────────────────────────────────────────────
-
-describe("buildCustomerReportWorkbook — rangeSelection mode", () => {
-  it("puts all customers on ONE worksheet, one row per meter", () => {
-    const meters = [
-      makeMeter({ deviceId: "d1", deviceSerialNo: "DEV-A1", meterSerialNo: "M-A1",
-        readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "CUST A", meterSerialNo: "M-A1" })] }),
-      makeMeter({ deviceId: "d2", deviceSerialNo: "DEV-B1", meterSerialNo: "M-B1",
-        readings: [makeReading({ id: "r2", deviceId: "d2", customerName: "CUST B", meterSerialNo: "M-B1" })] }),
-    ];
-    const wb = buildCustomerReportWorkbook(meters, "rangeSelection");
-    expect(sheetNames(wb)).toEqual(["Range Report"]);
-
-    const { header, data } = readTable(wb, "Range Report");
-    expect(header).toHaveLength(20);
-    expect(data).toHaveLength(2);
-    expect(data.map((r) => r[RANGE_COL.NAME])).toEqual(["CUST A", "CUST B"]);
-    expect(data.map((r) => r[RANGE_COL.METER_SN])).toEqual(["M-A1", "M-B1"]);
-  });
-
-  it("has no customer header block (that is dateRange only)", () => {
-    const meters = [makeMeter({ readings: [makeReading({ customerName: "CUST A" })] })];
-    const rows = sheetRows(buildCustomerReportWorkbook(meters, "rangeSelection"), "Range Report");
-    expect(rows[0][0]).toBe("SR.NO");
-  });
-
-  it("SR.NO runs across customers; STREAM NO restarts for each customer; customers sorted", () => {
-    const meters = [
-      makeMeter({ deviceId: "d1", deviceSerialNo: "DEV-C", meterSerialNo: "M-C",
-        readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "CUST C", meterSerialNo: "M-C" })] }),
-      makeMeter({ deviceId: "d2", deviceSerialNo: "DEV-A1", meterSerialNo: "M-A1",
-        readings: [makeReading({ id: "r2", deviceId: "d2", customerName: "CUST A", meterSerialNo: "M-A1" })] }),
-      makeMeter({ deviceId: "d3", deviceSerialNo: "DEV-A2", meterSerialNo: "M-A2",
-        readings: [makeReading({ id: "r3", deviceId: "d3", customerName: "CUST A", meterSerialNo: "M-A2" })] }),
-    ];
-    const { data } = readTable(buildCustomerReportWorkbook(meters, "rangeSelection"), "Range Report");
-    expect(data.map((r) => r[RANGE_COL.NAME])).toEqual(["CUST A", "CUST A", "CUST C"]);
-    expect(data.map((r) => r[RANGE_COL.SR_NO])).toEqual([1, 2, 3]);
-    expect(data.map((r) => r[RANGE_COL.STREAM])).toEqual([1, 2, 1]);
-  });
-
-  it("a customer with multiple meters gets one row per meter, sorted by meter serial", () => {
-    const meters = [
-      makeMeter({ deviceId: "d2", deviceSerialNo: "DEV-A2", meterSerialNo: "M-A2",
-        readings: [makeReading({ id: "r2", deviceId: "d2", customerName: "ONE CUST", meterSerialNo: "M-A2" })] }),
-      makeMeter({ deviceId: "d1", deviceSerialNo: "DEV-A1", meterSerialNo: "M-A1",
-        readings: [makeReading({ id: "r1", deviceId: "d1", customerName: "ONE CUST", meterSerialNo: "M-A1" })] }),
-      makeMeter({ deviceId: "d3", deviceSerialNo: "DEV-A3", meterSerialNo: "M-A3",
-        readings: [makeReading({ id: "r3", deviceId: "d3", customerName: "ONE CUST", meterSerialNo: "M-A3" })] }),
-    ];
-    const { data } = readTable(buildCustomerReportWorkbook(meters, "rangeSelection"), "Range Report");
-    expect(data).toHaveLength(3);
-    expect(data.map((r) => r[RANGE_COL.METER_SN])).toEqual(["M-A1", "M-A2", "M-A3"]);
-    expect(data.map((r) => r[RANGE_COL.STREAM])).toEqual([1, 2, 3]);
-    expect(data.map((r) => r[RANGE_COL.SR_NO])).toEqual([1, 2, 3]);
-  });
-
-  it("takes the last reading per meter and never sums meters together", () => {
-    const meters = [
-      makeMeter({ deviceId: "d1", deviceSerialNo: "DEV-A1", meterSerialNo: "M-A1",
-        readings: [
-          makeReading({ id: "r1", deviceId: "d1", customerName: "SUMCUSTOMER", meterSerialNo: "M-A1",
-            correctedVolumeVb: 100, gasPressure: 1.0, batteryLevel: 80 }),
-          makeReading({ id: "r2", deviceId: "d1", readingDate: "2026-08-02T00:00:00.000Z",
-            customerName: "SUMCUSTOMER", meterSerialNo: "M-A1",
-            correctedVolumeVb: 200, gasPressure: 2.0, batteryLevel: 90 }),
-        ]}),
-      makeMeter({ deviceId: "d2", deviceSerialNo: "DEV-A2", meterSerialNo: "M-A2",
-        readings: [
-          makeReading({ id: "r3", deviceId: "d2", customerName: "SUMCUSTOMER", meterSerialNo: "M-A2",
-            correctedVolumeVb: 300, gasPressure: 3.0, batteryLevel: 70 }),
-        ]}),
-    ];
-    const { data } = readTable(buildCustomerReportWorkbook(meters, "rangeSelection"), "Range Report");
-    expect(data).toHaveLength(2);
-    expect(data[0][RANGE_COL.METER_SN]).toBe("M-A1");
-    expect(data[0][RANGE_COL.CORR_VB]).toBe(200); // last reading, NOT 100+200
-    expect(data[0][RANGE_COL.PRESSURE]).toBe(2.0);
-    expect(data[0][RANGE_COL.BATTERY]).toBe(90);
-    expect(data[1][RANGE_COL.METER_SN]).toBe("M-A2");
-    expect(data[1][RANGE_COL.CORR_VB]).toBe(300); // not merged with M-A1
-    expect(data[1][RANGE_COL.PRESSURE]).toBe(3.0);
-  });
-
-  it("returns empty workbook when no readings", () => {
-    expect(sheetNames(buildCustomerReportWorkbook([], "rangeSelection"))).toEqual([]);
-  });
-
-  it("returns empty workbook when every meter has no readings", () => {
-    const meters = [{ deviceId: "d1", deviceSerialNo: "DEV-001", meterSerialNo: "M-001", readings: [] }];
-    expect(sheetNames(buildCustomerReportWorkbook(meters, "rangeSelection"))).toEqual([]);
-  });
-});
