@@ -95,6 +95,7 @@ export async function PATCH(
       where: { id: foundDevice.id },
       data: {
         meterSerialNo: optionalString(body.meterSerialNo),
+        category: body.category === undefined ? undefined : body.category || null,
         meterSize: optionalString(body.meterSize),
         firmwareVersion: optionalString(body.firmwareVersion),
         hardwareVersion: optionalString(body.hardwareVersion),

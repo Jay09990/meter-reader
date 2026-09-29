@@ -77,7 +77,6 @@ interface GeographicalArea {
 interface ExistingCustomer {
   id: string;
   name: string;
-  category: string;
 }
 
 interface CustomerGroup {
@@ -102,6 +101,7 @@ type DeviceIdentityDraft = {
   firmwareVersion: string;
   hardwareVersion: string;
   configurationVersion: string;
+  category: string;
   initial: {
     meterSerialNo: string;
     latitude: string;
@@ -111,6 +111,7 @@ type DeviceIdentityDraft = {
     firmwareVersion: string;
     hardwareVersion: string;
     configurationVersion: string;
+    category: string;
   };
 };
 
@@ -133,6 +134,7 @@ function deviceToIdentityDraft(device: {
   firmwareVersion?: string | null;
   hardwareVersion?: string | null;
   configurationVersion?: string | null;
+  category?: string | null;
 }): DeviceIdentityDraft {
   const meterSerialNo = strToInput(device.meterSerialNo);
   const latitude = numToInput(device.latitude);
@@ -142,6 +144,7 @@ function deviceToIdentityDraft(device: {
   const firmwareVersion = strToInput(device.firmwareVersion);
   const hardwareVersion = strToInput(device.hardwareVersion);
   const configurationVersion = strToInput(device.configurationVersion);
+  const category = strToInput(device.category);
   return {
     id: device.id,
     deviceSerialNo: device.deviceSerialNo,
@@ -153,6 +156,7 @@ function deviceToIdentityDraft(device: {
     firmwareVersion,
     hardwareVersion,
     configurationVersion,
+    category,
     initial: {
       meterSerialNo,
       latitude,
@@ -162,6 +166,7 @@ function deviceToIdentityDraft(device: {
       firmwareVersion,
       hardwareVersion,
       configurationVersion,
+      category,
     },
   };
 }
@@ -177,6 +182,7 @@ function buildDeviceIdentityPatch(draft: DeviceIdentityDraft): Record<string, st
     "firmwareVersion",
     "hardwareVersion",
     "configurationVersion",
+    "category",
   ] as const;
 
   for (const field of fields) {
@@ -206,7 +212,6 @@ export default function CustomersPage() {
   // Add Customer Modal States
   const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
   const [newCustName, setNewCustName] = useState("");
-  const [newCustCategory, setNewCustCategory] = useState("RESIDENTIAL");
   const [newCustGaId, setNewCustGaId] = useState("");
   const [newCustAddress, setNewCustAddress] = useState("");
   const [newCustError, setNewCustError] = useState("");
@@ -242,7 +247,6 @@ export default function CustomersPage() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<DeviceItem | null>(null);
   const [editCustomerName, setEditCustomerName] = useState("");
-  const [editCategory, setEditCategory] = useState("RESIDENTIAL");
   const [editAddress, setEditAddress] = useState("");
   const [editGaId, setEditGaId] = useState("");
   const [editError, setEditError] = useState("");
@@ -324,7 +328,6 @@ export default function CustomersPage() {
   const openCustomerEditor = async (customerLike: CustomerGroup | DeviceItem) => {
     const customerId = "devices" in customerLike ? customerLike.id : customerLike.customerId;
     const customerName = "devices" in customerLike ? customerLike.name : customerLike.customerName ?? "";
-    const category = "devices" in customerLike ? customerLike.category ?? "RESIDENTIAL" : customerLike.category ?? "RESIDENTIAL";
     const address = "devices" in customerLike ? customerLike.address ?? "" : customerLike.address ?? "";
     const gaId = "devices" in customerLike ? customerLike.gaId ?? "" : customerLike.gaId ?? "";
     const seedDevice = "devices" in customerLike ? customerLike.devices[0] : customerLike;
@@ -333,7 +336,6 @@ export default function CustomersPage() {
 
     setEditingCustomer(seedDevice);
     setEditCustomerName(customerName);
-    setEditCategory(category);
     setEditAddress(address);
     setEditGaId(gaId);
     setEditError("");
@@ -356,6 +358,7 @@ export default function CustomersPage() {
             firmwareVersion?: string | null;
             hardwareVersion?: string | null;
             configurationVersion?: string | null;
+            category?: string | null;
           }) => deviceToIdentityDraft(d),
         );
         setEditDeviceDrafts(drafts);
@@ -369,7 +372,6 @@ export default function CustomersPage() {
 
   const openAddCustomerModal = () => {
     setNewCustName("");
-    setNewCustCategory("RESIDENTIAL");
     setNewCustGaId(gasList[0]?.id || "");
     setNewCustAddress("");
     setNewCustError("");
@@ -396,7 +398,6 @@ export default function CustomersPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newCustName.trim(),
-          category: newCustCategory,
           gaId: newCustGaId,
           address: newCustAddress.trim() || null,
         }),
@@ -440,7 +441,7 @@ export default function CustomersPage() {
     setCustomerName(customer.name);
     setMeterIdInput(existingDevice?.deviceSerialNo || "");
     setDeviceIdInput("");
-    setSelectedCategory(customer.category ?? "RESIDENTIAL");
+    setSelectedCategory("RESIDENTIAL");
     setAddress(customer.address ?? "");
     setSelectedGaId(customer.gaId ?? gasList[0]?.id ?? "");
     setLatitudeInput("");
@@ -499,7 +500,6 @@ export default function CustomersPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: editCustomerName.trim(),
-          category: editCategory,
           address: editAddress.trim() || null,
           gaId: editGaId,
         }),
@@ -648,6 +648,7 @@ export default function CustomersPage() {
 
       const bodyPayload: Record<string, unknown> = {
         provision: true,
+        category: selectedCategory,
         meterSerialNo: deviceIdInput || null,
         latitude: latitudeInput.trim(),
         longitude: longitudeInput.trim(),
@@ -658,7 +659,6 @@ export default function CustomersPage() {
         bodyPayload.existingCustomerId = selectedExistingCustomerId;
       } else {
         bodyPayload.customerName = customerName;
-        bodyPayload.category = selectedCategory;
         bodyPayload.address = address;
         bodyPayload.gaId = selectedGaId;
       }
@@ -824,12 +824,11 @@ export default function CustomersPage() {
             onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
           >
             <option value="all">All Categories</option>
-            <option value="INDUSTRIAL">Industrial</option>
             <option value="COMMERCIAL">Commercial</option>
             <option value="RESIDENTIAL">Residential</option>
             <option value="DRS">DRS</option>
-            <option value="CNG">CNG</option>
-            <option value="PNG">PNG</option>
+            <option value="INDUSTRIAL_CNG">Industrial CNG</option>
+            <option value="INDUSTRIAL_PNG">Industrial PNG</option>
           </select>
         </div>
       </Card>
@@ -1179,7 +1178,7 @@ export default function CustomersPage() {
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-background shadow-2xl">
             <CardHeader>
               <CardTitle>Edit Customer Information</CardTitle>
-              <p className="text-xs text-muted-foreground">Updates apply to every meter assigned to this customer.</p>
+              <p className="text-xs text-muted-foreground">Customer details are shared; category is configured separately for each meter.</p>
             </CardHeader>
             <CardContent>
               <form onSubmit={saveCustomerEdit} className="space-y-4">
@@ -1187,25 +1186,12 @@ export default function CustomersPage() {
                   <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Customer Name</label>
                   <Input value={editCustomerName} onChange={(event) => setEditCustomerName(event.target.value)} required />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Category</label>
-                    <select value={editCategory} onChange={(event) => setEditCategory(event.target.value)} className="flex h-9 w-full rounded-md border border-border bg-muted px-3 text-sm text-foreground">
-                      <option value="RESIDENTIAL">Residential</option>
-                      <option value="COMMERCIAL">Commercial</option>
-                      <option value="INDUSTRIAL">Industrial</option>
-                      <option value="DRS">DRS</option>
-                      <option value="CNG">CNG</option>
-                      <option value="PNG">PNG</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
+                <div className="space-y-1.5">
                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Geographical Area</label>
                     <select value={editGaId} onChange={(event) => setEditGaId(event.target.value)} required className="flex h-9 w-full rounded-md border border-border bg-muted px-3 text-sm text-foreground">
                       <option value="" disabled>Select a city</option>
                       {gasList.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
                     </select>
-                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Address</label>
@@ -1249,6 +1235,17 @@ export default function CustomersPage() {
                           </div>
                           {isOpen && (
                             <div className="space-y-3 border-t border-border px-3 py-3">
+                              <div className="space-y-1.5">
+                                <label className="text-xs text-muted-foreground">Meter Category</label>
+                                <select value={draft.category} onChange={(e) => updateEditDeviceDraft(draft.id, "category", e.target.value)} className="flex h-9 w-full rounded-md border border-border bg-muted px-3 text-sm text-foreground">
+                                  <option value="">Uncategorized</option>
+                                  <option value="COMMERCIAL">Commercial</option>
+                                  <option value="RESIDENTIAL">Residential</option>
+                                  <option value="DRS">DRS</option>
+                                  <option value="INDUSTRIAL_CNG">Industrial CNG</option>
+                                  <option value="INDUSTRIAL_PNG">Industrial PNG</option>
+                                </select>
+                              </div>
                               <div className="space-y-1.5">
                                 <label className="text-xs text-muted-foreground">Device Serial No</label>
                                 <Input
@@ -1417,26 +1414,7 @@ export default function CustomersPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                      Category <span className="text-[color:var(--clr-alert)]">*</span>
-                    </label>
-                    <select
-                      className="flex h-9 w-full rounded-md border border-border bg-muted px-3 text-sm text-foreground focus:outline-none focus:border-[color:var(--clr-accent-hi)]"
-                      value={newCustCategory}
-                      onChange={(e) => setNewCustCategory(e.target.value)}
-                    >
-                      <option value="INDUSTRIAL">Industrial</option>
-                      <option value="COMMERCIAL">Commercial</option>
-                      <option value="RESIDENTIAL">Residential</option>
-                      <option value="DRS">DRS</option>
-                      <option value="CNG">CNG</option>
-                      <option value="PNG">PNG</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
+                <div className="space-y-1.5">
                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                       Geographical Area (City) <span className="text-[color:var(--clr-alert)]">*</span>
                     </label>
@@ -1451,7 +1429,6 @@ export default function CustomersPage() {
                         <option key={ga.id} value={ga.id}>{ga.name}</option>
                       ))}
                     </select>
-                  </div>
                 </div>
 
                 <div className="space-y-1.5">
@@ -1618,6 +1595,18 @@ export default function CustomersPage() {
                   </div>
                 )}
 
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Meter Category</label>
+                  <select className="w-full flex h-9 rounded-md border border-border bg-muted px-3 py-1 text-sm text-foreground" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+                    <option value="">Uncategorized</option>
+                    <option value="RESIDENTIAL">Residential</option>
+                    <option value="COMMERCIAL">Commercial</option>
+                    <option value="DRS">DRS</option>
+                    <option value="INDUSTRIAL_CNG">Industrial CNG</option>
+                    <option value="INDUSTRIAL_PNG">Industrial PNG</option>
+                  </select>
+                </div>
+
                 {provisionType === "existing" ? (
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Target Customer</label>
@@ -1638,7 +1627,7 @@ export default function CustomersPage() {
                         <option value="" disabled>No customers found</option>
                       ) : (
                         existingCustomers.map((c) => (
-                          <option key={c.id} value={c.id}>{c.name} ({c.category})</option>
+                          <option key={c.id} value={c.id}>{c.name}</option>
                         ))
                       )}
                     </select>
@@ -1655,23 +1644,6 @@ export default function CustomersPage() {
                         required={provisionType === "new"}
                         className="bg-muted border-border text-foreground placeholder:text-muted-foreground focus:border-[color:var(--clr-accent-hi)] focus:ring-0 text-sm"
                       />
-                    </div>
-
-                    {/* Category Dropdown */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Category</label>
-                      <select
-                        className="w-full flex h-9 rounded-md border border-border bg-muted px-3 py-1 text-sm shadow-sm transition-colors text-foreground focus:outline-none focus:border-[color:var(--clr-accent-hi)]"
-                        value={selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                      >
-                        <option value="RESIDENTIAL">Residential</option>
-                        <option value="COMMERCIAL">Commercial</option>
-                        <option value="INDUSTRIAL">Industrial</option>
-                        <option value="DRS">DRS</option>
-                        <option value="CNG">CNG</option>
-                        <option value="PNG">PNG</option>
-                      </select>
                     </div>
 
                     {/* Geographical Area Dropdown */}

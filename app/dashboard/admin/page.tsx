@@ -13,7 +13,7 @@ export default function AdminPage() {
   const [gaCode, setGaCode] = useState("");
   
   const [customerName, setCustomerName] = useState("");
-  const [customerCategory, setCustomerCategory] = useState("INDUSTRIAL");
+  const [meterCategory, setMeterCategory] = useState("RESIDENTIAL");
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerGaId, setCustomerGaId] = useState("");
 
@@ -66,7 +66,6 @@ export default function AdminPage() {
       method: "POST",
       body: JSON.stringify({
         name: customerName,
-        category: customerCategory,
         address: customerAddress,
         gaId: customerGaId,
       }),
@@ -82,6 +81,7 @@ export default function AdminPage() {
       method: "PATCH",
       body: JSON.stringify({
         customerId: assignCustomerId || null,
+        category: meterCategory,
         latitude: latitude ? parseFloat(latitude) : undefined,
         longitude: longitude ? parseFloat(longitude) : undefined,
         pressureUpperLimit: pressureUpperLimit ? parseFloat(pressureUpperLimit) : null,
@@ -142,21 +142,6 @@ export default function AdminPage() {
                 <Input value={customerName} onChange={e => setCustomerName(e.target.value)} required />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Category</label>
-                <select 
-                  className="w-full flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  value={customerCategory} 
-                  onChange={e => setCustomerCategory(e.target.value)}
-                >
-                  <option value="INDUSTRIAL">Industrial</option>
-                  <option value="COMMERCIAL">Commercial</option>
-                  <option value="RESIDENTIAL">Residential</option>
-                  <option value="DRS">DRS</option>
-                  <option value="CNG">CNG</option>
-                  <option value="PNG">PNG</option>
-                </select>
-              </div>
-              <div className="space-y-2">
                 <label className="text-sm font-medium">Address</label>
                 <Input value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} />
               </div>
@@ -197,6 +182,16 @@ export default function AdminPage() {
                 >
                   <option value="">None (Unassign)</option>
                   {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Meter Category</label>
+                <select className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" value={meterCategory} onChange={e => setMeterCategory(e.target.value)}>
+                  <option value="RESIDENTIAL">Residential</option>
+                  <option value="COMMERCIAL">Commercial</option>
+                  <option value="DRS">DRS</option>
+                  <option value="INDUSTRIAL_CNG">Industrial CNG</option>
+                  <option value="INDUSTRIAL_PNG">Industrial PNG</option>
                 </select>
               </div>
               <div className="space-y-2">

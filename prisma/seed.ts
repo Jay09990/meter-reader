@@ -44,7 +44,7 @@ interface DeviceSeed {
 const DEVICES: DeviceSeed[] = [
   // ── Delhi (3 provisioned + 1 unprovisioned = 4 markers) ──
   { serial: "DEV-2001", meterSerial: "MET-6001", city: "DELHI", latJitter: 0.35, lngJitter: -0.25,
-    customerName: "Adani Energy Works", category: "INDUSTRIAL", address: "Plot 22, SIPCOT High Tech Park, Delhi",
+    customerName: "Adani Energy Works", category: "INDUSTRIAL_CNG", address: "Plot 22, SIPCOT High Tech Park, Delhi",
     statusPlan: "ONLINE", baseVolume: 1650, baseFlow: 24, basePressure: 2.55, baseTemp: 16, baseBattery: 96, monthGrowth: 0.05 },
   { serial: "DEV-2002", meterSerial: "MET-6002", city: "DELHI", latJitter: -0.15, lngJitter: 0.05,
     customerName: "Delhi Public Utilities", category: "COMMERCIAL", address: "Connaught Place, Delhi",
@@ -58,7 +58,7 @@ const DEVICES: DeviceSeed[] = [
 
   // ── Ahmedabad (3) ──
   { serial: "DEV-2101", meterSerial: "MET-6101", city: "AHMEDABAD", latJitter: 0.2, lngJitter: -0.1,
-    customerName: "Sabarmati Textiles", category: "INDUSTRIAL", address: "GIDC Estate, Naroda, Ahmedabad",
+    customerName: "Sabarmati Textiles", category: "INDUSTRIAL_CNG", address: "GIDC Estate, Naroda, Ahmedabad",
     statusPlan: "ONLINE", baseVolume: 1420, baseFlow: 21, basePressure: 2.48, baseTemp: 19, baseBattery: 91, monthGrowth: 0.06 },
   { serial: "DEV-2102", meterSerial: "MET-6102", city: "AHMEDABAD", latJitter: -0.3, lngJitter: 0.15,
     customerName: "Gujarat DRS Gas Co", category: "DRS", address: "Vatva Industrial Estate, Ahmedabad",
@@ -69,7 +69,7 @@ const DEVICES: DeviceSeed[] = [
 
   // ── Kolkata (3) ──
   { serial: "DEV-2201", meterSerial: "MET-6201", city: "KOLKATA", latJitter: 0.1, lngJitter: -0.2,
-    customerName: "Kolkata Steel Works", category: "INDUSTRIAL", address: "Howrah Industrial Belt, Kolkata",
+    customerName: "Kolkata Steel Works", category: "INDUSTRIAL_CNG", address: "Howrah Industrial Belt, Kolkata",
     statusPlan: "ONLINE", baseVolume: 1750, baseFlow: 26, basePressure: 2.6, baseTemp: 22, baseBattery: 94, monthGrowth: 0.05 },
   { serial: "DEV-2202", meterSerial: "MET-6202", city: "KOLKATA", latJitter: -0.25, lngJitter: 0.1,
     customerName: "Howrah Residency", category: "RESIDENTIAL", address: "Shibpur, Howrah",
@@ -80,7 +80,7 @@ const DEVICES: DeviceSeed[] = [
 
   // ── Mumbai (4) ──
   { serial: "DEV-2301", meterSerial: "MET-6301", city: "MUMBAI", latJitter: -0.15, lngJitter: 0.1,
-    customerName: "Reliance Petrochemicals", category: "INDUSTRIAL", address: "Trombay Complex, Mumbai",
+    customerName: "Reliance Petrochemicals", category: "INDUSTRIAL_CNG", address: "Trombay Complex, Mumbai",
     statusPlan: "CRITICAL", baseVolume: 2400, baseFlow: 34, basePressure: 2.85, baseTemp: 21, baseBattery: 67, monthGrowth: 0.07 },
   { serial: "DEV-2302", meterSerial: "MET-6302", city: "MUMBAI", latJitter: 0.2, lngJitter: -0.2,
     customerName: "Central Mall", category: "COMMERCIAL", address: "Main Square, Mumbai",
@@ -94,7 +94,7 @@ const DEVICES: DeviceSeed[] = [
 
   // ── Hyderabad (2) ──
   { serial: "DEV-2401", meterSerial: "MET-6401", city: "HYDERABAD", latJitter: 0.15, lngJitter: 0.1,
-    customerName: "Hyderabad Pharma Plant", category: "INDUSTRIAL", address: "Genome Valley, Hyderabad",
+    customerName: "Hyderabad Pharma Plant", category: "INDUSTRIAL_CNG", address: "Genome Valley, Hyderabad",
     statusPlan: "CRITICAL", baseVolume: 1980, baseFlow: 29, basePressure: 2.78, baseTemp: 24, baseBattery: 58, monthGrowth: 0.06 },
   { serial: "DEV-2402", meterSerial: "MET-6402", city: "HYDERABAD", latJitter: -0.2, lngJitter: -0.15,
     customerName: "Hitech City Commercial", category: "COMMERCIAL", address: "Hitech City, Hyderabad",
@@ -102,7 +102,7 @@ const DEVICES: DeviceSeed[] = [
 
   // ── Bengaluru (3) ──
   { serial: "DEV-2501", meterSerial: "MET-6501", city: "BENGALURU", latJitter: 0.1, lngJitter: -0.15,
-    customerName: "Bengaluru Tech Park Energy", category: "INDUSTRIAL", address: "Electronic City Phase 1, Bengaluru",
+    customerName: "Bengaluru Tech Park Energy", category: "INDUSTRIAL_CNG", address: "Electronic City Phase 1, Bengaluru",
     statusPlan: "ONLINE", baseVolume: 1580, baseFlow: 23, basePressure: 2.52, baseTemp: 18, baseBattery: 92, monthGrowth: 0.05 },
   { serial: "DEV-2502", meterSerial: "MET-6502", city: "BENGALURU", latJitter: -0.25, lngJitter: 0.2,
     customerName: "Whitefield Residency", category: "RESIDENTIAL", address: "Whitefield, Bengaluru",
@@ -113,21 +113,21 @@ const DEVICES: DeviceSeed[] = [
 
   // ── Pune (4) ──
   { serial: "DEV-1001", meterSerial: "MET-5501", city: "PUNE", latJitter: 0, lngJitter: 0,
-    customerName: "Acme Industrial Ltd", category: "INDUSTRIAL", address: "123 Factory Road, Pune",
+    customerName: "Acme Industrial Ltd", category: "INDUSTRIAL_CNG", address: "123 Factory Road, Pune",
     statusPlan: "ONLINE", baseVolume: 1500, baseFlow: 22, basePressure: 2.5, baseTemp: 15, baseBattery: 85, monthGrowth: 0.05 },
   { serial: "DEV-1002", meterSerial: "MET-5502", city: "PUNE", latJitter: -0.2, lngJitter: 0.25,
     customerName: "Pune Residency Complex", category: "RESIDENTIAL", address: "Kothrud, Pune",
     statusPlan: "OFFLINE", baseVolume: 340, baseFlow: 0, basePressure: 2.1, baseTemp: 15, baseBattery: 35, monthGrowth: 0.02 },
   { serial: "DEV-1003", meterSerial: "MET-5503", city: "PUNE", latJitter: 0.25, lngJitter: -0.35,
-    customerName: "Pune Highway CNG Station", category: "CNG", address: "Nagar Road, Pune",
+    customerName: "Pune Highway CNG Station", category: "INDUSTRIAL_CNG", address: "Nagar Road, Pune",
     statusPlan: "ONLINE", baseVolume: 1350, baseFlow: 20, basePressure: 2.45, baseTemp: 16, baseBattery: 88, monthGrowth: 0.05 },
   { serial: "DEV-1004", meterSerial: "MET-5504", city: "PUNE", latJitter: -0.35, lngJitter: -0.15,
-    customerName: "Bhosari PNG Industrial Park", category: "PNG", address: "Bhosari MIDC, Pune",
+    customerName: "Bhosari PNG Industrial Park", category: "INDUSTRIAL_PNG", address: "Bhosari MIDC, Pune",
     statusPlan: "ONLINE", baseVolume: 1600, baseFlow: 24, basePressure: 2.52, baseTemp: 16, baseBattery: 91, monthGrowth: 0.05 },
 
   // ── Chennai (2) ──
   { serial: "DEV-2601", meterSerial: "MET-6601", city: "CHENNAI", latJitter: 0.15, lngJitter: -0.1,
-    customerName: "Chennai Auto Components", category: "INDUSTRIAL", address: "Ambattur Industrial Estate, Chennai",
+    customerName: "Chennai Auto Components", category: "INDUSTRIAL_CNG", address: "Ambattur Industrial Estate, Chennai",
     statusPlan: "WARNING", baseVolume: 1680, baseFlow: 25, basePressure: 2.58, baseTemp: 27, baseBattery: 74, monthGrowth: 0.05 },
   { serial: "DEV-2602", meterSerial: "MET-6602", city: "CHENNAI", latJitter: -0.1, lngJitter: 0.2,
     customerName: "T Nagar Commercial", category: "COMMERCIAL", address: "T Nagar, Chennai",
@@ -202,7 +202,6 @@ async function main() {
       const customer = await prisma.customer.create({
         data: {
           name: d.customerName,
-          category: d.category,
           address: d.address,
           gaId: gaByCity[d.city].id,
         },
@@ -225,10 +224,11 @@ async function main() {
         deviceSerialNo: d.serial,
         meterSerialNo: d.meterSerial,
         customerId,
+        category: d.category,
         meterSize: customerId
           ? d.category === "DRS"
             ? "150mm"
-            : d.category === "INDUSTRIAL" || d.category === "CNG" || d.category === "PNG"
+            : d.category === "INDUSTRIAL_CNG" || d.category === "INDUSTRIAL_PNG"
               ? "100mm"
               : "40mm"
           : null,

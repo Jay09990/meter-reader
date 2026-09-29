@@ -74,19 +74,19 @@ const COL = {
 
 describe("sanitizeSheetName", () => {
   it("removes Excel-invalid chars", () => {
-    const s = new Set();
+    const s = new Set<string>();
     expect(sanitizeSheetName("Meter/001:Main*", "Fallback", s)).toBe("Meter_001_Main_");
   });
   it("truncates to 31 chars", () => {
-    const s = new Set();
+    const s = new Set<string>();
     expect(sanitizeSheetName("A".repeat(50), "Fallback", s).length).toBeLessThanOrEqual(31);
   });
   it("uses fallback when empty", () => {
-    const s = new Set();
+    const s = new Set<string>();
     expect(sanitizeSheetName("", "Fallback", s)).toBe("Fallback");
   });
   it("deduplicates collisions", () => {
-    const s = new Set();
+    const s = new Set<string>();
     const a = sanitizeSheetName("A:001", "Fallback", s);
     const b = sanitizeSheetName("A*001", "Fallback2", s);
     expect(a).not.toBe(b);

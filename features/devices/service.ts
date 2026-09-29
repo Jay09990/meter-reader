@@ -18,6 +18,7 @@ function mapDeviceToItem(
     meterSerialNo: string | null;
     meterSize: string | null;
     customerId: string | null;
+    category: import("@prisma/client").CustomerCategory | null;
     firmwareVersion: string | null;
     hardwareVersion: string | null;
     deviceModel: string | null;
@@ -49,7 +50,6 @@ function mapDeviceToItem(
     customer?: {
       id?: string | null;
       name?: string | null;
-      category?: string | null;
       address?: string | null;
       gaId?: string | null;
       ga?: { name?: string | null } | null;
@@ -58,7 +58,6 @@ function mapDeviceToItem(
   customerOverride?: {
     id?: string | null;
     name?: string | null;
-    category?: string | null;
     address?: string | null;
     gaId?: string | null;
     gaName?: string | null;
@@ -68,7 +67,6 @@ function mapDeviceToItem(
   const resolvedCustomer = customerOverride ?? {
     id: device.customer?.id ?? null,
     name: device.customer?.name ?? null,
-    category: device.customer?.category ?? null,
     address: device.customer?.address ?? null,
     gaId: device.customer?.gaId ?? null,
     gaName: device.customer?.ga?.name ?? null,
@@ -81,7 +79,7 @@ function mapDeviceToItem(
     meterSize: device.meterSize,
     customerId: device.customerId,
     customerName: resolvedCustomer?.name || null,
-    category: resolvedCustomer?.category || null,
+    category: device.category,
     address: resolvedCustomer?.address || null,
     gaName: resolvedCustomer?.gaName || null,
     gaId: resolvedCustomer?.gaId || null,
@@ -136,7 +134,7 @@ export async function getPaginatedDevices(options: GetDevicesOptions) {
   const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
   if (options.category) {
-    where.customer = { category: options.category as import("@prisma/client").CustomerCategory };
+    where.category = options.category as import("@prisma/client").CustomerCategory;
   }
 
   if (options.gaId) {
@@ -194,7 +192,6 @@ export async function getPaginatedDevices(options: GetDevicesOptions) {
           select: {
             id: true,
             name: true,
-            category: true,
             address: true,
             gaId: true,
             ga: { select: { name: true } },
@@ -236,7 +233,10 @@ export async function getPaginatedCustomersWithDevices(options: GetDevicesOption
   }
 
   if (options.category) {
-    where.category = options.category as import("@prisma/client").CustomerCategory;
+    where.AND = [
+      ...(Array.isArray(where.AND) ? where.AND : []),
+      { devices: { some: { category: options.category as import("@prisma/client").CustomerCategory } } },
+    ];
   }
 
   if (options.gaId) {
@@ -317,17 +317,17 @@ export async function getPaginatedCustomersWithDevices(options: GetDevicesOption
       mapDeviceToItem(device, {
         id: customer.id,
         name: customer.name,
-        category: customer.category,
         address: customer.address,
         gaId: customer.gaId,
         gaName: customer.ga?.name || null,
       }),
     );
 
+    const categories = [...new Set(devices.map((device) => device.category).filter(Boolean))];
     return {
       id: customer.id,
       name: customer.name,
-      category: customer.category,
+      category: categories.length === 1 ? categories[0] : categories.length > 1 ? "MULTIPLE" : null,
       address: customer.address,
       gaId: customer.gaId,
       gaName: customer.ga?.name || null,

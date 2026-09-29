@@ -27,10 +27,10 @@ export async function GET(req: NextRequest) {
           select: {
             deviceSerialNo: true,
             meterSerialNo: true,
+            category: true,
             customer: {
               select: {
                 name: true,
-                category: true,
                 ga: { select: { name: true } },
               },
             },
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
         "Alarm Date": dateStr,
         "Timestamp": createdAtStr,
         "Customer Name": a.device.customer?.name || "Unassigned",
-        "Customer Type": a.device.customer?.category || "N/A",
+        "Meter Category": a.device.category || "N/A",
         "GA": a.device.customer?.ga?.name || "—",
         "Device Serial No": a.device.deviceSerialNo,
         "Meter Serial No": a.device.meterSerialNo || "N/A",

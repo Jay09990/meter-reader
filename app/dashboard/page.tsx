@@ -78,17 +78,15 @@ interface AlarmFeedItem {
 }
 
 const categoryColors: Record<string, string> = {
-  INDUSTRIAL: "var(--clr-industrial)",
   COMMERCIAL: "var(--clr-commercial)",
   RESIDENTIAL: "var(--clr-residential)",
   DRS: "var(--clr-drs)",
-  CNG: "var(--clr-cng)",
-  PNG: "var(--clr-png)",
+  INDUSTRIAL_CNG: "var(--clr-cng)",
+  INDUSTRIAL_PNG: "var(--clr-png)",
 };
 
 const humanCategoryLabel = (category: string) => {
-  if (category === "CNG" || category === "PNG") return category;
-  return category.charAt(0) + category.slice(1).toLowerCase();
+  return category.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 };
 
 const fmt = (value: number | null | undefined, decimals = 2) => {
@@ -379,7 +377,7 @@ export default function OverviewPage() {
           <CardContent>
             <ConsumptionKpiValue
               loading={loading}
-              value={categorySeries.find((item) => item.category === "INDUSTRIAL")?.totalVolume ?? 0}
+              value={(categorySeries.find((item) => item.category === "INDUSTRIAL_CNG")?.totalVolume ?? 0) + (categorySeries.find((item) => item.category === "INDUSTRIAL_PNG")?.totalVolume ?? 0)}
             />
             <p className="text-xs text-muted-foreground mt-1">Consumption for selected range</p>
           </CardContent>
@@ -395,7 +393,7 @@ export default function OverviewPage() {
           <CardContent>
             <ConsumptionKpiValue
               loading={loading}
-              value={categorySeries.find((item) => item.category === "CNG")?.totalVolume ?? 0}
+              value={categorySeries.find((item) => item.category === "INDUSTRIAL_CNG")?.totalVolume ?? 0}
             />
             <p className="text-xs text-muted-foreground mt-1">Consumption for selected range</p>
           </CardContent>
@@ -411,7 +409,7 @@ export default function OverviewPage() {
           <CardContent>
             <ConsumptionKpiValue
               loading={loading}
-              value={categorySeries.find((item) => item.category === "PNG")?.totalVolume ?? 0}
+              value={categorySeries.find((item) => item.category === "INDUSTRIAL_PNG")?.totalVolume ?? 0}
             />
             <p className="text-xs text-muted-foreground mt-1">Consumption for selected range</p>
           </CardContent>

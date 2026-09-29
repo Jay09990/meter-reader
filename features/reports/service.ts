@@ -192,9 +192,9 @@ interface ReportDevice {
   id: string;
   deviceSerialNo: string;
   meterSerialNo: string | null;
+  category: string | null;
   customer: {
     name: string;
-    category: string;
     ga: { name: string } | null;
   } | null;
 }
@@ -208,7 +208,7 @@ function buildNoDataReading(device: ReportDevice, periodEnd: Date): ReportReadin
     deviceSerialNo: device.deviceSerialNo,
     meterSerialNo: device.meterSerialNo,
     customerName: device.customer?.name || null,
-    customerCategory: device.customer?.category || null,
+    customerCategory: device.category,
     gaName: device.customer?.ga?.name || null,
     readingDate: periodEndIso,
     receivedAt: periodEndIso,
@@ -302,6 +302,7 @@ export async function getCustomerReport({
           id: true,
           deviceSerialNo: true,
           meterSerialNo: true,
+          category: true,
           alarms: {
             where: { status: "OPEN" },
             take: 1,
@@ -310,7 +311,6 @@ export async function getCustomerReport({
           customer: {
             select: {
               name: true,
-              category: true,
               ga: { select: { name: true } },
             },
           },
@@ -329,8 +329,9 @@ export async function getCustomerReport({
       id: true,
       deviceSerialNo: true,
       meterSerialNo: true,
+      category: true,
       customer: {
-        select: { name: true, category: true, ga: { select: { name: true } } },
+        select: { name: true, ga: { select: { name: true } } },
       },
     },
     orderBy: { deviceSerialNo: "asc" },
@@ -369,7 +370,7 @@ export async function getCustomerReport({
       deviceSerialNo: r.device.deviceSerialNo,
       meterSerialNo: r.device.meterSerialNo,
       customerName: r.device.customer?.name || null,
-      customerCategory: r.device.customer?.category || null,
+      customerCategory: r.device.category,
       gaName: r.device.customer?.ga?.name || null,
       readingDate: r.readingDate.toISOString(),
       receivedAt: r.receivedAt.toISOString(),

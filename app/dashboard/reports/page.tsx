@@ -413,7 +413,6 @@ export default function ReportsPage() {
                               className="rounded border-border bg-transparent accent-[var(--clr-accent-mid)]"
                             />
                             <span className="text-foreground">{c.name}</span>
-                            <span className="text-xs text-muted-foreground">({c.category})</span>
                           </label>
                         );
                       })}

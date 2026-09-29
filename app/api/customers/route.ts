@@ -3,18 +3,13 @@ import { db } from "@/lib/db";
 import { CustomerCategory, Prisma } from "@prisma/client";
 import { logApi } from "@/lib/api-log";
 
-/** Parse the category from the request body. */
-function normalizeCustomerCategory(category: unknown): CustomerCategory {
-  return category as CustomerCategory;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     logApi("POST /api/customers", { body });
-    if (!body.name || !body.gaId || !body.category) {
+    if (!body.name || !body.gaId) {
       return NextResponse.json(
-        { error: "Name, gaId, and category are required" },
+        { error: "Name and gaId are required" },
         { status: 400 },
       );
     }
@@ -22,7 +17,6 @@ export async function POST(req: NextRequest) {
     const customer = await db.customer.create({
       data: {
         name: body.name,
-        category: normalizeCustomerCategory(body.category),
         address: body.address || null,
         gaId: body.gaId,
       },
@@ -59,8 +53,7 @@ export async function GET(req: NextRequest) {
       ];
     }
     if (gaId) where.gaId = gaId;
-    if (category)
-      where.category = category as Prisma.CustomerWhereInput["category"];
+    if (category) where.devices = { some: { category: category as CustomerCategory } };
 
     const [total, data] = await Promise.all([
       db.customer.count({ where }),
@@ -75,6 +68,7 @@ export async function GET(req: NextRequest) {
               deviceSerialNo: true,
               meterSerialNo: true,
               lastSeenAt: true,
+              category: true,
             },
           },
         },

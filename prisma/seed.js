@@ -94,7 +94,6 @@ function main() {
                     return [4 /*yield*/, prisma.customer.create({
                             data: {
                                 name: "Acme Industrial Ltd",
-                                category: "INDUSTRIAL",
                                 address: "123 Factory Road, Pune",
                                 gaId: ga1.id,
                             }
@@ -104,7 +103,6 @@ function main() {
                     return [4 /*yield*/, prisma.customer.create({
                             data: {
                                 name: "Central Mall",
-                                category: "COMMERCIAL",
                                 address: "Main Square, Mumbai",
                                 gaId: ga2.id,
                             }
@@ -117,6 +115,7 @@ function main() {
                                 deviceSerialNo: "DEV-1001",
                                 meterSerialNo: "MET-5501",
                                 customerId: customer1.id,
+                                category: "INDUSTRIAL_CNG",
                                 latitude: 18.5204,
                                 longitude: 73.8567,
                                 lastSeenAt: new Date(),
@@ -129,6 +128,7 @@ function main() {
                                 deviceSerialNo: "DEV-1002",
                                 meterSerialNo: "MET-5502",
                                 customerId: customer2.id,
+                                category: "COMMERCIAL",
                                 latitude: 19.0760,
                                 longitude: 72.8777,
                                 lastSeenAt: new Date(Date.now() - 24 * 60 * 60 * 1000 * 2), // Stale device (2 days ago)

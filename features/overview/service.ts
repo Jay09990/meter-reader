@@ -16,7 +16,7 @@ import {
   toIsoDate,
 } from "../../lib/financial-calendar";
 
-const CATEGORY_ORDER = ["INDUSTRIAL", "COMMERCIAL", "RESIDENTIAL", "DRS", "CNG", "PNG"] as const;
+const CATEGORY_ORDER = ["COMMERCIAL", "RESIDENTIAL", "DRS", "INDUSTRIAL_CNG", "INDUSTRIAL_PNG"] as const;
 const MAX_SUSPECT_VALUE = 1_000_000;
 
 export type KpiRange = "today" | "month" | "quarter" | "year";
@@ -80,14 +80,14 @@ export async function getFleetConsumptionSeries(
     db.device.findMany({
       select: {
         id: true,
-        customer: { select: { category: true } },
+        category: true,
       },
     }),
   ]);
 
   const deviceCategories = new Map<string, CustomerCategory | null>();
   devices.forEach((device) => {
-    deviceCategories.set(device.id, device.customer?.category ?? null);
+    deviceCategories.set(device.id, device.category);
   });
 
   return specs.map((spec) => {
@@ -111,8 +111,8 @@ export async function getFleetConsumptionSeries(
       deviceCount++;
 
       const category = deviceCategories.get(deviceId);
-      if (category === CustomerCategory.CNG) cngTotal += delta;
-      if (category === CustomerCategory.PNG) pngTotal += delta;
+      if (category === CustomerCategory.INDUSTRIAL_CNG) cngTotal += delta;
+      if (category === CustomerCategory.INDUSTRIAL_PNG) pngTotal += delta;
     }
 
     if (deviceCount === 0) {
@@ -182,12 +182,12 @@ export async function getFleetAnalytics(range: KpiRange, today: Date = new Date(
       select: {
         id: true,
         deviceSerialNo: true,
+        category: true,
         customerId: true,
         lastSeenAt: true,
         customer: {
           select: {
             name: true,
-            category: true,
             ga: {
               select: {
                 name: true,
@@ -226,9 +226,9 @@ export async function getFleetAnalytics(range: KpiRange, today: Date = new Date(
 
   const categoryTotals = buildCategoryTotals(
     devices
-      .filter((device) => device.customer && deviceDeltas.has(device.id))
+      .filter((device) => device.category && deviceDeltas.has(device.id))
       .map((device) => ({
-        category: device.customer?.category ?? CustomerCategory.RESIDENTIAL,
+        category: device.category!,
         totalVolume: deviceDeltas.get(device.id) ?? 0,
       })),
   );
@@ -244,7 +244,7 @@ export async function getFleetAnalytics(range: KpiRange, today: Date = new Date(
         customerName: device.customer?.name ?? "Unassigned",
         deviceSerialNo: device.deviceSerialNo,
         city: device.customer?.ga?.name ?? "—",
-        category: device.customer?.category ?? "RESIDENTIAL",
+        category: device.category ?? "UNCATEGORIZED",
         flowValue,
         suspect,
         status: computeDeviceStatus(device.lastSeenAt, device.alarms, device.customerId),

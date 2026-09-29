@@ -53,9 +53,9 @@ export async function PATCH(
         }
         customerId = customer.id;
       } else {
-        if (!body.customerName || !body.category) {
+        if (!body.customerName) {
           return NextResponse.json(
-            { error: "Customer name and category are required for provisioning" },
+            { error: "Customer name is required for provisioning" },
             { status: 400 },
           );
         }
@@ -94,7 +94,6 @@ export async function PATCH(
         const customer = await db.customer.create({
           data: {
             name: trimmedName,
-            category: body.category,
             address: body.address || null,
             gaId: gaId,
           },
@@ -127,6 +126,7 @@ export async function PATCH(
       where: { id: foundDevice.id },
       data: {
         customerId: customerId,
+        category: body.category === undefined ? undefined : body.category || null,
         meterSerialNo:
           body.meterSerialNo !== undefined ? body.meterSerialNo : undefined,
         latitude,

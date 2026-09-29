@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CustomerCategory } from "@prisma/client";
 import { db } from "@/lib/db";
 import { logApi } from "@/lib/api-log";
-
-/** Parse the category from the request body. */
-function normalizeCustomerCategory(category: unknown): CustomerCategory {
-  return category as CustomerCategory;
-}
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -17,7 +11,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       where: { id },
       data: {
         name: body.name,
-        category: normalizeCustomerCategory(body.category),
         address: body.address,
         gaId: body.gaId,
       },

@@ -22,7 +22,6 @@ model GeographicalArea {
 model Customer {
   id        String           @id @default(cuid())
   name      String
-  category  CustomerCategory
   address   String?
   gaId      String
   createdAt DateTime         @default(now())
@@ -30,13 +29,13 @@ model Customer {
   devices   Device[]
 
   @@index([gaId])
-  @@index([category])
 }
 
 model Device {
   id                    String    @id @default(cuid())
   deviceSerialNo        String    @unique
   customerId            String?
+  category              CustomerCategory?
   meterSerialNo         String?
   meterSize             String?
   firmwareVersion       String?
@@ -135,12 +134,11 @@ model RejectedConnectionAttempt {
 }
 
 enum CustomerCategory {
-  INDUSTRIAL
   COMMERCIAL
   RESIDENTIAL
   DRS
-  CNG
-  PNG
+  INDUSTRIAL_CNG
+  INDUSTRIAL_PNG
 }
 
 enum AlarmType {
