@@ -65,6 +65,17 @@ function fmt(val: number | null | undefined, decimals = 2): string {
   });
 }
 
+// Renders `receivedAt` (an ISO timestamp) in the viewer's local timezone as "YYYY-MM-DD HH:mm".
+function fmtDateTime(isoString: string | null | undefined): string {
+  if (!isoString) return "—";
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return "—";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const datePart = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const timePart = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${datePart} ${timePart}`;
+}
+
 export function ReportModeSelector({
   value,
   onChange,
@@ -644,6 +655,9 @@ export default function ReportsPage() {
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
                           SR.NO
                         </TableHead>
+                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                          DATE &amp; TIME
+                        </TableHead>
                         {!isRangeSelection ? (
                           <>
                             <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
@@ -715,6 +729,9 @@ export default function ReportsPage() {
                         <TableRow key={row.id} className="border-border hover:bg-secondary/60">
                           <TableCell className="font-mono text-xs text-muted-foreground">
                             {pageStartIndex + idx + 1}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+                            {fmtDateTime(row.receivedAt)}
                           </TableCell>
                           {!isRangeSelection ? (
                             <>
