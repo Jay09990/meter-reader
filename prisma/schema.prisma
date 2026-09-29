@@ -9,14 +9,129 @@ datasource db {
 }
 
 model GeographicalArea {
-  id         String             @id @default(cuid())
-  name       String
-  code       String?            @unique
-  parentId   String?
-  parent     GeographicalArea?  @relation("GAHierarchy", fields: [parentId], references: [id])
-  children   GeographicalArea[] @relation("GAHierarchy")
-  customers  Customer[]
-  createdAt  DateTime           @default(now())
+  id        String             @id @default(cuid())
+  name      String
+  code      String?            @unique
+  parentId  String?
+  createdAt DateTime           @default(now())
+  customers Customer[]
+  parent    GeographicalArea?  @relation("GAHierarchy", fields: [parentId], references: [id])
+  children  GeographicalArea[] @relation("GAHierarchy")
+}
+
+model Customer {
+  id        String           @id @default(cuid())
+  name      String
+  category  CustomerCategory
+  address   String?
+  gaId      String
+  createdAt DateTime         @default(now())
+  ga        GeographicalArea @relation(fields: [gaId], references: [id])
+  devices   Device[]
+
+  @@index([gaId])
+  @@index([category])
+}
+
+model Device {
+  id                    String    @id @default(cuid())
+  deviceSerialNo        String    @unique
+  customerId            String?
+  meterSerialNo         String?
+  meterSize             String?
+  firmwareVersion       String?
+  hardwareVersion       String?
+  deviceModel           String?
+  configurationVersion  String?
+  latitude              Float?
+  longitude             Float?
+  firstSeenAt           DateTime  @default(now())
+  lastSeenAt            DateTime?
+  batteryLowerLimit     Float?
+  consumptionLowerLimit Float?
+  consumptionUpperLimit Float?
+  pressureLowerLimit    Float?
+  pressureUpperLimit    Float?
+  temperatureLowerLimit Float?
+  temperatureUpperLimit Float?
+  alarms                Alarm[]
+  customer              Customer? @relation(fields: [customerId], references: [id])
+  readings              Reading[]
+
+  @@index([customerId])
+}
+
+model Reading {
+  id                  String   @id @default(cuid())
+  deviceId            String
+  readingDate         DateTime
+  correctedVolumeVb   Float?
+  uncorrectedVolumeVm Float?
+  gasPressure         Float?
+  pressureMax         Float?
+  pressureMin         Float?
+  gasTemperature      Float?
+  temperatureMax      Float?
+  temperatureMin      Float?
+  compressibilityZ    Float?
+  compressibilityFpv  Float?
+  correctionFactorC   Float?
+  gasDensity          Float?
+  hourlyConsumption   Json?
+  batteryLevel        Float?
+  currentFlowRate     Float?
+  rawPayload          Json
+  receivedAt          DateTime @default(now())
+  device              Device   @relation(fields: [deviceId], references: [id])
+
+  @@index([deviceId, readingDate])
+  @@index([readingDate])
+}
+
+model Alarm {
+  id             String        @id @default(cuid())
+  deviceId       String
+  type           AlarmType
+  severity       AlarmSeverity
+  cause          String
+  gasValue       Float?
+  averageValue   Float?
+  forDate        DateTime
+  status         AlarmStatus   @default(OPEN)
+  acknowledged   Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  acknowledgedAt DateTime?
+  device         Device        @relation(fields: [deviceId], references: [id])
+
+  @@unique([deviceId, type, forDate])
+  @@index([status, createdAt])
+  @@index([severity, status])
+  @@index([acknowledged])
+}
+
+model AlarmSettings {
+  id                     String   @id @default("singleton")
+  gasDeviationWindowDays Int      @default(7)
+  gasDeviationPercent    Float    @default(20)
+  updatedAt              DateTime @updatedAt
+}
+
+model SystemSettings {
+  id                     String   @id @default("singleton")
+  maxMeterCapacity       Int?
+  updatedAt              DateTime @updatedAt
+  alarmNotificationEmail String?
+  reportScheduleTime     String?  @default("07:00")
+}
+
+model RejectedConnectionAttempt {
+  id             String   @id @default(cuid())
+  deviceSerialNo String
+  rawPayload     Json
+  attemptedAt    DateTime @default(now())
+  acknowledged   Boolean  @default(false)
+
+  @@index([acknowledged, attemptedAt])
 }
 
 enum CustomerCategory {
@@ -28,88 +143,6 @@ enum CustomerCategory {
   PNG
 }
 
-model Customer {
-  id           String            @id @default(cuid())
-  name         String
-  category     CustomerCategory
-  address      String?
-  gaId         String
-  ga           GeographicalArea  @relation(fields: [gaId], references: [id])
-  devices      Device[]
-  createdAt    DateTime          @default(now())
-
-  @@index([gaId])
-  @@index([category])
-}
-
-model Device {
-  id                   String    @id @default(cuid())
-  deviceSerialNo       String    @unique
-  customerId           String?
-  customer             Customer? @relation(fields: [customerId], references: [id])
-
-  meterSerialNo        String?
-  meterSize            String?
-  firmwareVersion      String?
-  hardwareVersion      String?
-  deviceModel          String?
-  configurationVersion String?
-
-  latitude             Float?
-  longitude            Float?
-
-  pressureUpperLimit      Float?
-  pressureLowerLimit      Float?
-  temperatureUpperLimit   Float?
-  temperatureLowerLimit   Float?
-  consumptionUpperLimit   Float?
-  consumptionLowerLimit   Float?
-  batteryLowerLimit       Float?
-
-  firstSeenAt          DateTime  @default(now())
-  lastSeenAt           DateTime?
-
-  readings             Reading[]
-  alarms               Alarm[]
-
-  @@index([customerId])
-}
-
-model Reading {
-   id                  String   @id @default(cuid())
-   deviceId            String
-   device              Device   @relation(fields: [deviceId], references: [id])
-   readingDate         DateTime
-
-   correctedVolumeVb   Float?
-   uncorrectedVolumeVm Float?
-   gasPressure         Float?
-   pressureMax         Float?
-   pressureMin         Float?
-   gasTemperature      Float?
-   temperatureMax      Float?
-   temperatureMin      Float?
-   compressibilityZ    Float?
-   compressibilityFpv  Float?
-   correctionFactorC   Float?
-   gasDensity          Float?
-   hourlyConsumption   Json?
-
-   batteryLevel        Float?
-   currentFlowRate     Float?
-
-   rawPayload          Json
-   receivedAt          DateTime @default(now())
-
-  // No longer unique — every push is now its own row (deviceId+readingDate
-  // can repeat). Index kept (now non-unique) since every read-path query
-  // still filters/sorts by these two columns to find "the latest push for
-  // this device/day" — see features/devices/service.ts and
-  // features/ingest/alarm-check.ts.
-  @@index([deviceId, readingDate])
-  @@index([readingDate])
- }
-
 enum AlarmType {
   MISSING_DATA
   GAS_OUT_OF_RANGE
@@ -118,7 +151,7 @@ enum AlarmType {
   CONSUMPTION_OUT_OF_RANGE
   BATTERY_LOW
   NO_CONSUMPTION
-  METER_FAILURE 
+  METER_FAILURE
 }
 
 enum AlarmSeverity {
@@ -129,50 +162,4 @@ enum AlarmSeverity {
 enum AlarmStatus {
   OPEN
   RESOLVED
-}
-
-model Alarm {
-  id             String        @id @default(cuid())
-  deviceId       String
-  device         Device        @relation(fields: [deviceId], references: [id])
-  type           AlarmType
-  severity       AlarmSeverity
-  cause          String
-  gasValue       Float?
-  averageValue   Float?
-  forDate        DateTime
-  status         AlarmStatus   @default(OPEN)
-  acknowledged   Boolean       @default(false)
-  acknowledgedAt DateTime?
-  createdAt      DateTime      @default(now())
-
-  @@unique([deviceId, type, forDate])
-  @@index([status, createdAt])
-  @@index([severity, status])
-  @@index([acknowledged])
-}
-
-model AlarmSettings {
-  id                       String   @id @default("singleton")
-  gasDeviationWindowDays   Int      @default(7)
-  gasDeviationPercent      Float    @default(20)
-  updatedAt                DateTime @updatedAt
-}
-
-model SystemSettings {
-  id                     String   @id @default("singleton")
-  maxMeterCapacity       Int?
-  alarmNotificationEmail String?
-  reportScheduleTime     String?  @default("07:00") // HH:MM in 24h UTC, e.g. "07:00"
-  updatedAt              DateTime @updatedAt
-}
-
-model RejectedConnectionAttempt {
-  id             String   @id @default(cuid())
-  deviceSerialNo String
-  rawPayload     Json
-  attemptedAt    DateTime @default(now())
-  acknowledged   Boolean  @default(false)
-
-  @@index([acknowledged, attemptedAt])
 }
