@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { db } from "@/lib/db";
 import { AlarmStatus, AlarmSeverity, AlarmType } from "@prisma/client";
 import { logApi } from "@/lib/api-log";
-import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
+import { getGaScope, requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
     const format = searchParams.get("format") || "xlsx";
 
     const where: import("@prisma/client").Prisma.AlarmWhereInput = {};
-    where.device = { customer: { gaId: user.gaId } };
+    const gaId = getGaScope(user);
+    if (gaId) where.device = { customer: { gaId } };
     if (statusParam && statusParam !== "all") where.status = statusParam as AlarmStatus;
     if (severityParam && severityParam !== "all") where.severity = severityParam as AlarmSeverity;
     if (typeParam && typeParam !== "all") where.type = typeParam as AlarmType;

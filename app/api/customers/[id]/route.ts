@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { logApi } from "@/lib/api-log";
-import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
+import { getGaScope, requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireApiUser();
     if (!user) return unauthorizedResponse();
     const { id } = await params;
+    const gaId = getGaScope(user);
     const body = await req.json();
     logApi("PATCH /api/customers/[id]", { id, body });
     const customer = await db.customer.update({
-      where: { id, gaId: user.gaId },
+      where: { id, ...(gaId ? { gaId } : {}) },
       data: {
         name: body.name,
         address: body.address,
@@ -30,9 +31,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const user = await requireApiUser();
     if (!user) return unauthorizedResponse();
     const { id } = await params;
+    const gaId = getGaScope(user);
     logApi("GET /api/customers/[id]", { id });
     const customer = await db.customer.findUnique({
-      where: { id, gaId: user.gaId },
+      where: { id, ...(gaId ? { gaId } : {}) },
       include: {
         ga: true,
         devices: {

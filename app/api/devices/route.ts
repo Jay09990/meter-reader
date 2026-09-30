@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPaginatedDevices } from "@/features/devices";
 import { logApi } from "@/lib/api-log";
-import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
+import { getGaScope, requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "all";
     const category = searchParams.get("category") || "";
-    const gaId = user.gaId;
+    const gaId = getGaScope(user);
 
     logApi("GET /api/devices", { page, limit, search, status, category, gaId });
     const result = await getPaginatedDevices({ page, limit, search, status, category, gaId });

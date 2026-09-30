@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDeviceLatest } from "@/features/devices";
 import { logApi } from "@/lib/api-log";
-import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
+import { getGaScope, requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function GET(
   _req: NextRequest,
@@ -12,7 +12,7 @@ export async function GET(
     if (!user) return unauthorizedResponse();
     const { id } = await params;
     logApi("GET /api/devices/[id]/latest", { id });
-    const data = await getDeviceLatest(id, user.gaId);
+    const data = await getDeviceLatest(id, getGaScope(user));
 
     if (!data) {
       logApi("GET /api/devices/[id]/latest → 404", { id });

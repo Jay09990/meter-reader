@@ -11,6 +11,11 @@ export async function requireAdminUser() {
   return user?.role === "ADMIN" ? user : null;
 }
 
+// An omitted GA filter is reserved for trusted administrators with cross-GA access.
+export function getGaScope(user: { gaId: string; role: string }): string | undefined {
+  return user.role === "ADMIN" ? undefined : user.gaId;
+}
+
 export function unauthorizedResponse() {
   return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 }

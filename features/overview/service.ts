@@ -69,7 +69,7 @@ export function buildCategoryTotals(
  */
 export async function getFleetConsumptionSeries(
   mode: ConsumptionMode,
-  gaId: string,
+  gaId: string | undefined,
   today: Date = new Date(),
 ): Promise<ConsumptionBucket[]> {
   const specs = buildBucketSpecs(mode, today);
@@ -79,7 +79,7 @@ export async function getFleetConsumptionSeries(
   const [boundaryMaps, devices] = await Promise.all([
     buildFleetBoundaryMaps(boundaries),
     db.device.findMany({
-      where: { customer: { gaId } },
+      where: gaId ? { customer: { gaId } } : undefined,
       select: {
         id: true,
         category: true,
@@ -132,19 +132,19 @@ export async function getFleetConsumptionSeries(
 }
 
 
-export async function getFleetOverview(gaId: string) {
+export async function getFleetOverview(gaId?: string) {
   const now = new Date();
   const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
   const [totalDevices, reportedToday, offlineDevices, alarmsBySeverity] = await Promise.all([
-    db.device.count({ where: { customer: { gaId } } }),
+    db.device.count({ where: gaId ? { customer: { gaId } } : undefined }),
     db.device.count({
-      where: { customer: { gaId }, lastSeenAt: { gte: startOfToday } },
+      where: { ...(gaId ? { customer: { gaId } } : {}), lastSeenAt: { gte: startOfToday } },
     }),
     db.device.count({
       where: {
-        customer: { gaId },
+        ...(gaId ? { customer: { gaId } } : {}),
         OR: [
           { lastSeenAt: null },
           { lastSeenAt: { lt: yesterday } },
@@ -153,7 +153,7 @@ export async function getFleetOverview(gaId: string) {
     }),
     db.alarm.groupBy({
       by: ["severity"],
-      where: { status: AlarmStatus.OPEN, device: { customer: { gaId } } },
+      where: { status: AlarmStatus.OPEN, ...(gaId ? { device: { customer: { gaId } } } : {}) },
       _count: { _all: true },
     }),
   ]);
@@ -177,15 +177,15 @@ export async function getFleetOverview(gaId: string) {
   };
 }
 
-export async function getFleetAnalytics(range: KpiRange, gaId: string, today: Date = new Date()) {
+export async function getFleetAnalytics(range: KpiRange, gaId: string | undefined, today: Date = new Date()) {
   const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
   const todayIso = toIsoDate(today);
   const rangeStartIso = toIsoDate(getRangeStartDate(range, today));
 
   const [openAlertCount, devices, boundaryMaps] = await Promise.all([
-    db.alarm.count({ where: { status: AlarmStatus.OPEN, device: { customer: { gaId } } } }),
+    db.alarm.count({ where: { status: AlarmStatus.OPEN, ...(gaId ? { device: { customer: { gaId } } } : {}) } }),
     db.device.findMany({
-      where: { customer: { gaId } },
+      where: gaId ? { customer: { gaId } } : undefined,
       select: {
         id: true,
         deviceSerialNo: true,

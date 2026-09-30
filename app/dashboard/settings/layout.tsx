@@ -1,10 +1,9 @@
-// Restricts global settings and GA administration to manually assigned administrators.
+// Requires a valid session for system settings pages.
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 
 export default async function SettingsLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role !== "ADMIN") redirect("/dashboard");
   return children;
 }

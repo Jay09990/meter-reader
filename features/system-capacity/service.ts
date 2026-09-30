@@ -96,10 +96,10 @@ export async function getAlarmNotificationEmail(): Promise<string | null> {
 }
 
 // Uses SQL until RejectedConnectionAttempt queries are fully migrated to the client API.
-export async function getCapacityStatus(gaId: string): Promise<CapacityStatus> {
+export async function getCapacityStatus(gaId?: string): Promise<CapacityStatus> {
   const [settings, currentCount] = await Promise.all([
     getSystemSettings(),
-    db.device.count({ where: { customer: { gaId } } }),
+    db.device.count({ where: gaId ? { customer: { gaId } } : undefined }),
   ]);
   const maxCapacity = settings.maxMeterCapacity;
   return {

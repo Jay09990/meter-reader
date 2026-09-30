@@ -9,7 +9,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!user) return unauthorizedResponse();
     if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Request origin is not allowed." }, { status: 403 });
     const { id } = await params;
-    if (id !== user.gaId) return NextResponse.json({ error: "Geographical area not found." }, { status: 404 });
+    if (user.role !== "ADMIN" && id !== user.gaId) return NextResponse.json({ error: "Geographical area not found." }, { status: 404 });
     const body = await req.json();
     logApi("PATCH /api/gas/[id]", { id, body });
     const ga = await db.geographicalArea.update({

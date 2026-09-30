@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { getOpenAlarmCount } from "@/features/alarms";
 import { logApi } from "@/lib/api-log";
-import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
+import { getGaScope, requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function GET() {
   try {
     const user = await requireApiUser();
     if (!user) return unauthorizedResponse();
-    const count = await getOpenAlarmCount(user.gaId);
+    const count = await getOpenAlarmCount(getGaScope(user));
     logApi("GET /api/alarms/count → 200", { count });
     return NextResponse.json({ count }, { status: 200 });
   } catch (err: unknown) {

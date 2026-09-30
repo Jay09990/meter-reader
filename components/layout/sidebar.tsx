@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -94,19 +93,10 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile, onToggleDesktop 
 
 function SidebarContent({ collapsed, showDesktopToggle, onCloseMobile, onToggleDesktop }: SidebarContentProps) {
   const pathname = usePathname();
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/auth/me", { cache: "no-store" })
-      .then((response) => response.ok ? response.json() : null)
-      .then((data) => setIsAdmin(data?.user?.role === "ADMIN"))
-      .catch(() => setIsAdmin(false));
-  }, []);
-
   const visibleGroups = navigationGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => item.href !== "/dashboard/settings" || isAdmin),
+      items: group.items,
     }))
     .filter((group) => group.items.length > 0);
 

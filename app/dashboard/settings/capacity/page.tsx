@@ -5,9 +5,9 @@ import { Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { GaManagementCard } from "@/components/settings/ga-management-card";
 
-// Hidden admin page for Maximum Meter Capacity management.
-// Not shown in sidebar — accessible directly at /dashboard/cfg-7v4x9k2q/capacity
+// Admin page for meter capacity and geographical area management.
 export default function CapacityPage() {
   const [capacity, setCapacity] = useState("");
   const [saving, setSaving] = useState(false);
@@ -44,7 +44,7 @@ export default function CapacityPage() {
   };
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
+    <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Meter Capacity</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -104,6 +104,7 @@ export default function CapacityPage() {
           </CardContent>
         )}
       </Card>
+      <GaManagementCard />
     </div>
   );
 }

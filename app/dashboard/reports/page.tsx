@@ -318,14 +318,18 @@ export default function ReportsPage() {
     ? allReadings
     : allReadings.slice(pageStartIndex, pageStartIndex + ROWS_PER_PAGE);
 
-  // For range selection: compute sequential STREAM NO per customer
-  const streamNoMap = new Map<string, number>();
-  function getStreamNo(customerName: string): number {
-    const current = streamNoMap.get(customerName) ?? 0;
-    const next = current + 1;
-    streamNoMap.set(customerName, next);
+  // Number each meter once within a customer so all its readings share one stream number.
+  const streamNoMap = new Map<string, Map<string, number>>();
+  function getStreamNo(customerName: string, deviceId: string): number {
+    const customerStreams = streamNoMap.get(customerName) ?? new Map<string, number>();
+    const existing = customerStreams.get(deviceId);
+    if (existing !== undefined) return existing;
+    const next = customerStreams.size + 1;
+    customerStreams.set(deviceId, next);
+    streamNoMap.set(customerName, customerStreams);
     return next;
   }
+  allReadings.forEach((row) => getStreamNo(row.customerName || "", row.deviceId));
 
   return (
     <div className="space-y-6 w-full">
@@ -704,9 +708,6 @@ export default function ReportsPage() {
                         <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
                           ALARMS
                         </TableHead>
-                        <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
-                          DATE
-                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -727,7 +728,7 @@ export default function ReportsPage() {
                                 IBAFO
                               </TableCell>
                               <TableCell className="font-mono text-xs text-foreground whitespace-nowrap">
-                                {row.meterSerialNo || row.deviceSerialNo}
+                                {getStreamNo(row.customerName || "", row.deviceId)}
                               </TableCell>
                             </>
                           ) : (
@@ -790,9 +791,6 @@ export default function ReportsPage() {
                           </TableCell>
                           <TableCell className="text-xs whitespace-normal max-w-[200px]">
                             {row.alarms || "---"}
-                          </TableCell>
-                          <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
-                            {row.readingDate.split("T")[0]}
                           </TableCell>
                         </TableRow>
                       ))}

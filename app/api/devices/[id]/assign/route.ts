@@ -8,7 +8,7 @@ import {
 } from "@/lib/device-field-parse";
 import { logApi } from "@/lib/api-log";
 import { CustomerCategory } from "@prisma/client";
-import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
+import { getGaScope, requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function PATCH(
   req: NextRequest,
@@ -20,12 +20,11 @@ export async function PATCH(
     const { id } = await params;
     
     // Find device by id (CUID) or deviceSerialNo
+    const gaId = getGaScope(user);
     const foundDevice = await db.device.findFirst({
       where: {
-        AND: [
-          { OR: [{ id }, { deviceSerialNo: id }] },
-          { OR: [{ customer: { gaId: user.gaId } }, { customerId: null }] },
-        ],
+        OR: [{ id }, { deviceSerialNo: id }],
+        ...(gaId ? { AND: [{ OR: [{ customer: { gaId } }, { customerId: null }] }] } : {}),
       }
     });
     if (!foundDevice) {
@@ -55,7 +54,7 @@ export async function PATCH(
         if (!customer) {
           return NextResponse.json({ error: "Selected customer not found" }, { status: 404 });
         }
-        if (customer.gaId !== user.gaId) {
+        if (gaId && customer.gaId !== gaId) {
           return NextResponse.json({ error: "Selected customer is outside your geographical area." }, { status: 403 });
         }
         customerId = customer.id;
@@ -90,7 +89,7 @@ export async function PATCH(
           data: {
             name: trimmedName,
             address: body.address || null,
-            gaId: user.gaId,
+            gaId: user.role === "ADMIN" ? body.gaId : user.gaId,
           },
         });
         customerId = customer.id;
@@ -98,7 +97,7 @@ export async function PATCH(
     }
 
     if (customerId) {
-      const customer = await db.customer.findFirst({ where: { id: customerId, gaId: user.gaId }, select: { id: true } });
+      const customer = await db.customer.findFirst({ where: { id: customerId, ...(gaId ? { gaId } : {}) }, select: { id: true } });
       if (!customer) return NextResponse.json({ error: "Selected customer is outside your geographical area." }, { status: 403 });
     }
 

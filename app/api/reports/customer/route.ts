@@ -8,7 +8,7 @@ import {
   ReportMode,
 } from "@/features/reports";
 import { logApi } from "@/lib/api-log";
-import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
+import { getGaScope, requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function GET(req: NextRequest) {
   const user = await requireApiUser();
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const report = await getCustomerReport({ customerId, startDate, endDate, frequency, mode, gaId: user.gaId });
+    const report = await getCustomerReport({ customerId, startDate, endDate, frequency, mode, gaId: getGaScope(user) });
     logApi("GET /api/reports/customer → 200", { customerId, frequency, mode });
     return NextResponse.json(report);
   } catch (err: unknown) {

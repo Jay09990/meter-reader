@@ -454,7 +454,6 @@ export default function MeterDetailPage() {
           <DataRow label="Compressibility (Z)" value={fmt(r?.compressibilityZ, 4)} />
           <DataRow label="Compressibility (Fpv)" value={fmt(r?.compressibilityFpv, 4)} />
           <DataRow label="Correction Factor (C)" value={fmt(r?.correctionFactorC, 4)} />
-          <DataRow label="Density" value={`${fmt(r?.gasDensity, 3)} kg/m³`} />
         </KpiCard>
 
         {/* Meter Info */}

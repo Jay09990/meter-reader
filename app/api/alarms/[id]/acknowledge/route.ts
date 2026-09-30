@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { logApi } from "@/lib/api-log";
-import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
+import { getGaScope, requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -9,7 +9,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     if (!user) return unauthorizedResponse();
     const { id } = await params;
     logApi("POST /api/alarms/[id]/acknowledge", { id });
-    const visibleAlarm = await db.alarm.findFirst({ where: { id, device: { customer: { gaId: user.gaId } } }, select: { id: true } });
+    const gaId = getGaScope(user);
+    const visibleAlarm = await db.alarm.findFirst({ where: { id, ...(gaId ? { device: { customer: { gaId } } } : {}) }, select: { id: true } });
     if (!visibleAlarm) return NextResponse.json({ error: "Alarm not found" }, { status: 404 });
     const alarm = await db.alarm.update({
       where: { id },

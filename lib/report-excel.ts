@@ -48,14 +48,6 @@ function formatValue(value: number | null | undefined): CellValue {
   return value === null || value === undefined ? "-" : value;
 }
 
-function readingDay(reading: ReportReading): string {
-  const date = new Date(reading.readingDate);
-  if (!isNaN(date.getTime()) && date.getFullYear() > 1970) {
-    return reading.readingDate.split("T")[0];
-  }
-  return reading.receivedAt.split("T")[0];
-}
-
 /**
  * Formats an ISO timestamp as "YYYY-MM-DD HH:mm" using the UTC components embedded
  * in the string itself (no timezone conversion). This keeps the export deterministic
@@ -69,8 +61,7 @@ function formatDateTime(isoString: string): string {
 }
 
 // Column order mirrors the AMR reference template (AMR REPORT FORMAT.xlsx).
-// "TOTAIZER" reproduces a typo in the reference; DATE is appended because the
-// report covers a date range while the reference is a single-day snapshot.
+// "TOTAIZER" reproduces a typo in the reference report template.
 const REPORT_COLUMNS: ReportColumn[] = [
   { header: "SR.NO", unit: "—", align: "center", getValue: ({ srNo }) => srNo },
   {
@@ -109,7 +100,6 @@ const REPORT_COLUMNS: ReportColumn[] = [
     getValue: ({ reading }) => (reading.batteryLevel != null ? Math.round(reading.batteryLevel) : "-"),
   },
   { header: "ALARMS", unit: "—", align: "left", getValue: ({ reading }) => reading.alarms || "NORMAL" },
-  { header: "DATE", unit: "—", align: "center", getValue: ({ reading }) => readingDay(reading) },
 ];
 
 // Kept for backward compatibility with any other importer.
@@ -263,14 +253,14 @@ function addDateRangeSheets(workbook: ExcelJS.Workbook, meters: MeterReportGroup
     let firstReading: ReportReading | undefined;
     let srNo = 0;
 
-    for (const meter of sortedMeters) {
+    for (const [meterIndex, meter] of sortedMeters.entries()) {
       const meterReadings = [...meter.readings].sort(
         (a, b) => new Date(a.readingDate).getTime() - new Date(b.readingDate).getTime(),
       );
-      meterReadings.forEach((reading, meterReadingIndex) => {
+      meterReadings.forEach((reading) => {
         if (!firstReading) firstReading = reading;
         srNo++;
-        dataRows.push(toDataRow(tableColumns, { reading, srNo, streamNo: meterReadingIndex + 1 }));
+        dataRows.push(toDataRow(tableColumns, { reading, srNo, streamNo: meterIndex + 1 }));
       });
     }
     if (dataRows.length === 0 || !firstReading) continue;

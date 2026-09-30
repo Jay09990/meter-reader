@@ -18,7 +18,7 @@ interface HeaderProps {
 export function Header({ onOpenMobileSidebar }: HeaderProps) {
   const router = useRouter();
   const [unseenAlarmCount, setUnseenAlarmCount] = useState<number | null>(null);
-  const [identity, setIdentity] = useState<{ username: string; gaName: string } | null>(null);
+  const [identity, setIdentity] = useState<{ username: string; gaName: string; role: string } | null>(null);
   const [signingOut, setSigningOut] = useState(false);
 
   const fetchAlarmCount = () => {
@@ -44,7 +44,7 @@ export function Header({ onOpenMobileSidebar }: HeaderProps) {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } finally {
-      router.replace("/login");
+      router.replace(identity?.role === "ADMIN" ? "/admin-signin" : "/login");
       router.refresh();
     }
   }
@@ -100,7 +100,7 @@ export function Header({ onOpenMobileSidebar }: HeaderProps) {
           <span className="h-2 w-2 rounded-full" style={{background:'var(--clr-accent-lo)'}} />
           <span>Live Environment</span>
         </div>
-        {identity && <span className="hidden max-w-32 truncate text-xs text-muted-foreground xl:inline" title={`${identity.username} · ${identity.gaName}`}>{identity.username} · {identity.gaName}</span>}
+        {identity && <span className="hidden max-w-40 truncate text-xs text-muted-foreground xl:inline" title={`${identity.username} · ${identity.role === "ADMIN" ? "All GAs" : identity.gaName}`}>{identity.username} · {identity.role === "ADMIN" ? "All GAs" : identity.gaName}</span>}
         <Button type="button" variant="outline" size="sm" disabled={signingOut} onClick={signOut} className="h-9 gap-1.5 px-2.5 text-xs">
           <LogOut className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">{signingOut ? "Signing out…" : "Sign out"}</span>

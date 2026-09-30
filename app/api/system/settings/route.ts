@@ -6,12 +6,12 @@ import {
   updateSystemSettings,
 } from "@/features/system-capacity/service";
 import { logApi } from "@/lib/api-log";
-import { requireAdminUser, unauthorizedResponse, isSameOriginRequest } from "@/lib/auth-api";
+import { requireAdminUser, requireApiUser, unauthorizedResponse, isSameOriginRequest } from "@/lib/auth-api";
 
 // Reads and updates system-wide settings (capacity, alarm email, report schedule time).
 export async function GET() {
   try {
-    const user = await requireAdminUser();
+    const user = await requireApiUser();
     if (!user) return unauthorizedResponse();
     const settings = await getSystemSettings();
     logApi("GET /api/system/settings → 200", { settings });

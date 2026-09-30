@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDeviceHistory } from "@/features/devices";
 import { logApi } from "@/lib/api-log";
-import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
+import { getGaScope, requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function GET(
   req: NextRequest,
@@ -15,7 +15,7 @@ export async function GET(
     const days = Math.max(1, Math.min(365, parseInt(searchParams.get("days") || "30", 10) || 30));
     logApi("GET /api/devices/[id]/history", { id, days });
 
-    const history = await getDeviceHistory(id, user.gaId, days);
+    const history = await getDeviceHistory(id, getGaScope(user), days);
     logApi("GET /api/devices/[id]/history → 200", { id, days, points: history.length });
     return NextResponse.json({ history }, { status: 200 });
   } catch (err: unknown) {

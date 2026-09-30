@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { CustomerCategory, Prisma } from "@prisma/client";
 import { logApi } from "@/lib/api-log";
-import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
+import { getGaScope, requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     if (!user) return unauthorizedResponse();
     const body = await req.json();
     logApi("POST /api/customers", { body });
-    if (!body.name || !body.gaId) {
+    if (!body.name || (user.role !== "ADMIN" && !body.gaId) || (user.role === "ADMIN" && !body.gaId)) {
       return NextResponse.json(
         { error: "Name and gaId are required" },
         { status: 400 },
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       data: {
         name: body.name,
         address: body.address || null,
-        gaId: user.gaId,
+        gaId: user.role === "ADMIN" ? body.gaId : user.gaId,
       },
     });
     logApi("POST /api/customers → 201", { id: customer.id, name: customer.name });
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
     const limit = Math.max(1, parseInt(searchParams.get("limit") || "20"));
     const search = searchParams.get("search") || "";
-    const gaId = user.gaId;
+    const gaId = getGaScope(user);
     const category = searchParams.get("category") || "";
 
     logApi("GET /api/customers", { page, limit, search, gaId, category });
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
         },
       ];
     }
-    where.gaId = gaId;
+    if (gaId) where.gaId = gaId;
     if (category) where.devices = { some: { category: category as CustomerCategory } };
 
     const [total, data] = await Promise.all([

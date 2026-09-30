@@ -9,7 +9,7 @@ import {
 } from "@/lib/device-field-parse";
 import { logApi } from "@/lib/api-log";
 import { CustomerCategory } from "@prisma/client";
-import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
+import { getGaScope, requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 /**
  * PATCH /api/devices/[id] — post-provisioning update of identity/location/model
@@ -25,12 +25,11 @@ export async function PATCH(
     if (!user) return unauthorizedResponse();
     const { id } = await params;
 
+    const gaId = getGaScope(user);
     const foundDevice = await db.device.findFirst({
       where: {
-        AND: [
-          { OR: [{ id }, { deviceSerialNo: id }] },
-          { customer: { gaId: user.gaId } },
-        ],
+        OR: [{ id }, { deviceSerialNo: id }],
+        ...(gaId ? { customer: { gaId } } : {}),
       },
     });
     if (!foundDevice) {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getFleetConsumptionSeries } from "@/features/overview/service";
 import type { ConsumptionMode } from "@/lib/consumption-series";
 import { logApi } from "@/lib/api-log";
-import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
+import { getGaScope, requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function GET(request: Request) {
   try {
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
         : "daily";
 
     logApi("GET /api/overview/consumption", { period });
-    const consumption = await getFleetConsumptionSeries(period, user.gaId);
+    const consumption = await getFleetConsumptionSeries(period, getGaScope(user));
 
     logApi("GET /api/overview/consumption → 200", { period, points: consumption.length });
     return NextResponse.json({ consumption }, { status: 200 });
