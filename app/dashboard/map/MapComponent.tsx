@@ -150,6 +150,51 @@ function ZoomWatcher({ onZoom }: { onZoom: (zoom: number) => void }) {
   return null;
 }
 
+function ClusteredDeviceMarkers({
+  devices,
+  icons,
+  clusterIcon,
+  onSelect,
+}: {
+  devices: MapDevice[];
+  icons: Map<string, L.DivIcon>;
+  clusterIcon: (cluster: L.MarkerCluster) => L.DivIcon;
+  onSelect: (device: MapDevice) => void;
+}) {
+  const map = useMap();
+  const zoomIntoCluster = useCallback((event: L.LeafletMouseEvent) => {
+    const cluster = (event as L.LeafletMouseEvent & { layer: L.MarkerCluster }).layer;
+    map.fitBounds(cluster.getBounds(), {
+      padding: [48, 48],
+      maxZoom: 15,
+      animate: false,
+    });
+  }, [map]);
+
+  return (
+    <MarkerClusterGroup
+      iconCreateFunction={clusterIcon}
+      maxClusterRadius={80}
+      disableClusteringAtZoom={15}
+      zoomToBoundsOnClick={false}
+      spiderfyOnMaxZoom={false}
+      animate={false}
+      onClick={zoomIntoCluster}
+    >
+      {devices.map((device) => (
+        <Marker
+          key={device.id}
+          position={[device.lat, device.lng]}
+          icon={icons.get(device.id)}
+          // @ts-expect-error - markerColor is a custom option read back out in clusterIcon
+          markerColor={device.markerColor}
+          eventHandlers={{ click: () => onSelect(device) }}
+        />
+      ))}
+    </MarkerClusterGroup>
+  );
+}
+
 export default function MapComponent() {
   const { theme } = useTheme();
   const [devices, setDevices] = useState<MapDevice[]>([]);
@@ -231,18 +276,12 @@ export default function MapComponent() {
         <MapViewport />
         <ZoomWatcher onZoom={setZoom} />
         <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} />
-        <MarkerClusterGroup iconCreateFunction={clusterIcon} maxClusterRadius={80} disableClusteringAtZoom={15} zoomToBoundsOnClick>
-          {devices.map((device) => (
-            <Marker
-              key={device.id}
-              position={[device.lat, device.lng]}
-              icon={markerIcons.get(device.id)}
-              // @ts-expect-error - markerColor is a custom option read back out in clusterIcon
-              markerColor={device.markerColor}
-              eventHandlers={{ click: () => setSelectedDevice(device) }}
-            />
-          ))}
-        </MarkerClusterGroup>
+        <ClusteredDeviceMarkers
+          devices={devices}
+          icons={markerIcons}
+          clusterIcon={clusterIcon}
+          onSelect={setSelectedDevice}
+        />
       </MapContainer>
 
       <ClusterLegend />
