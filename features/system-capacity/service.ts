@@ -96,37 +96,18 @@ export async function getAlarmNotificationEmail(): Promise<string | null> {
 }
 
 // Uses SQL until RejectedConnectionAttempt queries are fully migrated to the client API.
-export async function getCapacityStatus(): Promise<CapacityStatus> {
-  const [settings, currentCount, rejections] = await Promise.all([
+export async function getCapacityStatus(gaId: string): Promise<CapacityStatus> {
+  const [settings, currentCount] = await Promise.all([
     getSystemSettings(),
-    db.device.count(),
-    db.$queryRaw<
-      Array<{ count: bigint; deviceSerialNo: string | null; attemptedAt: Date | null }>
-    >(Prisma.sql`
-      SELECT COUNT(*)::bigint AS "count",
-        (SELECT "deviceSerialNo" FROM "RejectedConnectionAttempt" WHERE "acknowledged" = false ORDER BY "attemptedAt" DESC LIMIT 1) AS "deviceSerialNo",
-        (SELECT "attemptedAt" FROM "RejectedConnectionAttempt" WHERE "acknowledged" = false ORDER BY "attemptedAt" DESC LIMIT 1) AS "attemptedAt"
-      FROM "RejectedConnectionAttempt" WHERE "acknowledged" = false`),
+    db.device.count({ where: { customer: { gaId } } }),
   ]);
   const maxCapacity = settings.maxMeterCapacity;
-  const rejection = rejections[0];
-  const rejectionCount = Number(rejection?.count ?? 0);
   return {
     maxCapacity,
     currentCount,
     atCapacity: maxCapacity !== null && currentCount >= maxCapacity,
-    unacknowledgedRejections: rejectionCount
-      ? {
-          count: rejectionCount,
-          mostRecent:
-            rejection.deviceSerialNo && rejection.attemptedAt
-              ? {
-                  deviceSerialNo: rejection.deviceSerialNo,
-                  attemptedAt: rejection.attemptedAt,
-                }
-              : null,
-        }
-      : null,
+    // Rejected connections do not carry a GA link, so never expose the global queue to an operator.
+    unacknowledgedRejections: null,
   };
 }
 

@@ -8,8 +8,11 @@ import {
   ReportMode,
 } from "@/features/reports";
 import { logApi } from "@/lib/api-log";
+import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function GET(req: NextRequest) {
+  const user = await requireApiUser();
+  if (!user) return unauthorizedResponse();
   const { searchParams } = new URL(req.url);
   const customerId = searchParams.get("customerId") || "";
   const startDate = searchParams.get("startDate") || "";
@@ -25,7 +28,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const report = await getCustomerReport({ customerId, startDate, endDate, frequency, mode });
+    const report = await getCustomerReport({ customerId, startDate, endDate, frequency, mode, gaId: user.gaId });
     logApi("GET /api/reports/customer → 200", { customerId, frequency, mode });
     return NextResponse.json(report);
   } catch (err: unknown) {

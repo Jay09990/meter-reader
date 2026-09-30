@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDeviceHourly } from "@/features/devices";
 import { logApi } from "@/lib/api-log";
+import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await requireApiUser();
+    if (!user) return unauthorizedResponse();
     const { id } = await params;
     const { searchParams } = new URL(req.url);
     const date = searchParams.get("date") || undefined;
     logApi("GET /api/devices/[id]/hourly", { id, date });
 
-    const hourlyData = await getDeviceHourly(id, date);
+    const hourlyData = await getDeviceHourly(id, user.gaId, date);
 
     if (!hourlyData) {
       logApi("GET /api/devices/[id]/hourly → 404", { id, date });

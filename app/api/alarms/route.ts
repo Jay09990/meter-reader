@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPaginatedAlarms } from "@/features/alarms";
 import { AlarmStatus, AlarmType, AlarmSeverity } from "@prisma/client";
 import { logApi } from "@/lib/api-log";
+import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function GET(req: NextRequest) {
   try {
+    const user = await requireApiUser();
+    if (!user) return unauthorizedResponse();
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "10", 10);
@@ -34,7 +37,7 @@ export async function GET(req: NextRequest) {
           : undefined;
 
     logApi("GET /api/alarms", { page, limit, status, type, severity, search, acknowledged });
-    const result = await getPaginatedAlarms({ page, limit, status, type, severity, search, acknowledged });
+    const result = await getPaginatedAlarms({ page, limit, status, type, severity, search, acknowledged, gaId: user.gaId });
     logApi("GET /api/alarms → 200", { totalCount: result.pagination.totalCount, returned: result.items.length });
     return NextResponse.json(result, { status: 200 });
   } catch (err: unknown) {

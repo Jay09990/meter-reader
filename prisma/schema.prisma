@@ -15,8 +15,49 @@ model GeographicalArea {
   parentId  String?
   createdAt DateTime           @default(now())
   customers Customer[]
+  users     User[]
   parent    GeographicalArea?  @relation("GAHierarchy", fields: [parentId], references: [id])
   children  GeographicalArea[] @relation("GAHierarchy")
+}
+
+model User {
+  id           String              @id @default(cuid())
+  email        String              @unique
+  username     String              @unique
+  passwordHash String
+  gaId         String
+  role         UserRole            @default(USER)
+  createdAt    DateTime            @default(now())
+  ga           GeographicalArea    @relation(fields: [gaId], references: [id], onDelete: Restrict)
+  sessions     AuthSession[]
+
+  @@index([gaId])
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+model AuthRateLimit {
+  key         String   @id
+  attempts    Int      @default(0)
+  windowStart DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([updatedAt])
 }
 
 model Customer {

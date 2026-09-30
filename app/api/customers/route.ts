@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { CustomerCategory, Prisma } from "@prisma/client";
 import { logApi } from "@/lib/api-log";
+import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await requireApiUser();
+    if (!user) return unauthorizedResponse();
     const body = await req.json();
     logApi("POST /api/customers", { body });
     if (!body.name || !body.gaId) {
@@ -18,7 +21,7 @@ export async function POST(req: NextRequest) {
       data: {
         name: body.name,
         address: body.address || null,
-        gaId: body.gaId,
+        gaId: user.gaId,
       },
     });
     logApi("POST /api/customers → 201", { id: customer.id, name: customer.name });
@@ -32,11 +35,13 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    const user = await requireApiUser();
+    if (!user) return unauthorizedResponse();
     const { searchParams } = new URL(req.url);
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
     const limit = Math.max(1, parseInt(searchParams.get("limit") || "20"));
     const search = searchParams.get("search") || "";
-    const gaId = searchParams.get("gaId") || "";
+    const gaId = user.gaId;
     const category = searchParams.get("category") || "";
 
     logApi("GET /api/customers", { page, limit, search, gaId, category });
@@ -52,7 +57,7 @@ export async function GET(req: NextRequest) {
         },
       ];
     }
-    if (gaId) where.gaId = gaId;
+    where.gaId = gaId;
     if (category) where.devices = { some: { category: category as CustomerCategory } };
 
     const [total, data] = await Promise.all([

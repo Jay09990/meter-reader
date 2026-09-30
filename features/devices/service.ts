@@ -347,11 +347,9 @@ export async function getPaginatedCustomersWithDevices(options: GetDevicesOption
   };
 }
 
-export async function getDeviceLatest(deviceIdOrSerial: string) {
+export async function getDeviceLatest(deviceIdOrSerial: string, gaId: string) {
   const device = await db.device.findFirst({
-    where: {
-      OR: [{ id: deviceIdOrSerial }, { deviceSerialNo: deviceIdOrSerial }],
-    },
+    where: { AND: [{ OR: [{ id: deviceIdOrSerial }, { deviceSerialNo: deviceIdOrSerial }] }, { customer: { gaId } }] },
     include: {
       readings: {
         take: 1,
@@ -480,11 +478,9 @@ export async function getDeviceLatest(deviceIdOrSerial: string) {
   };
 }
 
-export async function getDeviceHistory(deviceIdOrSerial: string, days: number = 30) {
+export async function getDeviceHistory(deviceIdOrSerial: string, gaId: string, days: number = 30) {
   const device = await db.device.findFirst({
-    where: {
-      OR: [{ id: deviceIdOrSerial }, { deviceSerialNo: deviceIdOrSerial }],
-    },
+    where: { AND: [{ OR: [{ id: deviceIdOrSerial }, { deviceSerialNo: deviceIdOrSerial }] }, { customer: { gaId } }] },
     select: { id: true },
   });
 
@@ -533,11 +529,9 @@ export async function getDeviceHistory(deviceIdOrSerial: string, days: number = 
   }));
 }
 
-export async function getDeviceHourly(deviceIdOrSerial: string, dateStr?: string) {
+export async function getDeviceHourly(deviceIdOrSerial: string, gaId: string, dateStr?: string) {
   const device = await db.device.findFirst({
-    where: {
-      OR: [{ id: deviceIdOrSerial }, { deviceSerialNo: deviceIdOrSerial }],
-    },
+    where: { AND: [{ OR: [{ id: deviceIdOrSerial }, { deviceSerialNo: deviceIdOrSerial }] }, { customer: { gaId } }] },
     select: { id: true },
   });
 
@@ -664,12 +658,11 @@ export async function getDeviceHourly(deviceIdOrSerial: string, dateStr?: string
 export async function getDeviceConsumptionSeries(
   deviceIdOrSerial: string,
   mode: import("@/lib/consumption-series").ConsumptionMode,
+  gaId: string,
 ) {
   // Resolve to internal id first
   const device = await db.device.findFirst({
-    where: {
-      OR: [{ id: deviceIdOrSerial }, { deviceSerialNo: deviceIdOrSerial }],
-    },
+    where: { AND: [{ OR: [{ id: deviceIdOrSerial }, { deviceSerialNo: deviceIdOrSerial }] }, { customer: { gaId } }] },
     select: { id: true },
   });
 
@@ -689,11 +682,10 @@ export async function getDeviceConsumptionSeries(
 export async function getDeviceConsumptionSeriesUncorrected(
   deviceIdOrSerial: string,
   mode: import("@/lib/consumption-series").ConsumptionMode,
+  gaId: string,
 ) {
   const device = await db.device.findFirst({
-    where: {
-      OR: [{ id: deviceIdOrSerial }, { deviceSerialNo: deviceIdOrSerial }],
-    },
+    where: { AND: [{ OR: [{ id: deviceIdOrSerial }, { deviceSerialNo: deviceIdOrSerial }] }, { customer: { gaId } }] },
     select: { id: true },
   });
 

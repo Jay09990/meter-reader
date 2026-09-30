@@ -6,6 +6,9 @@ export async function POST(req: NextRequest) {
   try {
     // Secret verification (if configured in env)
     const expectedSecret = process.env.INGESTION_SECRET;
+    if (process.env.NODE_ENV === "production" && !expectedSecret) {
+      return NextResponse.json({ error: "Ingestion authentication is not configured." }, { status: 503 });
+    }
     if (expectedSecret) {
       const providedSecret = req.headers.get("x-ingestion-secret");
       if (providedSecret !== expectedSecret) {

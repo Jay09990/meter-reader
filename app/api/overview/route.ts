@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { getFleetAnalytics, getFleetOverview } from "@/features/overview/service";
 import type { KpiRange } from "@/features/overview/service";
 import { logApi } from "@/lib/api-log";
+import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function GET(request: Request) {
   try {
+    const user = await requireApiUser();
+    if (!user) return unauthorizedResponse();
     const { searchParams } = new URL(request.url);
     const rawRange = searchParams.get("range") ?? "today";
     const range: KpiRange =
@@ -13,8 +16,8 @@ export async function GET(request: Request) {
     logApi("GET /api/overview", { range });
 
     const [overview, analytics] = await Promise.all([
-      getFleetOverview(),
-      getFleetAnalytics(range),
+      getFleetOverview(user.gaId),
+      getFleetAnalytics(range, user.gaId),
     ]);
 
     logApi("GET /api/overview → 200", { range });

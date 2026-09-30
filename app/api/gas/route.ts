@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { logApi } from "@/lib/api-log";
+import { requireAdminUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await requireAdminUser();
+    if (!user) return unauthorizedResponse();
     const body = await req.json();
     logApi("POST /api/gas", { body });
     if (!body.name) {

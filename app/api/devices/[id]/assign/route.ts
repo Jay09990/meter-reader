@@ -7,21 +7,25 @@ import {
   validateThresholdPairs,
 } from "@/lib/device-field-parse";
 import { logApi } from "@/lib/api-log";
+import { CustomerCategory } from "@prisma/client";
+import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await requireApiUser();
+    if (!user) return unauthorizedResponse();
     const { id } = await params;
     
     // Find device by id (CUID) or deviceSerialNo
     const foundDevice = await db.device.findFirst({
       where: {
-        OR: [
-          { id },
-          { deviceSerialNo: id }
-        ]
+        AND: [
+          { OR: [{ id }, { deviceSerialNo: id }] },
+          { OR: [{ customer: { gaId: user.gaId } }, { customerId: null }] },
+        ],
       }
     });
     if (!foundDevice) {
@@ -39,7 +43,7 @@ export async function PATCH(
       return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid coordinate" }, { status: 400 });
     }
 
-    let customerId = body.customerId;
+    let customerId = body.customerId || null;
 
     // Support creating a customer on the fly (provisioning)
     if (body.provision) {
@@ -50,6 +54,9 @@ export async function PATCH(
         });
         if (!customer) {
           return NextResponse.json({ error: "Selected customer not found" }, { status: 404 });
+        }
+        if (customer.gaId !== user.gaId) {
+          return NextResponse.json({ error: "Selected customer is outside your geographical area." }, { status: 403 });
         }
         customerId = customer.id;
       } else {
@@ -79,27 +86,25 @@ export async function PATCH(
           );
         }
 
-        let gaId = body.gaId;
-        if (!gaId) {
-          // Fallback: Find the first geographical area or create a default one
-          let ga = await db.geographicalArea.findFirst();
-          if (!ga) {
-            ga = await db.geographicalArea.create({
-              data: { name: "Default Area", code: "DEFAULT" },
-            });
-          }
-          gaId = ga.id;
-        }
-
         const customer = await db.customer.create({
           data: {
             name: trimmedName,
             address: body.address || null,
-            gaId: gaId,
+            gaId: user.gaId,
           },
         });
         customerId = customer.id;
       }
+    }
+
+    if (customerId) {
+      const customer = await db.customer.findFirst({ where: { id: customerId, gaId: user.gaId }, select: { id: true } });
+      if (!customer) return NextResponse.json({ error: "Selected customer is outside your geographical area." }, { status: 403 });
+    }
+
+    const category = body.category == null || body.category === "" ? null : body.category;
+    if (category !== null && (typeof category !== "string" || !Object.values(CustomerCategory).includes(category as CustomerCategory))) {
+      return NextResponse.json({ error: "Select a valid meter category." }, { status: 400 });
     }
 
     const pressureUpperLimit = optionalNumber(body.pressureUpperLimit);
@@ -126,7 +131,7 @@ export async function PATCH(
       where: { id: foundDevice.id },
       data: {
         customerId: customerId,
-        category: body.category === undefined ? undefined : body.category || null,
+        category: body.category === undefined ? undefined : category,
         meterSerialNo:
           body.meterSerialNo !== undefined ? body.meterSerialNo : undefined,
         latitude,

@@ -6,10 +6,13 @@ import {
   updateSystemSettings,
 } from "@/features/system-capacity/service";
 import { logApi } from "@/lib/api-log";
+import { requireAdminUser, unauthorizedResponse, isSameOriginRequest } from "@/lib/auth-api";
 
 // Reads and updates system-wide settings (capacity, alarm email, report schedule time).
 export async function GET() {
   try {
+    const user = await requireAdminUser();
+    if (!user) return unauthorizedResponse();
     const settings = await getSystemSettings();
     logApi("GET /api/system/settings → 200", { settings });
     return NextResponse.json(settings);
@@ -22,6 +25,9 @@ export async function GET() {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const user = await requireAdminUser();
+    if (!user) return unauthorizedResponse();
+    if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Request origin is not allowed." }, { status: 403 });
     const body: unknown = await req.json();
     if (typeof body !== "object" || body === null) {
       return NextResponse.json({ error: "Invalid body" }, { status: 400 });

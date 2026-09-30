@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPaginatedDevices } from "@/features/devices";
 import { logApi } from "@/lib/api-log";
+import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function GET(req: NextRequest) {
   try {
+    const user = await requireApiUser();
+    if (!user) return unauthorizedResponse();
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "10", 10);
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "all";
     const category = searchParams.get("category") || "";
-    const gaId = searchParams.get("gaId") || "";
+    const gaId = user.gaId;
 
     logApi("GET /api/devices", { page, limit, search, status, category, gaId });
     const result = await getPaginatedDevices({ page, limit, search, status, category, gaId });

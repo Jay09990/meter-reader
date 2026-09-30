@@ -9,6 +9,7 @@ export interface GetAlarmsOptions {
   severity?: import("@prisma/client").AlarmSeverity;
   search?: string;
   acknowledged?: boolean;
+  gaId: string;
 }
 
 export async function getPaginatedAlarms(options: GetAlarmsOptions) {
@@ -17,6 +18,7 @@ export async function getPaginatedAlarms(options: GetAlarmsOptions) {
   const skip = (page - 1) * limit;
 
   const where: Prisma.AlarmWhereInput = {};
+  where.device = { customer: { gaId: options.gaId } };
 
   if (options.status) {
     where.status = options.status;
@@ -93,9 +95,9 @@ export async function getPaginatedAlarms(options: GetAlarmsOptions) {
   };
 }
 
-export async function getOpenAlarmCount() {
+export async function getOpenAlarmCount(gaId: string) {
   const count = await db.alarm.count({
-    where: { status: AlarmStatus.OPEN, acknowledged: false },
+    where: { status: AlarmStatus.OPEN, acknowledged: false, device: { customer: { gaId } } },
   });
   return count;
 }

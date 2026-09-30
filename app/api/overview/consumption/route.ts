@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { getFleetConsumptionSeries } from "@/features/overview/service";
 import type { ConsumptionMode } from "@/lib/consumption-series";
 import { logApi } from "@/lib/api-log";
+import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function GET(request: Request) {
   try {
+    const user = await requireApiUser();
+    if (!user) return unauthorizedResponse();
     const { searchParams } = new URL(request.url);
     const rawPeriod = searchParams.get("period") ?? "daily";
     const period: ConsumptionMode =
@@ -13,7 +16,7 @@ export async function GET(request: Request) {
         : "daily";
 
     logApi("GET /api/overview/consumption", { period });
-    const consumption = await getFleetConsumptionSeries(period);
+    const consumption = await getFleetConsumptionSeries(period, user.gaId);
 
     logApi("GET /api/overview/consumption → 200", { period, points: consumption.length });
     return NextResponse.json({ consumption }, { status: 200 });

@@ -84,6 +84,7 @@ export interface GetCustomerReportParams {
   endDate: string;
   frequency?: DataFrequency;
   mode?: ReportMode;
+  gaId?: string;
 }
 
 function resampleByFrequency<T extends { receivedAt: string; readingDate: string }>(
@@ -235,6 +236,7 @@ export async function getCustomerReport({
   endDate,
   frequency = "1d",
   mode = "dateRange",
+  gaId,
 }: GetCustomerReportParams): Promise<CustomerReport> {
   if (!customerId) {
     throw new ReportValidationError("Customer ID is required");
@@ -261,7 +263,7 @@ export async function getCustomerReport({
   const rawId = Array.isArray(customerId) ? customerId : [customerId];
 
   if (rawId.length === 1 && (rawId[0] === "all" || rawId[0] === "")) {
-    const allCusts = await db.customer.findMany({ select: { id: true } });
+    const allCusts = await db.customer.findMany({ where: gaId ? { gaId } : undefined, select: { id: true } });
     customerIds = allCusts.map((c) => c.id);
   } else {
     customerIds = Array.isArray(customerId)
@@ -274,12 +276,13 @@ export async function getCustomerReport({
   }
 
   const customers = await db.customer.findMany({
-    where: { id: { in: customerIds } },
+    where: { id: { in: customerIds }, ...(gaId ? { gaId } : {}) },
     include: { ga: { select: { name: true } } },
   });
   if (customers.length === 0) {
     throw new ReportNotFoundError("No customers found");
   }
+  customerIds = customers.map((customer) => customer.id);
 
   const customerName =
     customers.length === 1
@@ -293,7 +296,7 @@ export async function getCustomerReport({
 
   const readings = await db.reading.findMany({
     where: {
-      device: { customerId: { in: customerIds } },
+      device: { customerId: { in: customerIds }, ...(gaId ? { customer: { gaId } } : {}) },
       readingDate: { gte: start, lte: endOfDay },
     },
     include: {
@@ -324,7 +327,7 @@ export async function getCustomerReport({
   // has readings in this period. Range mode uses this so a meter with no readings
   // still gets its own row instead of silently disappearing from the report.
   const customerDevices = await db.device.findMany({
-    where: { customerId: { in: customerIds } },
+    where: { customerId: { in: customerIds }, ...(gaId ? { customer: { gaId } } : {}) },
     select: {
       id: true,
       deviceSerialNo: true,

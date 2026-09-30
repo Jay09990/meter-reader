@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, Menu } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Bell, LogOut, Menu } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
 import { RefreshIntervalSelect } from "./RefreshIntervalSelect";
 import { CapacityBanner } from "./capacity-banner";
@@ -15,7 +16,10 @@ interface HeaderProps {
 
 // Header owns global dashboard controls and the live alarm count indicator.
 export function Header({ onOpenMobileSidebar }: HeaderProps) {
+  const router = useRouter();
   const [unseenAlarmCount, setUnseenAlarmCount] = useState<number | null>(null);
+  const [identity, setIdentity] = useState<{ username: string; gaName: string } | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   const fetchAlarmCount = () => {
     fetch("/api/alarms/count")
@@ -27,6 +31,23 @@ export function Header({ onOpenMobileSidebar }: HeaderProps) {
   };
   useEffect(fetchAlarmCount, []);
   useAutoRefresh(fetchAlarmCount);
+
+  useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => { if (data?.user) setIdentity(data.user); })
+      .catch(() => {});
+  }, []);
+
+  async function signOut() {
+    setSigningOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      router.replace("/login");
+      router.refresh();
+    }
+  }
 
   return (
     <header className="sticky top-0 z-10 flex min-h-16 items-center justify-between gap-3 border-b border-border bg-background/80 px-3 py-3 text-foreground backdrop-blur transition-colors sm:px-6">
@@ -79,6 +100,11 @@ export function Header({ onOpenMobileSidebar }: HeaderProps) {
           <span className="h-2 w-2 rounded-full" style={{background:'var(--clr-accent-lo)'}} />
           <span>Live Environment</span>
         </div>
+        {identity && <span className="hidden max-w-32 truncate text-xs text-muted-foreground xl:inline" title={`${identity.username} · ${identity.gaName}`}>{identity.username} · {identity.gaName}</span>}
+        <Button type="button" variant="outline" size="sm" disabled={signingOut} onClick={signOut} className="h-9 gap-1.5 px-2.5 text-xs">
+          <LogOut className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">{signingOut ? "Signing out…" : "Sign out"}</span>
+        </Button>
       </div>
     </header>
   );

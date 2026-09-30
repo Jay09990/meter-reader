@@ -8,6 +8,8 @@ import {
   validateThresholdPairs,
 } from "@/lib/device-field-parse";
 import { logApi } from "@/lib/api-log";
+import { CustomerCategory } from "@prisma/client";
+import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 /**
  * PATCH /api/devices/[id] — post-provisioning update of identity/location/model
@@ -19,11 +21,16 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await requireApiUser();
+    if (!user) return unauthorizedResponse();
     const { id } = await params;
 
     const foundDevice = await db.device.findFirst({
       where: {
-        OR: [{ id }, { deviceSerialNo: id }],
+        AND: [
+          { OR: [{ id }, { deviceSerialNo: id }] },
+          { customer: { gaId: user.gaId } },
+        ],
       },
     });
     if (!foundDevice) {
@@ -91,11 +98,16 @@ export async function PATCH(
       return NextResponse.json({ error: pairError }, { status: 400 });
     }
 
+    const category = body.category == null || body.category === "" ? null : body.category;
+    if (category !== null && (typeof category !== "string" || !Object.values(CustomerCategory).includes(category as CustomerCategory))) {
+      return NextResponse.json({ error: "Select a valid meter category." }, { status: 400 });
+    }
+
     const device = await db.device.update({
       where: { id: foundDevice.id },
       data: {
         meterSerialNo: optionalString(body.meterSerialNo),
-        category: body.category === undefined ? undefined : body.category || null,
+        category: body.category === undefined ? undefined : category,
         meterSize: optionalString(body.meterSize),
         firmwareVersion: optionalString(body.firmwareVersion),
         hardwareVersion: optionalString(body.hardwareVersion),

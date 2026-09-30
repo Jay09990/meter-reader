@@ -2,11 +2,15 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getMapMarkerColor } from "@/lib/device-status";
 import { logApi } from "@/lib/api-log";
+import { requireApiUser, unauthorizedResponse } from "@/lib/auth-api";
 
 export async function GET() {
   try {
+    const user = await requireApiUser();
+    if (!user) return unauthorizedResponse();
     const devices = await db.device.findMany({
       where: {
+        customer: { gaId: user.gaId },
         latitude: { not: null },
         longitude: { not: null },
       },
