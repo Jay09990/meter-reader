@@ -14,7 +14,7 @@ export interface CapacityStatus {
 export interface SystemSettingsValues {
   maxMeterCapacity: number | null;
   alarmNotificationEmail: string | null;
-  /** HH:MM 24-hour UTC string, e.g. "07:00". Defaults to "07:00" if not set. */
+  /** HH:MM 24-hour West Africa Time string, e.g. "07:00". Defaults to "07:00" if not set. */
   reportScheduleTime: string;
 }
 

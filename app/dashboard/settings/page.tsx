@@ -182,7 +182,7 @@ export default function SettingsPage() {
             <form onSubmit={saveReportTime} className="space-y-4">
               <div className="space-y-2">
                 <label htmlFor="report-time" className="text-sm font-medium text-foreground">
-                  Send daily report at (UTC)
+                  Send daily report at (Nigeria time, WAT)
                 </label>
                 <Input
                   id="report-time"
@@ -194,8 +194,8 @@ export default function SettingsPage() {
                 />
                 <p className="text-xs text-muted-foreground">
                   The daily consumption report will be emailed to the alarm notification address
-                  at this time every day (UTC). Defaults to{" "}
-                  <code className="text-[11px]">07:00 UTC</code>. Requires{" "}
+                  at this time every day in Nigeria time (WAT, UTC+1). Defaults to{" "}
+                  <code className="text-[11px]">07:00 WAT</code>. Requires{" "}
                   <code className="text-[11px]">RESEND_API_KEY</code> and an alarm email to be
                   set.
                 </p>

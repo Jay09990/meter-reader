@@ -5,7 +5,7 @@ import { logApi } from "@/lib/api-log";
 /**
  * GET /api/cron/missing-data-alarms
  *
- * Invoked automatically by Vercel Cron (see vercel.json) — Vercel always
+ * Invoked automatically at 01:00 WAT / 00:00 UTC by Vercel Cron (see vercel.json). Vercel always
  * calls cron endpoints via GET and cannot send a request body, so this
  * always runs against the default target date (yesterday).
  * Vercel automatically attaches `Authorization: Bearer <CRON_SECRET>`

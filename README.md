@@ -78,3 +78,13 @@ For detailed specifications, see the `HELPER_MD'S` directory:
 - [PRD.md](./HELPER_MD'S/PRD.md) - Product Requirements Document
 - [ARCHITECTURE-DESIGN.md](./HELPER_MD'S/ARCHITECTURE-DESIGN.md) - Technical Design
 - [DATA-FLOW.md](./HELPER_MD'S/DATA-FLOW.md) - Detailed ingestion and processing logic
+
+## Daily report schedule
+
+The `Daily report scheduler` GitHub Actions workflow checks the configured
+report time every 10 minutes and triggers the protected Frontend route during
+its 10-minute window. The setting uses Nigeria time (WAT). Configure the
+repository secrets `FRONTEND_BASE_URL` and `CRON_SECRET` before enabling the
+workflow, and apply the Prisma migrations before deployment. Scheduled
+workflows run from the default branch; for public repositories, GitHub may
+disable them after 60 days without repository activity.

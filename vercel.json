@@ -2,11 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/missing-data-alarms",
-      "schedule": "0 1 * * *"
-    },
-    {
-      "path": "/api/cron/daily-report",
-      "schedule": "0 7 * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }

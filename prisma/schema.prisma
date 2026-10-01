@@ -164,6 +164,11 @@ model SystemSettings {
   reportScheduleTime     String?  @default("07:00")
 }
 
+model DailyReportDelivery {
+  forDate   DateTime @id @db.Date
+  claimedAt DateTime @default(now())
+}
+
 model RejectedConnectionAttempt {
   id             String   @id @default(cuid())
   deviceSerialNo String

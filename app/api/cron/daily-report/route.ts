@@ -1,17 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
+import { db } from "@/lib/db";
+import { getYesterdayNigeriaDate } from "@/lib/nigeria-date";
 import { sendDailyReport } from "@/features/reports/daily-report-email";
 import { logApi } from "@/lib/api-log";
+
+/** Claim the unique report date before sending so concurrent triggers cannot duplicate the email. */
+async function sendDailyReportOnce(forDateStr: string) {
+  const forDate = new Date(`${forDateStr}T00:00:00.000Z`);
+  try {
+    await db.dailyReportDelivery.create({ data: { forDate } });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return { sent: false, skipped: "Daily report already claimed for this date", customersIncluded: 0 };
+    }
+    throw error;
+  }
+
+  return sendDailyReport(forDateStr);
+}
 
 /**
  * GET /api/cron/daily-report
  *
- * Invoked automatically by Vercel Cron at the time configured in vercel.json
- * (default 07:00 UTC). Sends yesterday's consumption summary to the configured
+ * Invoked by an external scheduler at the configured Nigeria time. Sends
+ * yesterday's Nigeria-calendar-day consumption summary to the configured
  * alarm notification email.
  *
- * The schedule time is user-configurable in Settings → "Daily Report Schedule".
- * Changing it requires updating vercel.json's cron schedule OR using an
- * external scheduler that calls this endpoint via POST at the desired time.
+ * The schedule time is user-configurable in Settings → "Daily Report Schedule" (Nigeria time).
+ * Repeated calls for the same report date are safely skipped.
  *
  * Protected by CRON_SECRET (same pattern as other cron routes).
  */
@@ -24,12 +41,10 @@ export async function GET(req: NextRequest) {
 
   logApi("GET /api/cron/daily-report");
 
-  const yesterday = new Date();
-  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-  const forDateStr = yesterday.toISOString().split("T")[0];
+  const forDateStr = getYesterdayNigeriaDate().toISOString().split("T")[0];
 
   try {
-    const result = await sendDailyReport(forDateStr);
+    const result = await sendDailyReportOnce(forDateStr);
     logApi("GET /api/cron/daily-report → 200", { forDateStr, result });
     return NextResponse.json({ ok: true, forDate: forDateStr, ...result }, { status: 200 });
   } catch (err) {
@@ -69,18 +84,14 @@ export async function POST(req: NextRequest) {
       }
       forDateStr = body.forDate;
     } else {
-      const yesterday = new Date();
-      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-      forDateStr = yesterday.toISOString().split("T")[0];
+      forDateStr = getYesterdayNigeriaDate().toISOString().split("T")[0];
     }
   } catch {
-    const yesterday = new Date();
-    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-    forDateStr = yesterday.toISOString().split("T")[0];
+    forDateStr = getYesterdayNigeriaDate().toISOString().split("T")[0];
   }
 
   try {
-    const result = await sendDailyReport(forDateStr);
+    const result = await sendDailyReportOnce(forDateStr);
     logApi("POST /api/cron/daily-report → 200", { forDateStr, result });
     return NextResponse.json({ ok: true, forDate: forDateStr, ...result }, { status: 200 });
   } catch (err) {
