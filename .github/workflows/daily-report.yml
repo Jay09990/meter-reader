@@ -26,7 +26,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "$FRONTEND_BASE_URL" || -z "$CRON_SECRET" ]]; then
+          if [[ -z "$FRONTEND_BASE_URL" && -z "$CRON_SECRET" ]]; then
             echo "FRONTEND_BASE_URL and CRON_SECRET must be configured as secrets for the Production environment."
             exit 1
           fi
