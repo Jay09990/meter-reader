@@ -13,12 +13,7 @@ import { RawIngestPayload, ParsedReading } from "./types";
  * where it can roll back to the previous day. That's non-deterministic
  * behavior we don't want anywhere near ingestion.
  *
- * This only cares about the YYYY-MM-DD prefix, which is present and
- * unambiguous in every format we expect (date-only "2026-07-25",
- * space-separated "2026-07-25 01:09:00", or full ISO with offset
- * "2026-07-25T01:09:00+05:30") — so it deliberately never looks at the
- * time-of-day or timezone portion, both to fix the bug and because a
- * `Reading` row's identity is a calendar day, not a moment.
+ * This validates the YYYY-MM-DD portion before the full timestamp is parsed.
  */
 function extractCalendarDateUTC(str: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(str.trim());
@@ -42,6 +37,22 @@ function extractCalendarDateUTC(str: string): Date | null {
   return date;
 }
 
+/** Parse device timestamps deterministically, treating timezone-less values as UTC. */
+function parseReadingTimestamp(value: string): Date | null {
+  const trimmed = value.trim();
+  if (!extractCalendarDateUTC(trimmed)) return null;
+
+  // Device payloads commonly omit a timezone; interpreting those as local time
+  // would make the stored reading moment depend on the server's configured zone.
+  const normalized = trimmed.includes(" ") && !trimmed.includes("T")
+    ? trimmed.replace(" ", "T")
+    : trimmed;
+  const timestamp = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized)
+    ? new Date(normalized)
+    : new Date(`${normalized}Z`);
+  return Number.isNaN(timestamp.getTime()) ? null : timestamp;
+}
+
 export function parseIngestPayload(body: unknown): ParsedReading {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     throw new Error("Invalid payload: Body must be a JSON object");
@@ -59,18 +70,16 @@ export function parseIngestPayload(body: unknown): ParsedReading {
     throw new Error("Invalid payload: Missing or empty deviceSerialNo");
   }
 
-  // Determine reading date — prefer readingDate, fall back to timestamp,
-  // fall back to "today" (UTC). CHANGED: no longer routes through
-  // `new Date(str)` for the primary parse — see extractCalendarDateUTC
-  // above for why.
+  // Prefer the payload's measurement timestamp, then its legacy timestamp,
+  // and finally today's UTC date for older payloads without either field.
   let normalizedDate: Date | null = null;
 
   if (payload.readingDate && typeof payload.readingDate === "string") {
-    normalizedDate = extractCalendarDateUTC(payload.readingDate);
+    normalizedDate = parseReadingTimestamp(payload.readingDate);
   }
 
   if (!normalizedDate && payload.timestamp && typeof payload.timestamp === "string") {
-    normalizedDate = extractCalendarDateUTC(payload.timestamp);
+    normalizedDate = parseReadingTimestamp(payload.timestamp);
   }
 
   if (!normalizedDate) {

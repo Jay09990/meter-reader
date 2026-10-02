@@ -37,7 +37,6 @@ interface DeviceItem {
   status: "ONLINE" | "OFFLINE" | "ALERT" | "NEW";
   latestReading: {
     readingDate: string;
-    receivedAt: string;
     correctedVolumeVb: number | null;
     gasPressure: number | null;
     gasTemperature: number | null;
@@ -65,8 +64,8 @@ export default function MetersPage() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchDevices = useCallback(
-    (pageNum: number = 1) => {
-      setLoading(true);
+    (pageNum: number = 1, showLoading = true) => {
+      if (showLoading) setLoading(true);
       setError(null);
       const params = new URLSearchParams({
         page: pageNum.toString(),
@@ -83,11 +82,11 @@ export default function MetersPage() {
         .then((data) => {
           setDevices(data.items || []);
           setPagination(data.pagination);
-          setLoading(false);
+          if (showLoading) setLoading(false);
         })
         .catch((err) => {
           setError(err.message);
-          setLoading(false);
+          if (showLoading) setLoading(false);
         });
     },
     [search, statusFilter]
@@ -97,7 +96,7 @@ export default function MetersPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDevices(1);
   }, [fetchDevices]);
-  useAutoRefresh(() => fetchDevices(pagination.page));
+  useAutoRefresh(() => fetchDevices(pagination.page, false));
 
   return (
     <div className="space-y-6 w-full">
@@ -196,8 +195,8 @@ export default function MetersPage() {
                       : "Unassigned"}
                   </TableCell>
                   <TableCell className="font-mono text-sm text-muted-foreground">
-                    {device.latestReading?.receivedAt
-                      ? formatLocalTs(device.latestReading.receivedAt)
+                    {device.latestReading?.readingDate
+                      ? formatLocalTs(device.latestReading.readingDate)
                       : (device.lastSeenAt
                         ? formatLocalTs(device.lastSeenAt)
                         : "No data")}

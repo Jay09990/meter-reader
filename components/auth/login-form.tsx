@@ -2,7 +2,6 @@
 
 // Reusable themed credential form for operator and administrator sign-in.
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff, LoaderCircle, LockKeyhole, UserRound } from "lucide-react";
 import { AuthShell, FieldMessage } from "@/components/auth/auth-shell";
@@ -10,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export function LoginForm({ adminOnly = false }: { adminOnly?: boolean }) {
-  const router = useRouter();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -33,8 +31,8 @@ export function LoginForm({ adminOnly = false }: { adminOnly?: boolean }) {
       const safePath = nextPath?.startsWith("/") && !nextPath.startsWith("//") && !nextPath.startsWith("/api/")
         ? nextPath
         : "/dashboard";
-      router.replace(safePath);
-      router.refresh();
+      // A document navigation ensures the dashboard request includes the new session cookie.
+      window.location.replace(safePath);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to sign in.");
     } finally {

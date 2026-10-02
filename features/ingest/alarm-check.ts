@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { AlarmType } from "@prisma/client";
 import { notifyAlarmCreated } from "@/features/alarms/notify";
-import { toIsoDate } from "@/lib/financial-calendar";
+import { getUtcDayStart, toIsoDate } from "@/lib/financial-calendar";
 
 export async function checkGasOutOfRangeAlarm(
   deviceId: string,
@@ -12,13 +12,15 @@ export async function checkGasOutOfRangeAlarm(
     return;
   }
 
+  const alarmDate = getUtcDayStart(readingDate);
+
   // Get AlarmSettings
   const settings = await db.alarmSettings.findUnique({ where: { id: "singleton" } });
   const deviationPercent = settings?.gasDeviationPercent ?? 20;
   const deviationWindowDays = settings?.gasDeviationWindowDays ?? 7;
 
   // Get trailing N days of readings prior to current readingDate
-  const windowStart = new Date(readingDate);
+  const windowStart = new Date(alarmDate);
   windowStart.setUTCDate(windowStart.getUTCDate() - deviationWindowDays);
 
   // CHANGED: a device can now have multiple readings per day. Averaging
@@ -32,13 +34,13 @@ export async function checkGasOutOfRangeAlarm(
       deviceId,
       readingDate: {
         gte: windowStart,
-        lt: readingDate,
+        lt: alarmDate,
       },
       correctedVolumeVb: {
         not: null,
       },
     },
-    orderBy: [{ readingDate: "asc" }, { receivedAt: "desc" }],
+    orderBy: [{ readingDate: "desc" }, { receivedAt: "desc" }],
     select: {
       readingDate: true,
       correctedVolumeVb: true,
@@ -74,7 +76,7 @@ export async function checkGasOutOfRangeAlarm(
     const direction = currentVb > average ? "above" : "below";
     const cause = `Corrected volume (${currentVb.toFixed(2)} Sm³) is ${pctDiff}% ${direction} the ${deviationWindowDays}-day average (${average.toFixed(2)} Sm³)`;
 
-    const existing = await db.alarm.findUnique({ where: { deviceId_type_forDate: { deviceId, type: AlarmType.GAS_OUT_OF_RANGE, forDate: readingDate } } });
+    const existing = await db.alarm.findUnique({ where: { deviceId_type_forDate: { deviceId, type: AlarmType.GAS_OUT_OF_RANGE, forDate: alarmDate } } });
     if (existing) {
       await db.alarm.update({ where: { id: existing.id }, data: { gasValue: currentVb, averageValue: average, cause } });
     } else {
@@ -86,14 +88,14 @@ export async function checkGasOutOfRangeAlarm(
           customer: { select: { name: true, ga: { select: { name: true } } } },
         },
       });
-      await db.alarm.create({ data: { deviceId, type: AlarmType.GAS_OUT_OF_RANGE, severity: "WARNING", forDate: readingDate, gasValue: currentVb, averageValue: average, cause } });
+      await db.alarm.create({ data: { deviceId, type: AlarmType.GAS_OUT_OF_RANGE, severity: "WARNING", forDate: alarmDate, gasValue: currentVb, averageValue: average, cause } });
       if (device) {
         await notifyAlarmCreated({
           deviceSerialNo: device.deviceSerialNo,
           type: AlarmType.GAS_OUT_OF_RANGE,
           severity: "WARNING",
           cause,
-          forDate: readingDate,
+          forDate: alarmDate,
           meterSerialNo: device.meterSerialNo,
           customerName: device.customer?.name,
           gaName: device.customer?.ga?.name,
@@ -130,15 +132,17 @@ export async function checkMeterFailureAlarm(
   // Both volumes required to compare
   if (currentVb == null || currentVm == null) return;
 
+  const alarmDate = getUtcDayStart(readingDate);
+
   // Resolve yesterday's boundary date (same pattern as threshold-check.ts)
-  const yesterday = new Date(readingDate.getTime() - 86_400_000);
+  const yesterday = new Date(alarmDate.getTime() - 86_400_000);
   const yesterdayIso = toIsoDate(yesterday);
 
   // Fetch the latest reading on or before yesterday for each volume in one query
   const prevReading = await db.reading.findFirst({
     where: {
       deviceId,
-      readingDate: { lte: yesterday },
+      readingDate: { lt: alarmDate },
       correctedVolumeVb: { not: null },
       uncorrectedVolumeVm: { not: null },
     },
@@ -162,7 +166,7 @@ export async function checkMeterFailureAlarm(
   if (divergence < 0.1) return; // within acceptable tolerance
 
   const cause =
-    `Meter failure detected for ${yesterdayIso} → ${readingDate.toISOString().split("T")[0]}: ` +
+    `Meter failure detected for ${yesterdayIso} → ${alarmDate.toISOString().split("T")[0]}: ` +
     `uncorrected consumption (${uncorrectedDelta.toFixed(3)} m³) exceeds corrected consumption ` +
     `(${correctedDelta.toFixed(3)} Sm³) by ${divergence.toFixed(3)} — threshold is 0.1.`;
 
@@ -176,7 +180,7 @@ export async function checkMeterFailureAlarm(
   });
 
   const existing = await db.alarm.findUnique({
-    where: { deviceId_type_forDate: { deviceId, type: AlarmType.METER_FAILURE, forDate: readingDate } },
+    where: { deviceId_type_forDate: { deviceId, type: AlarmType.METER_FAILURE, forDate: alarmDate } },
   });
 
   if (existing) {
@@ -193,7 +197,7 @@ export async function checkMeterFailureAlarm(
       deviceId,
       type: AlarmType.METER_FAILURE,
       severity: "CRITICAL",
-      forDate: readingDate,
+      forDate: alarmDate,
       gasValue: divergence,       // the actual divergence value
       averageValue: 0.1,          // the threshold
       cause,
@@ -207,7 +211,7 @@ export async function checkMeterFailureAlarm(
       type: AlarmType.METER_FAILURE,
       severity: "CRITICAL",
       cause,
-      forDate: readingDate,
+      forDate: alarmDate,
       meterSerialNo: device.meterSerialNo,
       customerName: device.customer?.name,
       gaName: device.customer?.ga?.name,

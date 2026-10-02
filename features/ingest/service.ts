@@ -64,12 +64,8 @@ export async function processIngestPayload(rawBody: unknown) {
   });
 
 
-  // 2. Create Reading — CHANGED: every push is now its own row. No more
-  // upsert-by-(deviceId, readingDate); a second push for the same day no
-  // longer overwrites the first, it's appended. "Which row is authoritative
-  // for a given day" is now a read-time decision (latest by receivedAt —
-  // see features/devices/service.ts and features/ingest/alarm-check.ts),
-  // not an ingest-time one.
+  // Store every push; measurement timestamps order readings while receivedAt
+  // remains the arrival timestamp for audit and deterministic tie-breaking.
   const reading = await db.reading.create({
     data: {
       deviceId: device.id,
@@ -96,8 +92,6 @@ export async function processIngestPayload(rawBody: unknown) {
     },
   });
 
-  // 3. Run inline alarm checks (unchanged call site — logic inside now
-  // accounts for multiple readings/day, see alarm-check.ts)
   await checkGasOutOfRangeAlarm(device.id, parsed.readingDate, parsed.correctedVolumeVb);
   await checkDeviceThresholds(device.id, parsed.readingDate, {
     gasPressure: parsed.gasPressure ?? null,
@@ -105,8 +99,7 @@ export async function processIngestPayload(rawBody: unknown) {
     batteryLevel: parsed.batteryLevel ?? null,
     correctedVolumeVb: parsed.correctedVolumeVb ?? null,
   });
-  // Check for meter failure: fires when uncorrected consumption diverges from
-  // corrected consumption by >= 0.1 in today's delta (not raw totalizer).
+  // Meter failure compares corrected and uncorrected daily deltas.
   await checkMeterFailureAlarm(device.id, parsed.readingDate, parsed.correctedVolumeVb, parsed.uncorrectedVolumeVm);
 
   return {

@@ -60,7 +60,6 @@ interface DeviceItem {
   status: "NEW" | "ONLINE" | "OFFLINE" | "ALERT";
   latestReading: {
     readingDate: string;
-    receivedAt: string;
     correctedVolumeVb: number | null;
     gasPressure: number | null;
     gasTemperature: number | null;
@@ -914,8 +913,8 @@ export default function CustomersPage() {
                     <p className="truncate"><strong>Address:</strong> {customer.address || "—"}</p>
                     <p>
                       <strong>Last Updated:</strong>{" "}
-                      {leadingDevice?.latestReading?.receivedAt
-                        ? formatLocalTs(leadingDevice.latestReading.receivedAt)
+                      {leadingDevice?.latestReading?.readingDate
+                        ? formatLocalTs(leadingDevice.latestReading.readingDate)
                         : (leadingDevice?.lastSeenAt ? formatLocalTs(leadingDevice.lastSeenAt) : "No readings")}
                     </p>
                   </div>

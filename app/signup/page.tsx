@@ -2,7 +2,6 @@
 
 // Account registration with explicit GA confirmation and inline password guidance.
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Check, CheckCircle2, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { AuthShell, FieldMessage } from "@/components/auth/auth-shell";
@@ -23,7 +22,6 @@ const PASSWORD_RULES = [
 ] as const;
 
 export default function SignupPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [gaId, setGaId] = useState("");
@@ -83,8 +81,8 @@ export default function SignupPage() {
         setFieldErrors(data.fields ?? {});
         throw new Error(data.error || "Unable to create your account.");
       }
-      router.replace("/dashboard");
-      router.refresh();
+      // Load the protected dashboard after the registration response sets its session cookie.
+      window.location.replace("/dashboard");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to create your account.");
     } finally {

@@ -18,6 +18,11 @@ function utcDay(year: number, month: number, day: number): Date {
   return new Date(Date.UTC(year, month, day));
 }
 
+/** Return a timestamp's UTC calendar date at midnight. */
+export function getUtcDayStart(date: Date): Date {
+  return utcDay(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**

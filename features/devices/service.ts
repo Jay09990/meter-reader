@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { AlarmSeverity, AlarmStatus, Prisma } from "@prisma/client";
 import { computeDeviceStatus } from "@/lib/device-status";
+import { normalizeHourlyConsumption, type HourlyConsumptionPoint } from "@/lib/hourly-consumption";
 
 export interface GetDevicesOptions {
   page?: number;
@@ -173,7 +174,7 @@ export async function getPaginatedDevices(options: GetDevicesOptions) {
       include: {
         readings: {
           take: 1,
-          orderBy: { receivedAt: "desc" },
+          orderBy: [{ readingDate: "desc" }, { receivedAt: "desc" }],
           select: {
             readingDate: true,
             receivedAt: true,
@@ -290,7 +291,7 @@ export async function getPaginatedCustomersWithDevices(options: GetDevicesOption
           include: {
             readings: {
               take: 1,
-              orderBy: { receivedAt: "desc" },
+              orderBy: [{ readingDate: "desc" }, { receivedAt: "desc" }],
               select: {
                 readingDate: true,
                 receivedAt: true,
@@ -353,8 +354,7 @@ export async function getDeviceLatest(deviceIdOrSerial: string, gaId?: string) {
     include: {
       readings: {
         take: 1,
-        // CHANGED: same reasoning as getPaginatedDevices above.
-        orderBy: { receivedAt: "desc" },
+        orderBy: [{ readingDate: "desc" }, { receivedAt: "desc" }],
       },
       alarms: {
         where: { status: "OPEN" },
@@ -489,25 +489,13 @@ export async function getDeviceHistory(deviceIdOrSerial: string, gaId: string | 
   const startDate = new Date();
   startDate.setUTCDate(startDate.getUTCDate() - days);
 
-  // CHANGED (per request): the trend chart now plots EVERY push in range,
-  // not just the latest one per day — no more latest-per-day collapse.
-  // Ordered chronologically by receivedAt (actual arrival order), which
-  // is what should drive the chart's x-axis, not readingDate alone (two
-  // pushes tagged with the same readingDate still need a stable, real
-  // order to plot left-to-right correctly).
-  //
-  // NOTE: this is deliberately scoped to the trend chart only. KPI cards
-  // (getDeviceLatest, the readings included in getPaginatedDevices) and
-  // the gas-out-of-range alarm baseline (features/ingest/alarm-check.ts)
-  // still use "latest push per day" / "latest push overall" — those
-  // represent "the current true value," which is a different question
-  // from "show me the whole history," so they weren't touched here.
+  // Plot each push in measurement-time order; receivedAt only breaks timestamp ties.
   const readings = await db.reading.findMany({
     where: {
       deviceId: device.id,
       readingDate: { gte: startDate },
     },
-    orderBy: { receivedAt: "asc" },
+    orderBy: [{ readingDate: "asc" }, { receivedAt: "asc" }],
     select: {
       readingDate: true,
       receivedAt: true,
@@ -520,8 +508,7 @@ export async function getDeviceHistory(deviceIdOrSerial: string, gaId: string | 
 
   return readings.map((r) => ({
     date: r.readingDate.toISOString().split("T")[0],
-    timestamp: r.receivedAt.toISOString(), // NEW — lets the frontend tell
-    // apart multiple same-day pushes on the chart's x-axis
+    timestamp: r.readingDate.toISOString(),
     correctedVolumeVb: r.correctedVolumeVb,
     uncorrectedVolumeVm: r.uncorrectedVolumeVm,
     gasPressure: r.gasPressure,
@@ -547,9 +534,9 @@ export async function getDeviceHourly(deviceIdOrSerial: string, gaId: string | u
     reading = await db.reading.findFirst({
       where: {
         deviceId: device.id,
-        readingDate: normalized,
+        readingDate: { gte: normalized, lt: new Date(normalized.getTime() + 86_400_000) },
       },
-      orderBy: { receivedAt: "desc" },
+      orderBy: [{ readingDate: "desc" }, { receivedAt: "desc" }],
       select: {
         readingDate: true,
         hourlyConsumption: true,
@@ -592,29 +579,7 @@ export async function getDeviceHourly(deviceIdOrSerial: string, gaId: string | u
 
   if (!reading) return null;
 
-  let raw = reading.hourlyConsumption as any;
-  const items: Array<{ hour: number; value: number }> = [];
-
-  if (Array.isArray(raw)) {
-    raw.forEach((item, index) => {
-      if (typeof item === "number") {
-        items.push({ hour: index, value: item });
-      } else if (typeof item === "object" && item !== null) {
-        const hour = Number(item.hour ?? item.h ?? index);
-        const value = Number(item.value ?? item.v ?? item.consumption ?? item.val ?? 0);
-        items.push({ hour, value });
-      }
-    });
-  } else if (typeof raw === "object" && raw !== null) {
-    Object.entries(raw).forEach(([key, val]) => {
-      const hourMatch = key.match(/\d+/);
-      const hour = hourMatch ? Number(hourMatch[0]) : Number(key);
-      const value = typeof val === "number" ? val : Number((val as any)?.value ?? (val as any)?.v ?? 0);
-      if (!isNaN(hour)) {
-        items.push({ hour, value });
-      }
-    });
-  }
+  const items: HourlyConsumptionPoint[] = normalizeHourlyConsumption(reading.hourlyConsumption);
 
   // Fallback: if telemetry payload has no hourlyConsumption array, derive from readings on this day
   if (items.length === 0 && reading) {
@@ -624,11 +589,11 @@ export async function getDeviceHourly(deviceIdOrSerial: string, gaId: string | u
     const dayReadings = await db.reading.findMany({
       where: {
         deviceId: device.id,
-        receivedAt: { gte: dayStart, lt: dayEnd },
+        readingDate: { gte: dayStart, lt: dayEnd },
         correctedVolumeVb: { not: null },
       },
-      orderBy: { receivedAt: "asc" },
-      select: { receivedAt: true, correctedVolumeVb: true },
+      orderBy: [{ readingDate: "asc" }, { receivedAt: "asc" }],
+      select: { readingDate: true, correctedVolumeVb: true },
     });
 
     if (dayReadings.length > 1) {
@@ -637,7 +602,7 @@ export async function getDeviceHourly(deviceIdOrSerial: string, gaId: string | u
       for (let i = 1; i < dayReadings.length; i++) {
         const prev = dayReadings[i - 1];
         const curr = dayReadings[i];
-        const hour = new Date(curr.receivedAt).getHours();
+        const hour = curr.readingDate.getUTCHours();
         const delta = Math.max(0, (curr.correctedVolumeVb ?? 0) - (prev.correctedVolumeVb ?? 0));
         hourMap.set(hour, (hourMap.get(hour) ?? 0) + delta);
       }

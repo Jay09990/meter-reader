@@ -2,6 +2,17 @@ export interface WrappedIngestPayload {
   data: RawIngestPayload;
 }
 
+export interface RawHourlyConsumptionPoint {
+  timestamp?: string;
+  consumption?: number;
+  vb?: number;
+  vm?: number;
+  pressure?: number;
+  temperature?: number;
+  hour?: number;
+  value?: number;
+}
+
 export interface RawIngestPayload {
   deviceSerialNo: string;
   meterSerialNo?: string;
@@ -38,7 +49,7 @@ export interface RawIngestPayload {
   };
   batteryLevel?: number;
   currentFlowRate?: number;
-  hourlyConsumption?: Array<{ hour: number; value: number }>;
+  hourlyConsumption?: Array<number | RawHourlyConsumptionPoint>;
   [key: string]: unknown;
 }
 

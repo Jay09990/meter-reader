@@ -66,7 +66,7 @@ const REPORT_COLUMNS: ReportColumn[] = [
   { header: "SR.NO", unit: "—", align: "center", getValue: ({ srNo }) => srNo },
   {
     header: "DATE & TIME", unit: "—", align: "center",
-    getValue: ({ reading }) => formatDateTime(reading.receivedAt),
+    getValue: ({ reading }) => formatDateTime(reading.readingDate),
   },
   {
     header: "NAME OF INDUSTRY", unit: "—", align: "left", isCustomerDetail: true,

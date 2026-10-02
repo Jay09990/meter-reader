@@ -34,10 +34,10 @@ export async function GET() {
           },
         },
         readings: {
-          orderBy: { receivedAt: "desc" },
+          orderBy: [{ readingDate: "desc" }, { receivedAt: "desc" }],
           take: 1,
           select: {
-            receivedAt: true,
+            readingDate: true,
             correctedVolumeVb: true,
             currentFlowRate: true,
             gasPressure: true,
@@ -69,7 +69,7 @@ export async function GET() {
           currentFlowRate: latestReading.currentFlowRate,
           gasPressure: latestReading.gasPressure,
           batteryLevel: latestReading.batteryLevel,
-          receivedAt: latestReading.receivedAt.toISOString(),
+          readingDate: latestReading.readingDate.toISOString(),
         } : null,
         updateCadence: "Daily",
         lastSyncedAt: device.lastSeenAt,

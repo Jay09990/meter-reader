@@ -36,6 +36,7 @@ import { getChartTheme } from "@/lib/chart-theme";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { PeriodSelector } from "@/components/ui/period-selector";
 import { pickTicks, tickCountForMode, type ConsumptionBucket, type ConsumptionMode } from "@/lib/consumption-series";
+import type { HourlyConsumptionPoint } from "@/lib/hourly-consumption";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,33 +68,30 @@ interface LatestReading {
   correctedVolumeVb: number | null;
   uncorrectedVolumeVm: number | null;
   gasPressure: number | null;
-  pressureMax: number | null;
-  pressureMin: number | null;
   gasTemperature: number | null;
-  temperatureMax: number | null;
-  temperatureMin: number | null;
   compressibilityZ: number | null;
   compressibilityFpv: number | null;
   correctionFactorC: number | null;
   gasDensity: number | null;
-  hourlyConsumption: { hour: number; value: number }[] | null;
+  hourlyConsumption: HourlyConsumptionPoint[] | null;
   batteryLevel: number | null;
-  receivedAt: string;
 }
 
 interface HourlyData {
   date: string;
-  hourlyConsumption: { hour: number; value: number }[];
+  hourlyConsumption: HourlyConsumptionPoint[];
 }
 
 interface HistoryRow {
   date: string;
-  timestamp: string; // ISO receivedAt — one entry per push, not per day
+  timestamp: string; // ISO measurement time from readingDate
   correctedVolumeVb: number | null;
   uncorrectedVolumeVm: number | null;
   gasPressure: number | null;
   gasTemperature: number | null;
 }
+
+const HOURS_PER_DAY = 24;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -187,8 +185,8 @@ export default function MeterDetailPage() {
   const [trendDays, setTrendDays] = useState<7 | 30 | 90>(30);
   const [showDeviceInfo, setShowDeviceInfo] = useState(false);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (showLoading = false) => {
+    if (showLoading) setLoading(true);
     setError(null);
     try {
       const [latestRes, hourlyRes] = await Promise.all([
@@ -205,7 +203,7 @@ export default function MeterDetailPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load device");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [id]);
 
@@ -234,7 +232,7 @@ export default function MeterDetailPage() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadData();
+    loadData(true);
   }, [loadData]);
 
   useEffect(() => {
@@ -251,12 +249,16 @@ export default function MeterDetailPage() {
   useAutoRefresh(loadHistory);
   useAutoRefresh(loadConsumption);
 
-  const hourlyChartData = Array.from({ length: 24 }, (_, h) => {
-    const match = hourly?.hourlyConsumption?.find((e) => Number(e.hour) === h);
-    return { hour: `${h}:00`, value: match?.value ?? 0 };
-  });
+  const hourlyPointsByHour = new Map(
+    (hourly?.hourlyConsumption ?? []).map((point) => [point.hour, point])
+  );
+  const hourlyChartData = Array.from({ length: HOURS_PER_DAY }, (_, hour) => ({
+    key: hour,
+    hour: `${String(hour).padStart(2, "0")}:00`,
+    value: hourlyPointsByHour.get(hour)?.value ?? 0,
+  }));
   const peakHourlyValue = Math.max(...hourlyChartData.map((item) => item.value), 0);
-  const hasHourlyData = Boolean(hourly);
+  const hasHourlyData = (hourly?.hourlyConsumption.length ?? 0) > 0;
 
   const consumptionChartData = consumption.map((bucket) => ({ ...bucket, value: bucket.value ?? 0 }));
   const consumptionTicks = pickTicks(consumptionChartData.map((bucket) => bucket.label), tickCountForMode(consumptionPeriod));
@@ -389,11 +391,11 @@ export default function MeterDetailPage() {
             {device.customerName
               ? `${device.customerName} (${device.gaName || 'Unknown GA'})`
               : "Unassigned"}
-            {r ? ` · Last reading: ${formatLocalTs(r.receivedAt)}` : " · No reading yet"}
+            {r ? ` · Last reading: ${formatLocalTs(r.readingDate)}` : " · No reading yet"}
           </p>
         </div>
         <Button
-          onClick={loadData}
+          onClick={() => loadData(true)}
           variant="outline"
           size="sm"
           className="border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -432,8 +434,6 @@ export default function MeterDetailPage() {
         <KpiCard title="Pressure" icon={Gauge} iconStyle={{color:'var(--clr-commercial)'}}>
           <BigValue value={fmt(r?.gasPressure)} unit="barg" />
           <DataRow label="Current" value={`${fmt(r?.gasPressure)} barg`} />
-          <DataRow label="Max" value={`${fmt(r?.pressureMax)} barg`} />
-          <DataRow label="Min" value={`${fmt(r?.pressureMin)} barg`} />
           <DataRow label="Upper Limit" value={device.pressureUpperLimit != null ? `${fmt(device.pressureUpperLimit)} barg` : "Not set"} />
           <DataRow label="Lower Limit" value={device.pressureLowerLimit != null ? `${fmt(device.pressureLowerLimit)} barg` : "Not set"} />
         </KpiCard>
@@ -442,8 +442,6 @@ export default function MeterDetailPage() {
         <KpiCard title="Temperature" icon={Thermometer} iconStyle={{color:'var(--clr-stale)'}}>
           <BigValue value={fmt(r?.gasTemperature)} unit="°C" />
           <DataRow label="Current" value={`${fmt(r?.gasTemperature)} °C`} />
-          <DataRow label="Max" value={`${fmt(r?.temperatureMax)} °C`} />
-          <DataRow label="Min" value={`${fmt(r?.temperatureMin)} °C`} />
           <DataRow label="Upper Limit" value={device.temperatureUpperLimit != null ? `${fmt(device.temperatureUpperLimit)} °C` : "Not set"} />
           <DataRow label="Lower Limit" value={device.temperatureLowerLimit != null ? `${fmt(device.temperatureLowerLimit)} °C` : "Not set"} />
         </KpiCard>
@@ -518,7 +516,7 @@ export default function MeterDetailPage() {
                 />
                 <Bar dataKey="value" radius={[2, 2, 0, 0]}>
                   {hourlyChartData.map((entry) => (
-                    <Cell key={entry.hour} fill={entry.value === peakHourlyValue ? "var(--chart-1)" : "var(--chart-5)"} />
+                    <Cell key={entry.key} fill={entry.value === peakHourlyValue ? "var(--chart-1)" : "var(--chart-5)"} />
                   ))}
                 </Bar>
               </BarChart>

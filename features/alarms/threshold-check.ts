@@ -1,7 +1,7 @@
 import { AlarmType } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getDeviceBoundaryReading } from "@/lib/boundary-readings";
-import { toIsoDate } from "@/lib/financial-calendar";
+import { getUtcDayStart, toIsoDate } from "@/lib/financial-calendar";
 import { notifyAlarmCreated } from "./notify";
 
 interface ThresholdReading {
@@ -22,6 +22,7 @@ interface ThresholdBreach {
 
 // Evaluates all optional per-meter limits after a reading has been saved.
 export async function checkDeviceThresholds(deviceId: string, readingDate: Date, reading: ThresholdReading): Promise<void> {
+  const alarmDate = getUtcDayStart(readingDate);
   const device = await db.device.findUnique({
     where: { id: deviceId },
     select: {
@@ -70,7 +71,7 @@ export async function checkDeviceThresholds(deviceId: string, readingDate: Date,
   let yesterdayReading: number | null | undefined;
   const getYesterdayReading = async (): Promise<number | null> => {
     if (yesterdayReading !== undefined) return yesterdayReading;
-    const yesterday = new Date(readingDate.getTime() - 86_400_000);
+    const yesterday = new Date(alarmDate.getTime() - 86_400_000);
     yesterdayReading = await getDeviceBoundaryReading(deviceId, toIsoDate(yesterday));
     return yesterdayReading;
   };
@@ -118,18 +119,18 @@ export async function checkDeviceThresholds(deviceId: string, readingDate: Date,
   }
 
   for (const breach of breaches) {
-    const existing = await db.alarm.findUnique({ where: { deviceId_type_forDate: { deviceId, type: breach.type, forDate: readingDate } } });
+    const existing = await db.alarm.findUnique({ where: { deviceId_type_forDate: { deviceId, type: breach.type, forDate: alarmDate } } });
     if (existing) {
       await db.alarm.update({ where: { id: existing.id }, data: { gasValue: breach.value, averageValue: breach.limit, cause: breach.cause, status: "OPEN" } });
       continue;
     }
-    await db.alarm.create({ data: { deviceId, type: breach.type, severity: "CRITICAL", forDate: readingDate, gasValue: breach.value, averageValue: breach.limit, cause: breach.cause, status: "OPEN" } });
+    await db.alarm.create({ data: { deviceId, type: breach.type, severity: "CRITICAL", forDate: alarmDate, gasValue: breach.value, averageValue: breach.limit, cause: breach.cause, status: "OPEN" } });
     await notifyAlarmCreated({
       deviceSerialNo: device.deviceSerialNo,
       type: breach.type,
       severity: "CRITICAL",
       cause: breach.cause,
-      forDate: readingDate,
+      forDate: alarmDate,
       meterSerialNo: device.meterSerialNo,
       customerName: device.customer?.name,
       gaName: device.customer?.ga?.name,

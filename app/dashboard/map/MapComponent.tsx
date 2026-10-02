@@ -40,7 +40,7 @@ interface MapDevice {
     currentFlowRate: number | null;
     gasPressure: number | null;
     batteryLevel: number | null;
-    receivedAt: string | null;
+    readingDate: string | null;
   } | null;
   updateCadence: string;
   lastSyncedAt: string | null;

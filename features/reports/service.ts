@@ -96,7 +96,7 @@ function resampleByFrequency<T extends { receivedAt: string; readingDate: string
     // Keep one reading per distinct calendar day (chronologically earliest reading of the day)
     const dayMap = new Map<string, T>();
     for (const r of readings) {
-      const dayKey = r.readingDate.split("T")[0] || r.receivedAt.split("T")[0];
+      const dayKey = r.readingDate.split("T")[0];
       if (!dayMap.has(dayKey)) {
         dayMap.set(dayKey, r);
       }
@@ -107,7 +107,7 @@ function resampleByFrequency<T extends { receivedAt: string; readingDate: string
   if (frequency === "1mo") {
     const monthMap = new Map<string, T>();
     for (const r of readings) {
-      const monthKey = (r.readingDate || r.receivedAt).slice(0, 7);
+      const monthKey = r.readingDate.slice(0, 7);
       if (!monthMap.has(monthKey)) {
         monthMap.set(monthKey, r);
       }
@@ -119,7 +119,7 @@ function resampleByFrequency<T extends { receivedAt: string; readingDate: string
   const kept: T[] = [];
   let lastKeptTime = -Infinity;
   for (const r of readings) {
-    const t = new Date(r.receivedAt).getTime();
+    const t = new Date(r.readingDate).getTime();
     if (t - lastKeptTime >= frequencyMs - 30_000) {
       kept.push(r);
       lastKeptTime = t;
@@ -320,7 +320,7 @@ export async function getCustomerReport({
         },
       },
     },
-    orderBy: [{ device: { deviceSerialNo: "asc" } }, { receivedAt: "asc" }],
+    orderBy: [{ device: { deviceSerialNo: "asc" } }, { readingDate: "asc" }, { receivedAt: "asc" }],
   });
 
   // Every meter (device) that belongs to the selected customers, whether or not it

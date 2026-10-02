@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { CapacityExceededError, processIngestPayload } from "@/features/ingest";
+import { after, NextRequest, NextResponse } from "next/server";
+import { processIngestPayload } from "@/features/ingest";
 import { logApi } from "@/lib/api-log";
+
+const MAX_INGEST_BODY_BYTES = 1_048_576;
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,33 +22,45 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    let body: unknown;
-    try {
-      body = await req.json();
-      logApi("POST /api/ingest", { body });
-    } catch {
-      return NextResponse.json(
-        { error: "Bad Request: Request body must be valid JSON" },
-        { status: 400 }
-      );
+    const declaredLength = Number(req.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_INGEST_BODY_BYTES) {
+      return NextResponse.json({ error: "Ingestion payload is too large." }, { status: 413 });
     }
 
-    const result = await processIngestPayload(body);
-    logApi("POST /api/ingest → 200", { result });
-    return NextResponse.json(result, { status: 200 });
-  } catch (err: unknown) {
-    if (err instanceof CapacityExceededError) {
+    let rawBody: string;
+    try {
+      rawBody = await req.text();
+      logApi("POST /api/ingest received");
+    } catch {
       return NextResponse.json(
-        { error: "MAX_METER_CAPACITY_REACHED", message: err.message },
-        { status: 409 },
+        { error: "Unable to read ingestion request body." },
+        { status: 400 },
       );
     }
-    const errorMessage = err instanceof Error ? err.message : "Ingestion processing failed";
-    const isValidationError = errorMessage.startsWith("Invalid payload");
-    
+    if (Buffer.byteLength(rawBody, "utf8") > MAX_INGEST_BODY_BYTES) {
+      return NextResponse.json({ error: "Ingestion payload is too large." }, { status: 413 });
+    }
+
+    after(async () => {
+      try {
+        const body: unknown = JSON.parse(rawBody);
+        const result = await processIngestPayload(body);
+        logApi("POST /api/ingest processed", { result });
+      } catch (error) {
+        logApi("POST /api/ingest background processing failed", {
+          error: error instanceof Error ? error.message : "Unknown ingestion processing failure",
+        });
+      }
+    });
+    logApi("POST /api/ingest accepted for background processing");
     return NextResponse.json(
-      { error: errorMessage },
-      { status: isValidationError ? 400 : 500 }
+      { success: true, accepted: true, message: "Ingestion accepted for processing." },
+      { status: 202 },
+    );
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Unable to accept ingestion request." },
+      { status: 500 },
     );
   }
 }
