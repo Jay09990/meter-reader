@@ -19,6 +19,7 @@ import {
   ChevronDown,
   ChevronRight,
   Check,
+  Unlink,
 } from "lucide-react";
 
 import { useAutoRefresh } from "@/lib/auto-refresh";
@@ -253,6 +254,9 @@ export default function CustomersPage() {
   const [editDeviceDrafts, setEditDeviceDrafts] = useState<DeviceIdentityDraft[]>([]);
   const [expandedEditDeviceId, setExpandedEditDeviceId] = useState<string | null>(null);
   const [loadingEditDevices, setLoadingEditDevices] = useState(false);
+  const [pendingDetach, setPendingDetach] = useState<DeviceIdentityDraft | null>(null);
+  const [detachingMeter, setDetachingMeter] = useState(false);
+  const [detachError, setDetachError] = useState("");
 
   // Expandable threshold editing (list view) — single-expand (table is paginated)
   const [expandedCustomerId, setExpandedCustomerId] = useState<string | null>(null);
@@ -467,6 +471,35 @@ export default function CustomersPage() {
     setEditDeviceDrafts((prev) =>
       prev.map((d) => (d.id === deviceId ? { ...d, [field]: value } : d)),
     );
+  };
+
+  const detachMeterFromCustomer = async () => {
+    if (!pendingDetach) return;
+
+    setDetachingMeter(true);
+    setDetachError("");
+    try {
+      const response = await fetch(`/api/devices/${pendingDetach.id}/assign`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerId: null }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Failed to detach meter");
+
+      setEditDeviceDrafts((drafts) =>
+        drafts.filter((draft) => draft.id !== pendingDetach.id),
+      );
+      setExpandedEditDeviceId((deviceId) =>
+        deviceId === pendingDetach.id ? null : deviceId,
+      );
+      setPendingDetach(null);
+      fetchDevices();
+    } catch (error) {
+      setDetachError(error instanceof Error ? error.message : "Failed to detach meter");
+    } finally {
+      setDetachingMeter(false);
+    }
   };
 
   const saveCustomerEdit = async (event: React.FormEvent) => {
@@ -1220,17 +1253,32 @@ export default function CustomersPage() {
                                 Meter serial: <span className="font-mono not-italic">{draft.meterSerialNo || "—"}</span>
                               </p>
                             </div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="shrink-0"
-                              onClick={() =>
-                                setExpandedEditDeviceId(isOpen ? null : draft.id)
-                              }
-                            >
-                              {isOpen ? "Done" : "Edit"}
-                            </Button>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                disabled={savingEdit || detachingMeter}
+                                onClick={() => {
+                                  setDetachError("");
+                                  setPendingDetach(draft);
+                                }}
+                              >
+                                <Unlink className="mr-1 h-3.5 w-3.5" />
+                                Detach
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  setExpandedEditDeviceId(isOpen ? null : draft.id)
+                                }
+                              >
+                                {isOpen ? "Done" : "Edit"}
+                              </Button>
+                            </div>
                           </div>
                           {isOpen && (
                             <div className="space-y-3 border-t border-border px-3 py-3">
@@ -1340,6 +1388,44 @@ export default function CustomersPage() {
               </form>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {pendingDetach && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-2xl">
+            <h3 className="mb-2 text-lg font-bold text-foreground">Detach meter?</h3>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Detach meter <span className="font-mono text-foreground">{pendingDetach.deviceSerialNo}</span> from this customer?
+              The meter and its readings will remain in the database.
+            </p>
+            {detachError && (
+              <p className="mb-4 text-sm" style={{ color: "var(--clr-alert)" }}>
+                {detachError}
+              </p>
+            )}
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={detachingMeter}
+                onClick={() => {
+                  setPendingDetach(null);
+                  setDetachError("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={detachingMeter}
+                onClick={detachMeterFromCustomer}
+              >
+                {detachingMeter ? "Detaching…" : "Detach meter"}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
