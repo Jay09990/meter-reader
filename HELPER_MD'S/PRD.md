@@ -1,4 +1,4 @@
-# PRD — EVC Gas Meter Monitoring Dashboard (v2 — GA/Customer scope)
+# PRD — AMR Gas Meter Monitoring Dashboard (v2 — GA/Customer scope)
 
 ## 0. What Changed in This Revision
 Two new inputs triggered this revision:

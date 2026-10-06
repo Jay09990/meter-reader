@@ -92,6 +92,8 @@ interface HistoryRow {
 }
 
 const HOURS_PER_DAY = 24;
+const HOURLY_WINDOW_START = 7;
+const HOURLY_WINDOW_TICKS = ["07:00", "11:00", "15:00", "19:00", "23:00", "03:00", "06:00"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -108,6 +110,12 @@ function daysSince(dateStr: string | null): number | null {
   const then = new Date(dateStr).getTime();
   const now = Date.now();
   return Math.floor((now - then) / 86_400_000);
+}
+
+function shiftDate(date: string, days: number): string {
+  const shifted = new Date(`${date}T00:00:00.000Z`);
+  shifted.setUTCDate(shifted.getUTCDate() + days);
+  return shifted.toISOString().slice(0, 10);
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -197,8 +205,9 @@ export default function MeterDetailPage() {
       const latestJson = await latestRes.json();
       setDeviceData(latestJson);
       if (hourlyRes.ok) {
-        const h = await hourlyRes.json();
-        setHourly(h);
+        setHourly(await hourlyRes.json());
+      } else {
+        setHourly(null);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load device");
@@ -249,16 +258,31 @@ export default function MeterDetailPage() {
   useAutoRefresh(loadHistory);
   useAutoRefresh(loadConsumption);
 
-  const hourlyPointsByHour = new Map(
-    (hourly?.hourlyConsumption ?? []).map((point) => [point.hour, point])
+  // Use each point's timestamp because the API payload crosses midnight.
+  const hourlyPointsByDateAndHour = new Map(
+    (hourly?.hourlyConsumption ?? []).map((point) => {
+      const timestampMatch = point.timestamp?.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):/);
+      const pointDate = timestampMatch?.[1] ?? hourly?.date;
+      const pointHour = timestampMatch ? Number(timestampMatch[2]) : point.hour;
+      return [`${pointDate}-${pointHour}`, point] as const;
+    })
   );
-  const hourlyChartData = Array.from({ length: HOURS_PER_DAY }, (_, hour) => ({
-    key: hour,
-    hour: `${String(hour).padStart(2, "0")}:00`,
-    value: hourlyPointsByHour.get(hour)?.value ?? 0,
-  }));
+  const previousHourlyDate = hourly?.date ? shiftDate(hourly.date, -1) : null;
+  const hourlyChartData = Array.from({ length: HOURS_PER_DAY }, (_, index) => {
+    const sourceHour = (index + HOURLY_WINDOW_START) % HOURS_PER_DAY;
+    const sourceDate = sourceHour >= HOURLY_WINDOW_START ? previousHourlyDate : hourly?.date;
+    return {
+      key: index,
+      hour: `${String(sourceHour).padStart(2, "0")}:00`,
+      value: sourceDate ? hourlyPointsByDateAndHour.get(`${sourceDate}-${sourceHour}`)?.value ?? 0 : 0,
+    };
+  });
   const peakHourlyValue = Math.max(...hourlyChartData.map((item) => item.value), 0);
-  const hasHourlyData = (hourly?.hourlyConsumption.length ?? 0) > 0;
+  const hasHourlyData = hourlyChartData.some((item) => {
+    const sourceHour = Number(item.hour.slice(0, 2));
+    const sourceDate = sourceHour >= HOURLY_WINDOW_START ? previousHourlyDate : hourly?.date;
+    return sourceDate ? hourlyPointsByDateAndHour.has(`${sourceDate}-${sourceHour}`) : false;
+  });
 
   const consumptionChartData = consumption.map((bucket) => ({ ...bucket, value: bucket.value ?? 0 }));
   const consumptionTicks = pickTicks(consumptionChartData.map((bucket) => bucket.label), tickCountForMode(consumptionPeriod));
@@ -479,9 +503,9 @@ export default function MeterDetailPage() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-semibold text-foreground">
               Hourly Consumption
-              {hourly?.date && (
+              {hourly?.date && previousHourlyDate && (
                 <span className="ml-2 text-xs text-muted-foreground font-mono">
-                  {hourly.date}
+                  {previousHourlyDate} 7:00 AM – {hourly.date} 6:00 AM
                 </span>
               )}
             </CardTitle>
@@ -499,8 +523,8 @@ export default function MeterDetailPage() {
               >
                 <XAxis
                   dataKey="hour"
+                  ticks={HOURLY_WINDOW_TICKS}
                   tick={{ fontSize: 10, fill: chartTheme.tick }}
-                  interval={3}
                   tickLine={false}
                   axisLine={false}
                 />
