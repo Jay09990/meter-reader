@@ -3,6 +3,8 @@ export interface HourlyConsumptionPoint {
   hour: number;
   value: number;
   timestamp?: string;
+  pressure?: number;
+  temperature?: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -23,6 +25,12 @@ function getPointValue(point: Record<string, unknown>): number {
   return Number(point.consumption ?? point.value ?? point.v ?? point.val);
 }
 
+function getOptionalNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === "") return undefined;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
+
 export function normalizeHourlyConsumption(input: unknown): HourlyConsumptionPoint[] {
   const points: HourlyConsumptionPoint[] = [];
 
@@ -34,11 +42,15 @@ export function normalizeHourlyConsumption(input: unknown): HourlyConsumptionPoi
       const hour = getPointHour(point, index);
       const value = getPointValue(point);
       if (!Number.isInteger(hour) || hour < 0 || hour > 23 || !Number.isFinite(value)) return;
+      const pressure = getOptionalNumber(point.pressure ?? point.gasPressure);
+      const temperature = getOptionalNumber(point.temperature ?? point.gasTemperature);
 
       points.push({
         hour,
         value,
         ...(typeof point.timestamp === "string" ? { timestamp: point.timestamp } : {}),
+        ...(pressure !== undefined ? { pressure } : {}),
+        ...(temperature !== undefined ? { temperature } : {}),
       });
     });
 
@@ -53,14 +65,17 @@ export function normalizeHourlyConsumption(input: unknown): HourlyConsumptionPoi
     const hour = Number(point.hour ?? point.h ?? (keyHour ? keyHour[0] : key));
     const value = getPointValue(point);
     if (!Number.isInteger(hour) || hour < 0 || hour > 23 || !Number.isFinite(value)) return;
+    const pressure = getOptionalNumber(point.pressure ?? point.gasPressure);
+    const temperature = getOptionalNumber(point.temperature ?? point.gasTemperature);
 
     points.push({
       hour,
       value,
       ...(typeof point.timestamp === "string" ? { timestamp: point.timestamp } : {}),
+      ...(pressure !== undefined ? { pressure } : {}),
+      ...(temperature !== undefined ? { temperature } : {}),
     });
   });
 
   return points;
 }
-

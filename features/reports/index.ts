@@ -4,6 +4,10 @@ export {
   ReportNotFoundError,
   FREQUENCY_OPTIONS,
 } from "./service";
+export {
+  getHourlyConsumptionReport,
+  HourlyReportValidationError,
+} from "./hourly-service";
 export type {
   CustomerReport,
   MeterReportGroup,
@@ -13,3 +17,7 @@ export type {
   RangeSelectorType,
   DataFrequency,
 } from "./service";
+export type {
+  HourlyConsumptionReport,
+  HourlyConsumptionReportRow,
+} from "./hourly-service";

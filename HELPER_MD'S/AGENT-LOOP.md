@@ -35,6 +35,7 @@ IMPLIMENTATION-PLAN.md, do the work, re-run checks, update this file.
 - **Customer editing:** Added a table action that edits a customer’s name, category, address, and geographical area through the existing customer API.
 - **Demo fixtures:** Added an idempotent five-meter fixture script with 18 months of daily cumulative readings; database insertion awaits approval.
 - **Yearly consumption:** Added the Yearly option to the shared consumption selector and all period-aware chart paths; it returns five trailing April-March financial-year delta buckets.
+- **Hourly reports:** Added an authenticated single-request customer/date-range API, timestamp-filtered hourly report tab/table, pagination, and Excel export with stream number, pressure, and temperature. Timestamp dates select rows; adjacent reading dates are queried because payloads can cross midnight.
 
 ## 2. Phase Checklist (mirror of IMPLIMENTATION-PLAN.md — update both)
 
@@ -88,6 +89,7 @@ IMPLIMENTATION-PLAN.md, do the work, re-run checks, update this file.
 - **2026-08-20 — demo meter fixtures.** Added `scripts/add-dummy-meters.mjs`, which only replaces readings for `DEMO-1801` through `DEMO-1805`, preserving all other data. It creates or refreshes their assigned customer/GA data and 548 daily cumulative readings per meter. Execution was not approved in this session.
 
 - **2026-08-20 - yearly consumption.** Extended the shared mode, bucket builder, selector, API parsers, and Map drawer. Yearly reports five trailing April-March financial years, including the current partial year, through the same boundary-reading delta calculation as the other periods.
+- **2026-10-06 - hourly reports.** Kept existing date-range and range-selection reports unchanged. New `/api/reports/hourly` reads the hourly JSON for selected customers in one request, filters each point by its timestamp, deduplicates overlapping payload points by latest received reading, and supports matching Excel export.
 
 ## 6. Next Session Should Start With
 

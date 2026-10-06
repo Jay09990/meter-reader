@@ -23,12 +23,12 @@ import {
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   downloadCustomerReportExcel,
+  downloadHourlyConsumptionExcel,
   groupReadingsByMeter,
 } from "@/lib/report-excel";
-import { sanitizeSheetName } from "@/lib/report-excel-common";
 import type {
   CustomerReport,
-  MeterReportGroup,
+  HourlyConsumptionReport,
   ReportMode,
   RangeSelectorType,
   DataFrequency,
@@ -43,10 +43,12 @@ interface Customer {
 }
 
 const ROWS_PER_PAGE = 25;
+type ReportPageMode = ReportMode | "hourly";
 
-const REPORT_MODES: Array<{ value: ReportMode; label: string }> = [
+const REPORT_MODES: Array<{ value: ReportPageMode; label: string }> = [
   { value: "dateRange", label: "Date Range" },
   { value: "rangeSelection", label: "Range Selection" },
+  { value: "hourly", label: "Hourly" },
 ];
 
 const FREQUENCY_SELECT_OPTIONS: Array<{ value: DataFrequency; label: string }> = [
@@ -65,17 +67,19 @@ function fmt(val: number | null | undefined, decimals = 2): string {
   });
 }
 
-export function ReportModeSelector({
+function ReportModeSelector({
   value,
   onChange,
+  disabled = false,
 }: {
-  value: ReportMode;
-  onChange: (value: ReportMode) => void;
+  value: ReportPageMode;
+  onChange: (value: ReportPageMode) => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="relative grid grid-cols-2 rounded-lg bg-secondary p-1 text-xs font-semibold max-w-[320px]">
+    <div className="relative grid grid-cols-3 rounded-lg bg-secondary p-1 text-xs font-semibold max-w-[360px]">
       <span
-        className="absolute inset-y-1 w-1/2 rounded-md bg-card shadow-sm transition-transform duration-200"
+        className="absolute inset-y-1 w-1/3 rounded-md bg-card shadow-sm transition-transform duration-200"
         style={{
           transform: `translateX(${REPORT_MODES.findIndex((m) => m.value === value) * 100}%)`,
         }}
@@ -85,6 +89,7 @@ export function ReportModeSelector({
           key={m.value}
           type="button"
           onClick={() => onChange(m.value)}
+          disabled={disabled}
           className={cn(
             "relative z-10 rounded-md px-3 py-1.5 transition-colors",
             value === m.value ? "text-foreground" : "text-muted-foreground hover:text-foreground",
@@ -104,20 +109,11 @@ export default function ReportsPage() {
   const [loadingCustomers, setLoadingCustomers] = useState(true);
 
   // Mode state
-  const [reportMode, setReportMode] = useState<ReportMode>("dateRange");
+  const [reportMode, setReportMode] = useState<ReportPageMode>("dateRange");
 
   // Mode 1 & 2 Form State (Multi-select customers)
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-
-  // Entering rangeSelection mode selects all customers; the user can then deselect.
-  // Deliberately depends only on mode + customer list (not on the selection itself),
-  // so deselecting every customer doesn't immediately re-select them all.
-  useEffect(() => {
-    if (reportMode === "rangeSelection") {
-      setSelectedCustomerIds(customers.map((c) => c.id));
-    }
-  }, [reportMode, customers]);
 
   // Mode 1: Date Range Form State
   const [startDate, setStartDate] = useState("");
@@ -133,6 +129,7 @@ export default function ReportsPage() {
   // Report State
   const [loadingReport, setLoadingReport] = useState(false);
   const [reportData, setReportData] = useState<CustomerReport | null>(null);
+  const [hourlyReportData, setHourlyReportData] = useState<HourlyConsumptionReport | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -175,7 +172,9 @@ export default function ReportsPage() {
     return false;
   })();
 
-  const isFormValid = reportMode === "dateRange" ? isDateRangeFormValid : isRangeSelectionFormValid;
+  const isFormValid = reportMode === "dateRange" || reportMode === "hourly"
+    ? isDateRangeFormValid
+    : isRangeSelectionFormValid;
 
   // Generate FY start year options going back ~6 years
   const getFyOptions = () => {
@@ -201,7 +200,7 @@ export default function ReportsPage() {
       return;
     }
 
-    if (reportMode === "dateRange" && new Date(startDate) > new Date(endDate)) {
+    if ((reportMode === "dateRange" || reportMode === "hourly") && new Date(startDate) > new Date(endDate)) {
       setError("Start date cannot be later than end date.");
       return;
     }
@@ -210,6 +209,7 @@ export default function ReportsPage() {
     setError(null);
     setHasSearched(true);
     setReportData(null);
+    setHourlyReportData(null);
     setCurrentPage(1);
 
     try {
@@ -217,6 +217,19 @@ export default function ReportsPage() {
         selectedCustomerIds.length === customers.length
           ? "all"
           : selectedCustomerIds.join(",");
+
+      if (reportMode === "hourly") {
+        const params = new URLSearchParams({
+          customerId: selectedIdParam,
+          startDate,
+          endDate,
+        });
+        const response = await fetch(`/api/reports/hourly?${params.toString()}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Failed to fetch hourly report data.");
+        setHourlyReportData(data);
+        return;
+      }
 
       let queryStartDate = startDate;
       let queryEndDate = endDate;
@@ -293,6 +306,11 @@ export default function ReportsPage() {
     setExporting(true);
 
     try {
+      if (reportMode === "hourly") {
+        if (!hourlyReportData || hourlyReportData.rows.length === 0) return;
+        await downloadHourlyConsumptionExcel(hourlyReportData);
+        return;
+      }
       if (!reportData) return;
       const meters = reportData.meters ?? [];
       if (meters.length === 0) return;
@@ -309,27 +327,37 @@ export default function ReportsPage() {
 
   // Pagination for dateRange mode only — rangeSelection shows all meters at once
   const allReadings = reportData?.readings ?? [];
+  const hourlyRows = hourlyReportData?.rows ?? [];
   const isRangeSelection = reportMode === "rangeSelection";
+  const isHourlyReport = reportMode === "hourly";
+  const resultCount = isHourlyReport ? hourlyRows.length : allReadings.length;
   const totalPages = isRangeSelection
     ? 1
-    : Math.max(1, Math.ceil(allReadings.length / ROWS_PER_PAGE));
+    : Math.max(1, Math.ceil((isHourlyReport ? hourlyRows.length : allReadings.length) / ROWS_PER_PAGE));
   const pageStartIndex = (currentPage - 1) * ROWS_PER_PAGE;
   const paginatedReadings = isRangeSelection
     ? allReadings
     : allReadings.slice(pageStartIndex, pageStartIndex + ROWS_PER_PAGE);
+  const paginatedHourlyRows = hourlyRows.slice(pageStartIndex, pageStartIndex + ROWS_PER_PAGE);
 
-  // Number each meter once within a customer so all its readings share one stream number.
+  // Match Excel's per-customer numbering order so table and export stream numbers agree.
   const streamNoMap = new Map<string, Map<string, number>>();
-  function getStreamNo(customerName: string, deviceId: string): number {
-    const customerStreams = streamNoMap.get(customerName) ?? new Map<string, number>();
-    const existing = customerStreams.get(deviceId);
-    if (existing !== undefined) return existing;
-    const next = customerStreams.size + 1;
-    customerStreams.set(deviceId, next);
-    streamNoMap.set(customerName, customerStreams);
-    return next;
+  const meterLabelsByCustomer = new Map<string, Map<string, string>>();
+  for (const row of allReadings) {
+    const customerMeters = meterLabelsByCustomer.get(row.customerName || "") ?? new Map<string, string>();
+    customerMeters.set(row.deviceId, row.meterSerialNo || row.deviceSerialNo);
+    meterLabelsByCustomer.set(row.customerName || "", customerMeters);
   }
-  allReadings.forEach((row) => getStreamNo(row.customerName || "", row.deviceId));
+  for (const [customerName, customerMeters] of meterLabelsByCustomer) {
+    const customerStreams = new Map<string, number>();
+    Array.from(customerMeters.entries())
+      .sort((left, right) => left[1].localeCompare(right[1]))
+      .forEach(([deviceId], index) => customerStreams.set(deviceId, index + 1));
+    streamNoMap.set(customerName, customerStreams);
+  }
+  function getStreamNo(customerName: string, deviceId: string): number {
+    return streamNoMap.get(customerName)?.get(deviceId) ?? 0;
+  }
 
   return (
     <div className="space-y-6 w-full">
@@ -340,7 +368,21 @@ export default function ReportsPage() {
             Generate and export telemetry reports based on customer and date range.
           </p>
         </div>
-        <ReportModeSelector value={reportMode} onChange={setReportMode} />
+        <ReportModeSelector
+          value={reportMode}
+          onChange={(mode) => {
+            setReportMode(mode);
+            if (mode === "rangeSelection" || mode === "hourly") {
+              setSelectedCustomerIds(customers.map((customer) => customer.id));
+            }
+            setReportData(null);
+            setHourlyReportData(null);
+            setHasSearched(false);
+            setError(null);
+            setCurrentPage(1);
+          }}
+          disabled={loadingCustomers}
+        />
       </div>
 
       <Card className="bg-card border-border !overflow-visible">
@@ -425,7 +467,7 @@ export default function ReportsPage() {
                 )}
               </div>
 
-              {reportMode === "dateRange" ? (
+              {reportMode === "dateRange" || reportMode === "hourly" ? (
                 <>
                   {/* Start Date */}
                   <div className="space-y-2">
@@ -602,9 +644,11 @@ export default function ReportsPage() {
           <CardHeader className="flex flex-row items-center justify-between border-b border-border bg-secondary pb-4">
             <div>
               <CardTitle className="text-lg text-foreground">Report Data</CardTitle>
-              {allReadings.length > 0 && (
+              {resultCount > 0 && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  {isRangeSelection
+                  {isHourlyReport
+                    ? `Showing ${pageStartIndex + 1}–${Math.min(pageStartIndex + ROWS_PER_PAGE, hourlyRows.length)} of ${hourlyRows.length} hourly readings`
+                    : isRangeSelection
                     ? `Showing ${allReadings.length} meter${allReadings.length === 1 ? "" : "s"} (aggregated)`
                     : `Showing ${pageStartIndex + 1}–${Math.min(pageStartIndex + ROWS_PER_PAGE, allReadings.length)} of ${allReadings.length} readings`}
                 </p>
@@ -616,7 +660,9 @@ export default function ReportsPage() {
               disabled={
                 loadingReport ||
                 exporting ||
-                (!reportData || (reportData.meters?.length ?? 0) === 0)
+                (isHourlyReport
+                  ? hourlyRows.length === 0
+                  : !reportData || (reportData.meters?.length ?? 0) === 0)
               }
               variant="outline"
               className="border-border bg-card hover:bg-accent text-foreground"
@@ -638,6 +684,40 @@ export default function ReportsPage() {
                 />
                 <p>Generating report...</p>
               </div>
+            ) : isHourlyReport && hourlyRows.length > 0 ? (
+              <>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-secondary border-b border-border">
+                      <TableRow className="border-border hover:bg-transparent">
+                        {["SR.NO", "CUSTOMER", "CUSTOMER TYPE", "GA", "DEVICE SERIAL NO", "METER SERIAL NO", "STREAM NO", "DATE & TIME", "PRESSURE (BAR)", "TEMPERATURE (°C)", "HOURLY CONSUMPTION (SCM)"].map((heading) => (
+                          <TableHead key={heading} className="whitespace-nowrap text-muted-foreground font-semibold">
+                            {heading}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedHourlyRows.map((row, index) => (
+                        <TableRow key={row.id} className="border-border hover:bg-secondary/60">
+                          <TableCell className="font-mono text-xs text-muted-foreground">{pageStartIndex + index + 1}</TableCell>
+                          <TableCell className="text-sm font-medium text-foreground whitespace-nowrap">{row.customerName || "—"}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{row.customerCategory || "—"}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{row.gaName || "—"}</TableCell>
+                          <TableCell className="font-mono text-xs text-foreground whitespace-nowrap">{row.deviceSerialNo}</TableCell>
+                          <TableCell className="font-mono text-xs text-foreground whitespace-nowrap">{row.meterSerialNo || "—"}</TableCell>
+                          <TableCell className="font-mono text-xs text-foreground whitespace-nowrap">{row.streamNo}</TableCell>
+                          <TableCell className="font-mono text-xs text-foreground whitespace-nowrap">{row.timestamp.replace("T", " ").slice(0, 16)}</TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground">{fmt(row.pressure, 4)}</TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground">{fmt(row.temperature, 4)}</TableCell>
+                          <TableCell className="text-right font-mono text-xs font-semibold text-foreground">{fmt(row.consumption, 3)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+              </>
             ) : reportData && reportData.readings?.length > 0 ? (
               <>
                 <div className="overflow-x-auto">
@@ -669,6 +749,9 @@ export default function ReportsPage() {
                             </TableHead>
                             <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
                               METER SERIAL NO
+                            </TableHead>
+                            <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">
+                              STREAM NO
                             </TableHead>
                           </>
                         )}
@@ -738,6 +821,9 @@ export default function ReportsPage() {
                               </TableCell>
                               <TableCell className="font-mono text-xs text-foreground whitespace-nowrap">
                                 {row.meterSerialNo || row.deviceSerialNo}
+                              </TableCell>
+                              <TableCell className="font-mono text-xs text-foreground whitespace-nowrap">
+                                {getStreamNo(row.customerName || "", row.deviceId)}
                               </TableCell>
                             </>
                           )}

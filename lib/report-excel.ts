@@ -1,6 +1,6 @@
 // lib/report-excel.ts
 import ExcelJS from "exceljs";
-import type { MeterReportGroup, ReportMode, ReportReading } from "@/features/reports";
+import type { HourlyConsumptionReport, MeterReportGroup, ReportMode, ReportReading } from "@/features/reports";
 import { groupReadingsByMeter, sanitizeSheetName } from "@/lib/report-excel-common";
 
 // ── Shared helpers (single source of truth lives in report-excel-common) ──
@@ -353,6 +353,72 @@ export async function downloadCustomerReportExcel(
   }
 
   const filename = buildReportFilename(mode, startDate, endDate);
+  await downloadWorkbook(workbook, filename);
+}
+
+/** Exports the timestamp-filtered hourly rows shown in the Hourly report mode. */
+export async function downloadHourlyConsumptionExcel(report: HourlyConsumptionReport): Promise<void> {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Hourly Consumption");
+  const headers = [
+    "SR.NO",
+    "CUSTOMER",
+    "CUSTOMER TYPE",
+    "GA",
+    "DEVICE SERIAL NO",
+    "METER SERIAL NO",
+    "STREAM NO",
+    "DATE & TIME",
+    "PRESSURE (BAR)",
+    "TEMPERATURE (°C)",
+    "HOURLY CONSUMPTION (SCM)",
+  ];
+
+  worksheet.addRow([`Hourly Consumption Report: ${report.startDate} to ${report.endDate}`]);
+  worksheet.mergeCells(1, 1, 1, headers.length);
+  worksheet.addRow(headers);
+  report.rows.forEach((row, index) => {
+    worksheet.addRow([
+      index + 1,
+      row.customerName || "-",
+      row.customerCategory || "-",
+      row.gaName || "-",
+      row.deviceSerialNo,
+      row.meterSerialNo || "-",
+      row.streamNo,
+      row.timestamp.replace("T", " ").slice(0, 16),
+      row.pressure ?? "-",
+      row.temperature ?? "-",
+      row.consumption,
+    ]);
+  });
+
+  worksheet.columns = [
+    { width: 10 },
+    { width: 28 },
+    { width: 20 },
+    { width: 24 },
+    { width: 24 },
+    { width: 24 },
+    { width: 12 },
+    { width: 22 },
+    { width: 18 },
+    { width: 18 },
+    { width: 28 },
+  ];
+  worksheet.getRow(1).font = { bold: true, size: 14 };
+  worksheet.getRow(2).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  worksheet.getRow(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_FILL_COLOR } };
+  worksheet.autoFilter = { from: { row: 2, column: 1 }, to: { row: Math.max(2, report.rows.length + 2), column: headers.length } };
+  worksheet.views = [{ state: "frozen", ySplit: 2 }];
+
+  await downloadWorkbook(
+    workbook,
+    `Hourly_Consumption_Report_${report.startDate}_${report.endDate}.xlsx`,
+  );
+}
+
+async function downloadWorkbook(workbook: ExcelJS.Workbook, filename: string): Promise<void> {
   const buffer = await workbook.xlsx.writeBuffer();
 
   const blob = new Blob([buffer], {

@@ -201,6 +201,14 @@ is known, since the sidebar is just a list of routes.)
 Raw payload stored alongside parsed columns (FR9 in v1 PRD, renumbered
 here as part of FR5/Reading History).
 
+The Reports page also provides an **Hourly Consumption** mode. It accepts a
+customer selection and inclusive calendar-date range, returns one row per
+meter/hour from the `Reading.hourlyConsumption` payloads, and exports the
+same timestamp-filtered rows to Excel. Rows include stream number, pressure,
+and temperature. Each point's embedded timestamp is the reporting date
+source; the parent reading date is only used to find payloads and may be an
+adjacent day.
+
 ## 6. Success Criteria (extended)
 - All v1 success criteria still hold (ingestion latency, meter-table
   responsiveness at fleet scale, missing-data/out-of-range alarms firing
@@ -274,4 +282,4 @@ redeploy).
   licensing), a separate `city` field on Customer may be needed in
   addition to GA — not added in this revision; flagged for confirmation.
 - Everything carried over unresolved from v1 PRD §7 (payload structure,
-  deviation threshold/window defaults, create-on-first-push assumption). 
+  deviation threshold/window defaults, create-on-first-push assumption).
