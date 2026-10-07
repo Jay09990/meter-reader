@@ -66,6 +66,8 @@ export function parseIngestPayload(body: unknown): ParsedReading {
     ? (body as { data: RawIngestPayload }).data
     : body as RawIngestPayload;
 
+  console.log("Parsing payload:", JSON.stringify(payload));
+
   if (!payload.deviceSerialNo || typeof payload.deviceSerialNo !== "string" || !payload.deviceSerialNo.trim()) {
     throw new Error("Invalid payload: Missing or empty deviceSerialNo");
   }
