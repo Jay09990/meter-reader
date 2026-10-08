@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import {
@@ -52,7 +52,7 @@ const REPORT_MODES: Array<{ value: ReportPageMode; label: string }> = [
 ];
 
 const FREQUENCY_SELECT_OPTIONS: Array<{ value: DataFrequency; label: string }> = [
-  { value: "1h", label: "1 hour" },
+
   { value: "6h", label: "6 hours" },
   { value: "12h", label: "12 hours" },
   { value: "1d", label: "1 day" },

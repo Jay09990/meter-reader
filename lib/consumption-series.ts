@@ -100,10 +100,11 @@ function buildMonthlySpecs(today: Date): BucketSpec[] {
     const monthStart = addMonths(getMonthStart(today), -i);
     const monthEnd = getMonthEnd(monthStart);
     const isCurrentMonth = i === 0;
+    const priorBoundary = new Date(monthStart.getTime() - 86_400_000);
 
     specs.push({
       label: formatMonthLabel(monthStart),
-      startDate: toIsoDate(monthStart),
+      startDate: toIsoDate(priorBoundary),
       // Current (partial) month: use today as end boundary
       endDate: isCurrentMonth ? todayIso : toIsoDate(monthEnd),
     });
@@ -120,10 +121,11 @@ function buildQuarterlySpecs(today: Date): BucketSpec[] {
   for (let i = 4; i >= 0; i--) {
     const qStart = getQuarterStart(today, i);
     const isCurrentQuarter = toIsoDate(qStart) === toIsoDate(currentQStart);
+    const priorBoundary = new Date(qStart.getTime() - 86_400_000);
 
     specs.push({
       label: formatMonthLabel(qStart), // use quarter's start month as label
-      startDate: toIsoDate(qStart),
+      startDate: toIsoDate(priorBoundary),
       endDate: isCurrentQuarter ? todayIso : toIsoDate(getQuarterEnd(qStart)),
     });
   }
@@ -149,10 +151,11 @@ function buildYearlySpecs(today: Date): BucketSpec[] {
       0,
     ));
     const startYear = financialYearStart.getUTCFullYear();
+    const priorBoundary = new Date(financialYearStart.getTime() - 86_400_000);
 
     specs.push({
       label: `FY ${startYear}-${String(startYear + 1).slice(-2)}`,
-      startDate: toIsoDate(financialYearStart),
+      startDate: toIsoDate(priorBoundary),
       endDate: isCurrentFinancialYear ? todayIso : toIsoDate(financialYearEnd),
     });
   }

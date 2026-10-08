@@ -13,16 +13,36 @@ export async function GET(req: NextRequest) {
     const statusParam = searchParams.get("status");
     const severityParam = searchParams.get("severity");
     const typeParam = searchParams.get("type");
+    const customerId = searchParams.get("customerId");
+    const date = searchParams.get("date");
+    const search = searchParams.get("search");
     const format = searchParams.get("format") || "xlsx";
 
     const where: import("@prisma/client").Prisma.AlarmWhereInput = {};
     const gaId = getGaScope(user);
-    if (gaId) where.device = { customer: { gaId } };
+    if (gaId) where.device = { ...(where.device as object || {}), customer: { gaId } };
+    if (customerId && customerId !== "all") where.device = { ...(where.device as object || {}), customerId };
     if (statusParam && statusParam !== "all") where.status = statusParam as AlarmStatus;
     if (severityParam && severityParam !== "all") where.severity = severityParam as AlarmSeverity;
     if (typeParam && typeParam !== "all") where.type = typeParam as AlarmType;
+    if (date && date.trim()) {
+      const dStr = date.trim();
+      const startOfDay = new Date(`${dStr}T00:00:00.000Z`);
+      const endOfDay = new Date(`${dStr}T23:59:59.999Z`);
+      if (!isNaN(startOfDay.getTime())) {
+        where.createdAt = { gte: startOfDay, lte: endOfDay };
+      }
+    }
+    if (search && search.trim()) {
+      const s = search.trim();
+      where.OR = [
+        { device: { deviceSerialNo: { contains: s, mode: "insensitive" } } },
+        { device: { meterSerialNo: { contains: s, mode: "insensitive" } } },
+        { device: { customer: { name: { contains: s, mode: "insensitive" } } } },
+      ];
+    }
 
-    logApi("GET /api/alarms/export", { status: statusParam, severity: severityParam, type: typeParam, format });
+    logApi("GET /api/alarms/export", { status: statusParam, severity: severityParam, type: typeParam, customerId, date, search, format });
 
     const alarms = await db.alarm.findMany({
       where,

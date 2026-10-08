@@ -10,8 +10,10 @@ import {
   Clock,
   Activity,
   Download,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -50,8 +52,14 @@ interface PaginationMeta {
   totalPages: number;
 }
 
+interface CustomerOption {
+  id: string;
+  name: string;
+}
+
 export default function AlarmsPage() {
   const [alarms, setAlarms] = useState<AlarmItem[]>([]);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta>({
     page: 1,
     limit: 10,
@@ -62,9 +70,18 @@ export default function AlarmsPage() {
   const [alarmView, setAlarmView] = useState<"unseen" | "acknowledged">("unseen");
   const [statusFilter, setStatusFilter] = useState<string>("OPEN");
   const [severityFilter, setSeverityFilter] = useState<string>("all");
+  const [customerFilter, setCustomerFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/customers?limit=1000")
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((data) => setCustomers(data.data || []))
+      .catch(() => {});
+  }, []);
 
   const fetchAlarms = useCallback(
     (pageNum: number = 1) => {
@@ -79,6 +96,8 @@ export default function AlarmsPage() {
       if (typeFilter !== "all") params.append("type", typeFilter);
       if (statusFilter !== "all") params.append("status", statusFilter);
       if (severityFilter !== "all") params.append("severity", severityFilter);
+      if (customerFilter !== "all") params.append("customerId", customerFilter);
+      if (dateFilter) params.append("date", dateFilter);
       if (searchQuery) params.append("search", searchQuery);
 
       fetch(`/api/alarms?${params.toString()}`)
@@ -96,7 +115,7 @@ export default function AlarmsPage() {
           setLoading(false);
         });
     },
-    [alarmView, typeFilter, statusFilter, severityFilter, searchQuery]
+    [alarmView, typeFilter, statusFilter, severityFilter, customerFilter, dateFilter, searchQuery]
   );
 
   useEffect(() => {
@@ -131,6 +150,9 @@ export default function AlarmsPage() {
               if (typeFilter !== "all") params.append("type", typeFilter);
               if (statusFilter !== "all") params.append("status", statusFilter);
               if (severityFilter !== "all") params.append("severity", severityFilter);
+              if (customerFilter !== "all") params.append("customerId", customerFilter);
+              if (dateFilter) params.append("date", dateFilter);
+              if (searchQuery) params.append("search", searchQuery);
               window.open(`/api/alarms/export?${params.toString()}`, "_blank");
             }}
             variant="outline"
@@ -183,62 +205,101 @@ export default function AlarmsPage() {
       </div>
 
       {/* Filter Controls */}
-      <Card className="bg-card border-border p-4 flex flex-col sm:flex-row items-center gap-4">
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <label className="text-xs font-semibold text-muted-foreground uppercase">Alarm Type:</label>
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="h-9 px-3 py-1 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none"
-            style={{'--tw-ring-color':'var(--clr-accent-mid)'} as React.CSSProperties}
-          >
-            <option value="all">All Types</option>
-            <option value="MISSING_DATA">Missing Data</option>
-            <option value="GAS_OUT_OF_RANGE">Gas Out Of Range</option>
-            <option value="PRESSURE_OUT_OF_RANGE">Pressure Out Of Range</option>
-            <option value="TEMPERATURE_OUT_OF_RANGE">Temperature Out Of Range</option>
-            <option value="CONSUMPTION_OUT_OF_RANGE">Consumption Out Of Range</option>
-            <option value="BATTERY_LOW">Battery Low</option>
-          </select>
+      <div className="rounded-xl border border-border bg-card p-4 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-muted-foreground uppercase whitespace-nowrap">Alarm Type:</label>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="h-9 px-3 py-1 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none"
+              style={{'--tw-ring-color':'var(--clr-accent-mid)'} as React.CSSProperties}
+            >
+              <option value="all">All Types</option>
+              <option value="MISSING_DATA">Missing Data</option>
+              <option value="GAS_OUT_OF_RANGE">Gas Out Of Range</option>
+              <option value="PRESSURE_OUT_OF_RANGE">Pressure Out Of Range</option>
+              <option value="TEMPERATURE_OUT_OF_RANGE">Temperature Out Of Range</option>
+              <option value="CONSUMPTION_OUT_OF_RANGE">Consumption Out Of Range</option>
+              <option value="BATTERY_LOW">Battery Low</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-muted-foreground uppercase whitespace-nowrap">Status:</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-9 px-3 py-1 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none"
+            >
+              <option value="OPEN">Open Alarms Only</option>
+              <option value="RESOLVED">Resolved Only</option>
+              <option value="all">All Statuses</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-muted-foreground uppercase whitespace-nowrap">Severity:</label>
+            <select
+              value={severityFilter}
+              onChange={(e) => setSeverityFilter(e.target.value)}
+              className="h-9 px-3 py-1 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none"
+            >
+              <option value="all">All Severities</option>
+              <option value="CRITICAL">Critical</option>
+              <option value="WARNING">Warning</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-muted-foreground uppercase whitespace-nowrap">Customer:</label>
+            <select
+              value={customerFilter}
+              onChange={(e) => setCustomerFilter(e.target.value)}
+              className="h-9 px-3 py-1 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none max-w-[180px]"
+            >
+              <option value="all">All Customers</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-muted-foreground uppercase whitespace-nowrap">Date (DD/MM/YYYY):</label>
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="h-9 px-3 py-1 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none"
+            />
+            {dateFilter && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDateFilter("")}
+                className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </Button>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <label className="text-xs font-semibold text-muted-foreground uppercase">Status:</label>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-9 px-3 py-1 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none"
-          >
-            <option value="OPEN">Open Alarms Only</option>
-            <option value="RESOLVED">Resolved Only</option>
-            <option value="all">All Statuses</option>
-          </select>
-        </div>
-
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <label className="text-xs font-semibold text-muted-foreground uppercase">Severity:</label>
-          <select
-            value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value)}
-            className="h-9 px-3 py-1 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none"
-          >
-            <option value="all">All Severities</option>
-            <option value="CRITICAL">Critical</option>
-            <option value="WARNING">Warning</option>
-          </select>
-        </div>
-
-        <div className="flex items-center gap-3 w-full sm:w-auto ml-auto">
-          <input
+        <div className="relative w-full sm:w-60">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
             type="text"
-            placeholder="Search Serial No..."
+            placeholder="Search serial, customer..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && fetchAlarms(1)}
-            className="h-9 px-3 py-1 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none w-full sm:w-48"
+            className="pl-9 h-9 bg-secondary border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none w-full"
           />
         </div>
-      </Card>
+      </div>
 
       {error && (
         <div className="p-4 rounded-lg text-sm" style={{background:'var(--clr-alert)18', border:'1px solid var(--clr-alert)44', color:'var(--clr-alert)'}}>
@@ -251,10 +312,11 @@ export default function AlarmsPage() {
         <Table>
           <TableHeader className="bg-secondary border-b border-border">
             <TableRow className="border-border hover:bg-transparent">
+              <TableHead className="text-muted-foreground font-semibold">Customer</TableHead>
               <TableHead className="text-muted-foreground font-semibold">Device Serial</TableHead>
               <TableHead className="text-muted-foreground font-semibold">Type</TableHead>
               <TableHead className="text-muted-foreground font-semibold">Cause / Explanation</TableHead>
-              <TableHead className="text-muted-foreground font-semibold">Date</TableHead>
+              <TableHead className="text-muted-foreground font-semibold">Date (DD/MM/YYYY hh:mm A)</TableHead>
               <TableHead className="text-muted-foreground font-semibold">Status</TableHead>
               <TableHead className="text-right text-muted-foreground font-semibold">Action</TableHead>
             </TableRow>
@@ -262,19 +324,24 @@ export default function AlarmsPage() {
           <TableBody>
             {loading ? (
               <TableRow className="border-border">
-                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                   Loading alarms...
                 </TableCell>
               </TableRow>
             ) : alarms.length === 0 ? (
               <TableRow className="border-border">
-                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                   No system alarms found matching the filter criteria.
                 </TableCell>
               </TableRow>
             ) : (
               alarms.map((alarm) => (
                 <TableRow key={alarm.id} className="border-border hover:bg-secondary/60">
+                  <TableCell className="text-sm font-medium text-foreground">
+                    {alarm.customerName
+                      ? `${alarm.customerName} (${alarm.gaName || 'Unknown GA'})`
+                      : "Unassigned"}
+                  </TableCell>
                   <TableCell className="font-mono text-sm font-medium text-foreground">
                     {alarm.deviceSerialNo}
                   </TableCell>

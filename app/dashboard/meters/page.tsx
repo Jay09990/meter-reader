@@ -126,7 +126,7 @@ export default function MetersPage() {
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search serial, meter #, or site..."
+            placeholder="Search customer, meter #, or serial..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 bg-secondary border-border text-foreground placeholder:text-muted-foreground"
@@ -158,10 +158,10 @@ export default function MetersPage() {
         <Table>
           <TableHeader className="bg-secondary border-b border-border">
             <TableRow className="border-border hover:bg-transparent">
-              <TableHead className="text-muted-foreground font-semibold">Device Serial</TableHead>
+              <TableHead className="text-muted-foreground font-semibold">Customers</TableHead>
               <TableHead className="text-muted-foreground font-semibold">Meter Serial</TableHead>
-              <TableHead className="text-muted-foreground font-semibold">Site / Station</TableHead>
-              <TableHead className="text-muted-foreground font-semibold">Last Reading Date</TableHead>
+              <TableHead className="text-muted-foreground font-semibold">Device Serial</TableHead>
+              <TableHead className="text-muted-foreground font-semibold">Last Reading Date (DD/MM/YYYY hh:mm A)</TableHead>
               <TableHead className="text-muted-foreground font-semibold">Status</TableHead>
               <TableHead className="text-right text-muted-foreground font-semibold">Action</TableHead>
             </TableRow>
@@ -182,17 +182,17 @@ export default function MetersPage() {
             ) : (
               devices.map((device) => (
                 <TableRow key={device.id} className="border-border hover:bg-secondary/60">
-                  <TableCell className="font-mono text-sm font-medium text-foreground flex items-center gap-2">
-                    <Flame className="w-4 h-4" style={{color:'var(--clr-accent-hi)'}} />
-                    {device.deviceSerialNo}
+                  <TableCell className="text-sm font-medium text-foreground">
+                    {device.customerName
+                      ? `${device.customerName} (${device.gaName || 'Unknown GA'})`
+                      : "Unassigned"}
                   </TableCell>
                   <TableCell className="font-mono text-sm text-muted-foreground">
                     {device.meterSerialNo || "—"}
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {device.customerName
-                      ? `${device.customerName} (${device.gaName || 'Unknown GA'})`
-                      : "Unassigned"}
+                  <TableCell className="font-mono text-sm font-medium text-foreground flex items-center gap-2">
+                    <Flame className="w-4 h-4" style={{color:'var(--clr-accent-hi)'}} />
+                    {device.deviceSerialNo}
                   </TableCell>
                   <TableCell className="font-mono text-sm text-muted-foreground">
                     {device.latestReading?.readingDate

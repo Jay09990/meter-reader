@@ -8,6 +8,8 @@ export interface GetAlarmsOptions {
   type?: AlarmType;
   severity?: import("@prisma/client").AlarmSeverity;
   search?: string;
+  customerId?: string;
+  date?: string;
   acknowledged?: boolean;
   gaId?: string;
 }
@@ -18,7 +20,22 @@ export async function getPaginatedAlarms(options: GetAlarmsOptions) {
   const skip = (page - 1) * limit;
 
   const where: Prisma.AlarmWhereInput = {};
-  if (options.gaId) where.device = { customer: { gaId: options.gaId } };
+  if (options.gaId) {
+    where.device = { ...(where.device as object || {}), customer: { gaId: options.gaId } };
+  }
+
+  if (options.customerId && options.customerId !== "all") {
+    where.device = { ...(where.device as object || {}), customerId: options.customerId };
+  }
+
+  if (options.date && options.date.trim()) {
+    const dStr = options.date.trim();
+    const startOfDay = new Date(`${dStr}T00:00:00.000Z`);
+    const endOfDay = new Date(`${dStr}T23:59:59.999Z`);
+    if (!isNaN(startOfDay.getTime())) {
+      where.createdAt = { gte: startOfDay, lte: endOfDay };
+    }
+  }
 
   if (options.status) {
     where.status = options.status;
@@ -41,6 +58,7 @@ export async function getPaginatedAlarms(options: GetAlarmsOptions) {
     where.OR = [
       { device: { deviceSerialNo: { contains: s, mode: "insensitive" } } },
       { device: { meterSerialNo: { contains: s, mode: "insensitive" } } },
+      { device: { customer: { name: { contains: s, mode: "insensitive" } } } },
     ];
   }
 

@@ -40,7 +40,7 @@ export async function getFleetBoundaryReadings(
            "deviceId",
            "correctedVolumeVb"
     FROM   "Reading"
-    WHERE  "readingDate" <= ${isoDate}::date
+    WHERE  "readingDate" < (${isoDate}::date + INTERVAL '1 day')
       AND  "correctedVolumeVb" IS NOT NULL
     ORDER  BY "deviceId", "readingDate" DESC, "receivedAt" DESC
   `;

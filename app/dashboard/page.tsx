@@ -491,7 +491,7 @@ export default function OverviewPage() {
           <CardHeader>
             <CardTitle className="text-lg font-semibold text-foreground">Consumption by Category</CardTitle>
           </CardHeader>
-          <CardContent className="h-80">
+          <CardContent className="h-80 relative">
             {loading ? (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 <RefreshCw className="h-4 w-4 animate-spin mr-2" style={{ color: "var(--clr-accent-mid)" }} />
@@ -507,34 +507,61 @@ export default function OverviewPage() {
                 </p>
               </div>
             ) : (
-              <ChartContainer
-                config={Object.fromEntries(
-                  categorySeries.map((category) => [
-                    category.category,
-                    { label: category.label, color: category.color },
-                  ])
-                )}
-                className="h-full w-full"
-              >
-                <PieChart>
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Pie
-                    data={categorySeries}
-                    dataKey="totalVolume"
-                    nameKey="label"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius="70%"
-                    paddingAngle={2}
-                    label={({ name, value }) => `${name}: ${fmt(Number(value), 0)}`}
-                    labelLine={{ stroke: "var(--muted-foreground)", strokeWidth: 1 }}
-                  >
-                    {categorySeries.map((entry) => (
-                      <Cell key={entry.category} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ChartContainer>
+              <div className="relative h-full w-full">
+                <ChartContainer
+                  config={Object.fromEntries(
+                    categorySeries.map((category) => [
+                      category.category,
+                      { label: category.label, color: category.color },
+                    ])
+                  )}
+                  className="h-full w-full"
+                >
+                  <PieChart>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Pie
+                      data={categorySeries}
+                      dataKey="totalVolume"
+                      nameKey="label"
+                      cx="42%"
+                      cy="50%"
+                      outerRadius="68%"
+                      paddingAngle={2}
+                      label={({ name, value }) => `${name}: ${fmt(Number(value), 0)}`}
+                      labelLine={{ stroke: "var(--muted-foreground)", strokeWidth: 1 }}
+                    >
+                      {categorySeries.map((entry) => (
+                        <Cell key={entry.category} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ChartContainer>
+
+                {/* Compact Top-Right Corner Table View */}
+                <div className="absolute top-0 right-0 z-10 w-auto min-w-[170px] max-w-[210px] rounded-lg border border-border bg-card/90 backdrop-blur shadow-sm overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-secondary/70">
+                      <TableRow className="border-border hover:bg-transparent">
+                        <TableHead className="text-muted-foreground text-[10px] font-bold uppercase tracking-wider py-1 px-2.5 h-6">Category</TableHead>
+                        <TableHead className="text-right text-muted-foreground text-[10px] font-bold uppercase tracking-wider py-1 px-2.5 h-6">Value (SCM)</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {categorySeries.map((item) => (
+                        <TableRow key={item.category} className="border-border hover:bg-secondary/40">
+                          <TableCell className="py-1 px-2.5 font-medium text-[11px] flex items-center gap-1.5 leading-tight">
+                            <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: item.color }} />
+                            <span className="text-foreground truncate">{item.label}</span>
+                          </TableCell>
+                          <TableCell className="py-1 px-2.5 text-right font-mono text-[11px] text-muted-foreground leading-tight">
+                            {fmt(item.totalVolume, 2)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>

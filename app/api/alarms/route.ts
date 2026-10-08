@@ -28,6 +28,8 @@ export async function GET(req: NextRequest) {
       : undefined;
 
     const search = searchParams.get("search") || undefined;
+    const customerId = searchParams.get("customerId") || undefined;
+    const date = searchParams.get("date") || undefined;
     const acknowledgedParam = searchParams.get("acknowledged");
     const acknowledged =
       acknowledgedParam === "true"
@@ -36,8 +38,8 @@ export async function GET(req: NextRequest) {
           ? false
           : undefined;
 
-    logApi("GET /api/alarms", { page, limit, status, type, severity, search, acknowledged });
-    const result = await getPaginatedAlarms({ page, limit, status, type, severity, search, acknowledged, gaId: getGaScope(user) });
+    logApi("GET /api/alarms", { page, limit, status, type, severity, search, customerId, date, acknowledged });
+    const result = await getPaginatedAlarms({ page, limit, status, type, severity, search, customerId, date, acknowledged, gaId: getGaScope(user) });
     logApi("GET /api/alarms → 200", { totalCount: result.pagination.totalCount, returned: result.items.length });
     return NextResponse.json(result, { status: 200 });
   } catch (err: unknown) {
