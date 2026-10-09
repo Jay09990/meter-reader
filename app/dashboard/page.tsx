@@ -16,14 +16,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { BarChart, Bar, CartesianGrid, Cell, XAxis, YAxis, PieChart, Pie } from "recharts";
+import { BarChart, Bar, CartesianGrid, Cell, XAxis, YAxis, PieChart, Pie, Tooltip } from "recharts";
 import { useAutoRefresh } from "@/lib/auto-refresh";
 import { formatLocalTs } from "@/lib/utils";
 import { getChartTheme } from "@/lib/chart-theme";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
+import { ChartContainer, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { CapacityBanner } from "@/components/layout/capacity-banner";
 import { PeriodSelector } from "@/components/ui/period-selector";
 import { pickTicks, tickCountForMode, type ConsumptionBucket, type ConsumptionMode } from "@/lib/consumption-series";
+import { getFinancialYearLabel, getQuarterlyFinancialYearRangeLabel } from "@/lib/financial-calendar";
 import { KpiRangeSelector } from "@/components/overview/kpi-range-selector";
 import type { KpiRange } from "@/features/overview/service";
 
@@ -96,6 +97,72 @@ const fmt = (value: number | null | undefined, decimals = 2) => {
     maximumFractionDigits: decimals,
   });
 };
+
+interface ConsumptionUser {
+  customerName: string;
+  deviceSerialNo: string;
+  flowValue: number;
+}
+
+function ConsumptionTooltip({ active, payload, label }: {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; color: string; payload: { users?: ConsumptionUser[] } }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const users = payload[0]?.payload?.users ?? [];
+  return (
+    <div
+      style={{
+        background: "var(--background)",
+        border: "1px solid var(--border)",
+        borderRadius: 10,
+        boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+        padding: "10px 14px",
+        minWidth: 220,
+        maxWidth: 300,
+        fontSize: 12,
+      }}
+    >
+      <div style={{ fontWeight: 700, marginBottom: 6, color: "var(--foreground)" }}>{label}</div>
+      {payload.map((p, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: p.color, display: "inline-block", flexShrink: 0 }} />
+          <span style={{ color: "var(--muted-foreground)" }}>{p.name}</span>
+          <span style={{ marginLeft: "auto", fontFamily: "monospace", fontWeight: 600, color: "var(--foreground)" }}>
+            {fmt(p.value, 0)}
+          </span>
+        </div>
+      ))}
+      {users.length > 0 && (
+        <>
+          <div style={{ borderTop: "1px solid var(--border)", margin: "8px 0 6px", opacity: 0.5 }} />
+          <div style={{ fontWeight: 600, marginBottom: 4, color: "var(--muted-foreground)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>Users</div>
+          <div style={{ maxHeight: 180, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+            {users.slice(0, 10).map((u, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ flex: 1, fontWeight: 500, color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {u.customerName}
+                </span>
+                <span style={{ fontFamily: "monospace", fontSize: 10, color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>
+                  {u.deviceSerialNo}
+                </span>
+                <span style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--foreground)", marginLeft: 4, whiteSpace: "nowrap" }}>
+                  {fmt(u.flowValue, 0)}
+                </span>
+              </div>
+            ))}
+            {users.length > 10 && (
+              <div style={{ color: "var(--muted-foreground)", fontSize: 10, textAlign: "center" }}>
+                +{users.length - 10} more
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function ConsumptionKpiValue({
   loading,
@@ -435,7 +502,17 @@ export default function OverviewPage() {
         <Card className="bg-card border-border">
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <CardTitle className="text-lg font-semibold text-foreground">Consumption</CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-lg font-semibold text-foreground">Consumption</CardTitle>
+                {consumptionPeriod === "quarterly" && (
+                  <Badge
+                    variant="outline"
+                    className="font-medium text-xs px-2 py-0.5 border-border bg-secondary text-muted-foreground"
+                  >
+                    {getQuarterlyFinancialYearRangeLabel()}
+                  </Badge>
+                )}
+              </div>
               <PeriodSelector value={consumptionPeriod} onChange={setConsumptionPeriod} />
             </div>
           </CardHeader>
@@ -466,9 +543,9 @@ export default function OverviewPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} opacity={0.7} />
                   <XAxis dataKey="label" ticks={consumptionTicks} tick={{ fill: chartTheme.tick, fontSize: 12 }} />
                   <YAxis tick={{ fill: chartTheme.tick, fontSize: 12 }} />
-                  <ChartTooltip
+                  <Tooltip
                     cursor={{ fill: "var(--clr-accent-hi)", opacity: 0.07 }}
-                    content={<ChartTooltipContent />}
+                    content={<ConsumptionTooltip />}
                   />
                   <ChartLegend content={<ChartLegendContent />} />
                   <Bar dataKey="cng" radius={[6, 6, 0, 0]}>
@@ -518,7 +595,7 @@ export default function OverviewPage() {
                   className="h-full w-full"
                 >
                   <PieChart>
-                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Tooltip />
                     <Pie
                       data={categorySeries}
                       dataKey="totalVolume"

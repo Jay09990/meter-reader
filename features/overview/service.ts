@@ -82,7 +82,11 @@ export async function getFleetConsumptionSeries(
       where: gaId ? { customer: { gaId } } : undefined,
       select: {
         id: true,
+        deviceSerialNo: true,
         category: true,
+        customer: {
+          select: { name: true },
+        },
       },
     }),
   ]);
@@ -103,6 +107,7 @@ export async function getFleetConsumptionSeries(
     let cngTotal = 0;
     let pngTotal = 0;
     let deviceCount = 0;
+    const users: Array<{ customerName: string; deviceSerialNo: string; flowValue: number }> = [];
 
     for (const device of devices) {
       const deviceId = device.id;
@@ -115,18 +120,28 @@ export async function getFleetConsumptionSeries(
       total += delta;
       deviceCount++;
 
+      users.push({
+        customerName: device.customer?.name ?? "Unassigned",
+        deviceSerialNo: device.deviceSerialNo,
+        flowValue: delta,
+      });
+
       const category = deviceCategories.get(deviceId);
       if (category === CustomerCategory.INDUSTRIAL_CNG) cngTotal += delta;
       if (category === CustomerCategory.INDUSTRIAL_PNG) pngTotal += delta;
     }
 
+    // Sort users descending by flowValue for easy reading
+    users.sort((a, b) => b.flowValue - a.flowValue);
+
     if (deviceCount === 0) {
-      return { ...spec, value: null, suspect: false, cngValue: null, pngValue: null };
+      return { ...spec, value: null, suspect: false, cngValue: null, pngValue: null, users: [] };
     }
     return {
       ...computeBucket(spec, 0, total), // total is already the fleet delta
       cngValue: cngTotal,
       pngValue: pngTotal,
+      users,
     };
   });
 }

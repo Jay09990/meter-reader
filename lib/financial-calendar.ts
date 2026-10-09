@@ -140,11 +140,57 @@ export function formatDayLabel(date: Date): string {
 }
 
 /**
- * Format a UTC Date as "MMM-YY" (e.g. "Aug-25") — used for monthly/quarterly labels.
+ * Format a UTC Date as "MMM-YY" (e.g. "Aug-25") — used for monthly labels.
  */
 export function formatMonthLabel(date: Date): string {
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return `${MONTHS[date.getUTCMonth()]}-${String(date.getUTCFullYear()).slice(2)}`;
+}
+
+/**
+ * Return FY quarter number (1 for Apr-Jun, 2 for Jul-Sep, 3 for Oct-Dec, 4 for Jan-Mar).
+ */
+export function getQuarterNumber(date: Date): number {
+  const m = date.getUTCMonth();
+  if (m >= 3 && m <= 5) return 1;
+  if (m >= 6 && m <= 8) return 2;
+  if (m >= 9 && m <= 11) return 3;
+  return 4;
+}
+
+/**
+ * Format a quarter label relative to the current financial year.
+ * Quarters in previous financial years get an apostrophe (e.g. Q3', Q4').
+ * Quarters in the current financial year get standard notation (e.g. Q1, Q2, Q3).
+ */
+export function formatQuarterLabel(quarterDate: Date, today: Date = new Date()): string {
+  const qNum = getQuarterNumber(quarterDate);
+  const quarterFy = getFinancialYearStart(quarterDate).getUTCFullYear();
+  const currentFy = getFinancialYearStart(today).getUTCFullYear();
+  return quarterFy < currentFy ? `Q${qNum}'` : `Q${qNum}`;
+}
+
+/**
+ * Return formatted financial year string like "FY 2026-27" for the given date.
+ */
+export function getFinancialYearLabel(date: Date = new Date()): string {
+  const fyStart = getFinancialYearStart(date);
+  const startYear = fyStart.getUTCFullYear();
+  const nextYearShort = String(startYear + 1).slice(2);
+  return `FY ${startYear}-${nextYearShort}`;
+}
+
+/**
+ * Return formatted financial year range string explaining the primed and unprimed quarters:
+ * e.g. "FY' 2025-26 & FY 2026-27"
+ */
+export function getQuarterlyFinancialYearRangeLabel(date: Date = new Date()): string {
+  const currentFyStart = getFinancialYearStart(date);
+  const currentYear = currentFyStart.getUTCFullYear();
+  const prevYear = currentYear - 1;
+  const prevNextShort = String(prevYear + 1).slice(2);
+  const currNextShort = String(currentYear + 1).slice(2);
+  return `FY' ${prevYear}-${prevNextShort} & FY ${currentYear}-${currNextShort}`;
 }
 
 /**
@@ -153,3 +199,4 @@ export function formatMonthLabel(date: Date): string {
 export function toIsoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
+

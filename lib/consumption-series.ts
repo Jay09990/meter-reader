@@ -23,6 +23,7 @@ import {
   getFinancialYearStart,
   formatDayLabel,
   formatMonthLabel,
+  formatQuarterLabel,
 } from "./financial-calendar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -53,6 +54,10 @@ export interface ConsumptionBucket {
    * customers. Undefined for per-device series.
    */
   pngValue?: number | null;
+  /**
+   * Fleet-only: List of users that contributed to this bucket.
+   */
+  users?: Array<{ customerName: string; deviceSerialNo: string; flowValue: number }>;
 }
 
 /** A raw boundary-reading lookup result, keyed by boundary ISO date. */
@@ -112,7 +117,7 @@ function buildMonthlySpecs(today: Date): BucketSpec[] {
   return specs;
 }
 
-/** Build 5 FY-quarter bucket specs: trailing quarters incl. current quarter. */
+/** Build 5 FY-quarter bucket specs: trailing 5 quarters incl. current quarter. */
 function buildQuarterlySpecs(today: Date): BucketSpec[] {
   const specs: BucketSpec[] = [];
   const todayIso = toIsoDate(today);
@@ -124,7 +129,7 @@ function buildQuarterlySpecs(today: Date): BucketSpec[] {
     const priorBoundary = new Date(qStart.getTime() - 86_400_000);
 
     specs.push({
-      label: formatMonthLabel(qStart), // use quarter's start month as label
+      label: formatQuarterLabel(qStart, today), // e.g. Q3' Q4' Q1 Q2 Q3
       startDate: toIsoDate(priorBoundary),
       endDate: isCurrentQuarter ? todayIso : toIsoDate(getQuarterEnd(qStart)),
     });
@@ -269,7 +274,7 @@ export function tickCountForMode(mode: ConsumptionMode): number {
   switch (mode) {
     case "daily": return 4;
     case "monthly": return 6;
-    case "quarterly": return 5; // show all 5
+    case "quarterly": return 5; // show all 5 trailing quarters
     case "yearly": return 5; // show all 5
   }
 }
